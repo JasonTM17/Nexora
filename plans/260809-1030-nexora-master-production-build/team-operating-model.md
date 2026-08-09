@@ -89,6 +89,7 @@ main
   |    |- docs/c0-decision-ratification
   |    \- docs/c0-requirements-catalog
   |- M0 reviewed documentation train (no M0 integration branch)
+  |    |- docs/m0-project-assessment
   |    |- docs/m0-architecture
   |    |- docs/m0-threat-model
   |    \- docs/m0-delivery-contract

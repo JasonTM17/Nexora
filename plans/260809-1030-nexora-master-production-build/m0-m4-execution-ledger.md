@@ -83,6 +83,7 @@ No product implementation happens in M0.
 | 1 | M0-T01 | Workspace/toolchain Scout, terra medium R0 | none | none | C0-07 Goal active | Current files, Git, remote, tools, versions and absences recorded without secrets |
 | 1 | M0-T02 | Requirements Scout, terra medium R0 | none | none | C0-07 Goal active | Recompute source/parent/child catalog coverage; Prompt Phase 0-43 and M0-M4 mapping have no omission or weakened post-activation requirement |
 | 1 | M0-T03 | Runtime Scout, terra medium R0 | none | none | C0-07 Goal active | Live AgentKit/subagent/model/tool/control inventory or explicit gaps |
+| 1 | M0-D01 | Documentation-assessment writer, terra high R1 | `docs/m0-project-assessment` | `docs/project-assessment.md`, `docs/implementation-plan.md` only | C0-07 Goal active + `USCOPE-001` discharged by this accepted C0-01D scope amendment + M0-T01 through M0-T03 PASS receipts | Create the two source-required assessment/implementation-plan documents from the pinned child-catalog requirements; record provenance, risks, sequencing, owners and non-goals without claiming product completion; exact-head Advisor FIT + Kongming PASS before `MERGE_READY` |
 | 2 | M0-T04 | Architect, sol high R1 | `docs/m0-architecture` | `docs/architecture/**`, approved ADR drafts | M0-T01 through M0-T03 PASS receipts | System/data/trust diagrams, module boundaries, alternatives and failure semantics |
 | 2 | M0-T05 | Security planner/reviewer, sol high R1 | `docs/m0-threat-model` | `docs/security/**` | M0-T01 through M0-T03 PASS receipts | Tenant/Auth/Storage/Realtime/upload/RAG/provider threat model and STOP tests |
 | 3 | M0-T06 | Project Manager, terra high R1 | `docs/m0-delivery-contract` | Active plan ledger and receipts | M0-T04 and M0-T05 exact-head `frozen_interfaces` report pins | Dependencies, ownership, estimates, open decisions and resume packet synchronized |
@@ -90,7 +91,7 @@ No product implementation happens in M0.
 | 4B | M0-T07B | Kongming, sol high R0 | none | none | M0-T04 through M0-T06 same-candidate digest in `VERIFYING` | Independent PASS/HOLD/STOP C3 review of contradictions, security, failure modes and evidence |
 | 5 | M0-I01 | Controller + Git Manager | approved `main` target; no M0 integration branch | Mechanical merge of M0 `MERGE_READY` docs only | M0-T07A FIT + M0-T07B PASS on same candidate | Sequential exact-head docs merges, dispositions, combined M0 checks, clean main and no unresolved v0.1 blocker |
 
-M0 safe parallelism: M0-T01 through M0-T03 run in parallel; M0-T04 and M0-T05 may run in parallel because paths are disjoint; the Controller serializes final authority.
+M0-D01 does not exist as a pre-Goal writer: this C0-01D amendment grants only its post-Goal packet boundary and does not create either owned document. M0-T01 through M0-T03 run in parallel; M0-D01, M0-T04 and M0-T05 may run in parallel after their stated dependencies because their paths are disjoint; the Controller serializes final authority.
 
 ## M1 — Repository and Platform Foundation
 

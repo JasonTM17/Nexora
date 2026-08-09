@@ -131,6 +131,10 @@ pre_goal_constraints:
 
 All ordinary `NEXORA-TASK-PACKET-1` writer fields still apply: exact base, intent branch, project-local worktree, allowed/forbidden paths, active lease, dependency class, acceptance, stop conditions and exact-head review. `prompt_phase: null` is accepted only together with `goal_scope: PRE_GOAL_C0`, `goal_id: null` and an allowlisted C0 task ID. C0-01D cannot write the expanded catalog. C0-01R owns only `master-requirements-catalog-expanded.md`; its reviewed output receipt supplies the actual digest. C0-06 records that digest in the final-binding event, and any later packet with a pending child digest is invalid.
 
+### Accepted M0-D01 post-Goal boundary
+
+`USCOPE-001` is discharged only by the C0-01D scope-amendment receipt and the exact ledger row for `M0-D01`; it does not add a third pre-Goal writer. After C0-07 records the formal Goal, the Controller may issue one ordinary `NEXORA-TASK-PACKET-1` with `id: M0-D01`, `goal_scope: v0.1-M0-M4`, `prompt_phase: 0`, branch `docs/m0-project-assessment`, and worktree `D:\Nexora\.worktrees\Nexora-m0-project-assessment`. Its allowed paths are exactly `docs/project-assessment.md` and `docs/implementation-plan.md`; all product, runtime, plan, catalog, ledger and deployment paths are forbidden. It consumes the final-bound Goal/catalog identity and M0-T01 through M0-T03 PASS receipts, writes no claim that product implementation has occurred, and remains subject to the normal lease and exact-head Advisor/Kongming gate. Neither file may be created or changed by this amendment or by any pre-Goal packet.
+
 ## Conforming Task-Packet Example
 
 No agent is spawned with a prose-only request. The Controller and Project Manager freeze a complete `NEXORA-TASK-PACKET-1` as defined in [Workflow Configuration](./workflow-configuration.md). The following is a conforming product-task projection for explanation; it does not rename fields or create a second validator schema:
