@@ -35,7 +35,7 @@ Innovation backlog đề xuất một trục khác biệt mạnh hơn “CMS có
 - Exact revision không còn là một hash mơ hồ: `NEXORA-SEMANTIC-DIGEST-1` định nghĩa file set, UTF-8/LF normalization, thứ tự, framing, manifest và hai implementation PowerShell/Node phải ra cùng kết quả trước khi Advisor/Kongming ký.
 - Tất cả linked worktree chuyển vào ignored `D:\Nexora\.worktrees\`; target phải là strict descendant, có `git check-ignore` receipt và không được broad-clean.
 - Chatbot M4 có `chat_sessions/chat_messages`, tenant/user ownership, stable history pagination, idempotent send, persisted stream state, reload/resume/cancel/regenerate lineage, history delete và reauthorize citation khi mở lại.
-- DEC-016 nay bao phủ account khác tenant deletion, user export, chat/document purge, analytics anonymization, telemetry/provider/backups và purge-on-restore; plan đưa ra các retention default cụ thể để bạn chốt nhưng không claim compliance certification.
+- DEC-016 nay bao phủ account khác tenant deletion, user export, chat/document purge, analytics anonymization, telemetry/provider/backups và purge-on-restore; các retention default v0.1 đã được bạn chấp thuận, nhưng plan không claim compliance certification.
 - Profile được đưa vào M2; bookmarks/topic follows vào M5; CMS/publishing M2 có SEO title/description/canonical/OG/Twitter/sitemap/robots/allowlisted JSON-LD; builder có hide/show bền vững; shell có breadcrumb/contextual help accessible.
 - Có seed pack chuẩn `Nexora University` với pages/documents/personas đúng master prompt, tenant đối chứng, deterministic checksum, ephemeral credentials, safe reset và được dùng chung cho E2E/RAG/media thật.
 

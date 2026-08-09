@@ -15,7 +15,7 @@ Establish authenticated identity, organization membership and tenant context tha
 
 ## Architecture
 
-- Supabase Auth is proposed identity issuer; Spring validates current tokens and owns domain authorization.
+- Supabase Auth is the accepted identity issuer; Spring validates current tokens and owns domain authorization.
 - Organization context derives from authenticated membership and explicit selection among allowed memberships.
 - Tenant-owned tables carry tenant keys, composite uniqueness/indexes and policy review.
 - Browser domain traffic uses the same-origin Next.js BFF/Server Component boundary before Spring; approved direct Supabase use is restricted to Auth, signed private Storage and authorized private Realtime contracts.
