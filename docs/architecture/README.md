@@ -19,6 +19,7 @@ Advisor FIT, Kongming PASS and Controller disposition before proceeding.
 
 | Document | Purpose | Primary implementation owners |
 |---|---|---|
+| [System overview](./system-overview.md) | Phase-0 current-state, planned topology, risk and dependency summary | M0-T04 architect; later owners validate each boundary |
 | [System and module view](./system-and-modules.md) | Planned services, interfaces, ownership and alternatives | M1 foundation, M2 domain/API, M3 events, M4 RAG workers |
 | [Data and trust view](./data-and-trust.md) | Data classification, request authorization and permitted egress | Migration train, platform API, web and security owners |
 | [Failure semantics](./failure-semantics.md) | Planned degraded behavior, retry boundaries and STOP conditions | Each domain owner; later operational acceptance validates it |
