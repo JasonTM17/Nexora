@@ -1,0 +1,19 @@
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+
+# Local AgentKit source bundle; not Nexora product source
+engineer/
+
+# Project-local linked worktrees and AgentKit runtime projections
+.worktrees/
+.agentkit/state/
+
+# Common generated artifacts
+node_modules/
+.next/
+dist/
+build/
+coverage/
+*.log
