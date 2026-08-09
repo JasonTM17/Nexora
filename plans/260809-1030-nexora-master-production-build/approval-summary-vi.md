@@ -68,13 +68,13 @@ Thread có quyền ghi luôn có đúng một branch, một worktree dưới `D:
 
 Keepalive của agent là checkpoint có thể resume: Goal/task ID, branch/worktree, HEAD, lease generation, lệnh/session đang chạy, bằng chứng và bước tiếp theo. Authority là một SQLite control ledger duy nhất nằm dưới absolute Git common directory (`<git-common-dir>\agentkit\nexora-control-ledger.sqlite`), nên mọi worktree cùng nhìn một DB; `.agentkit/state/**` trong worktree chỉ là cache/projection. C0 tạo schema version + genesis gắn baseline SHA, semantic/source/catalog digests và Decision Log revision, rồi hai process từ hai temporary worktree tranh cùng một lease và bắt buộc chỉ một bên thắng. Chat/heartbeat không có authority. Khi timeout hoặc handoff, lead đối chiếu process/Git rồi thu hồi lease nguyên tử trước khi giao lại.
 
-Vì thư mục hiện chưa có Git, có đúng một ngoại lệ bootstrap: sau khi bạn duyệt, Git Manager tạo một root seed commit trực tiếp trên `main`, chỉ gồm allowlist plan/governance/ignore/env-template, không product code, không writer song song và không push. Ngay sau đó ledger có authority; việc cập nhật các decision đã chốt và sinh child catalog phải chạy ở hai branch/worktree/lease riêng, được review exact-head rồi Git Manager merge cơ học. Final Goal pin SHA sau hai merge này, không pin seed SHA.
+C0-03 đã dùng đúng một ngoại lệ bootstrap: Git Manager tạo local root seed commit trực tiếp trên `main`, chỉ gồm allowlist plan/governance/ignore/env-template, không product code, không writer song song và không push. Ledger hiện có authority; việc ghi nhận các decision đã chốt và sinh child catalog vẫn chạy ở hai branch/worktree/lease riêng, được review exact-head rồi Git Manager merge cơ học. Final Goal chỉ pin SHA sau hai merge này, không pin seed SHA.
 
 ## Luồng triển khai theo Goal
 
-1. Sau khi bạn duyệt: giữ Apache-2.0 đã chốt, ghi receipt cho các decision còn lại, chạy secret/provenance gate và xác nhận policy/quyền push; DEC-011 mặc định DeepSeek USD 5/25 calls, Stitch 3 hướng/4 màn hình mỗi hướng/2 edit pass mỗi màn hình/36 operations tổng, cloud mới USD 0 nếu chưa có R3 riêng.
-2. Bootstrap seed: init Git `main`, thêm `origin` nhưng chưa push, tạo đúng một allowlisted root commit; sau đó tạo canonical ledger/genesis. Trước khi giao cho writer nào, C0-05 phải PASS cả two-worktree contention test trong `D:\Nexora\.worktrees\` và task-graph dry-run Go/NATS/outbox trên đúng user-decision receipts.
-3. Ledger dispatch `docs/c0-decision-ratification`; branch này có worktree/lease, exact-head dual review và được merge cơ học trước. Chỉ từ exact main SHA đó mới dispatch `docs/c0-requirements-catalog`, cũng review/merge riêng. Sau combined public-safe check, hai digest implementation pin final main SHA + semantic/source/parent/child-catalog identities bằng manifest không chứa private path.
+1. Người dùng đã chấp thuận Apache-2.0 và toàn bộ mặc định C0, gồm DEC-011/DEC-016; secret/provenance gate vẫn chạy trước mọi public action. DEC-011 giữ DeepSeek USD 5/25 calls, Stitch 3 hướng/4 màn hình mỗi hướng/2 edit pass mỗi màn hình/36 operations tổng, cloud mới USD 0 nếu chưa có R3 riêng.
+2. C0-03 đã bootstrap local Git `main`, thêm `origin` nhưng chưa push, tạo đúng một allowlisted root commit và canonical ledger/genesis. C0-05 đã PASS two-worktree contention test trong `D:\Nexora\.worktrees\` và task-graph dry-run Go/NATS/outbox trên đúng user-decision receipts.
+3. Ledger đang dispatch `docs/c0-decision-ratification`; branch này có worktree/lease, exact-head dual review và sẽ được merge cơ học trước. Chỉ từ exact main SHA đó mới dispatch `docs/c0-requirements-catalog`, cũng review/merge riêng. Sau combined public-safe check, hai digest implementation pin final main SHA + semantic/source/parent/child-catalog identities bằng manifest không chứa private path.
 4. C0-06 kiểm lại receipt C0-05, chạy final binding, runtime inventory, same-candidate Advisor/Kongming activation review và Goal warmup; chỉ khi `READY` mới tạo Goal M0-M4 chính thức với innovation hooks rỗng.
 5. Mỗi milestone có worker branches -> exact-head review -> integration branch -> combined gate -> merge `main`.
 6. M4 chỉ hoàn tất release khi public `origin/main` khớp exact reviewed head và quyền R3 cho prerelease đã được duyệt; nếu quyền bị giữ lại, Goal là `NEEDS_USER`, không phải hoàn thành giả.
@@ -100,15 +100,15 @@ Vercel chạy web; Supabase paid production chạy Auth/Postgres/Storage/Realtim
 
 Mục tiêu ứng viên để bạn duyệt ở M6/M7 là 99.9% cho public/CMS/publish/retrieval, 99.5% cho generation phụ thuộc DeepSeek, critical-service RTO tối đa 30 phút và full data-plane RTO tối đa 60 phút. Postgres/pgvector RPO tối đa 15 phút; Storage object là mặt phẳng backup riêng với RPO tối đa 60 phút; JetStream dựa trên outbox replay và snapshot cho state không thể rebuild. Rollback app tối đa 10 phút. Đây là mục tiêu cần đo và drill, không phải lời hứa hiện tại. Supabase Free chỉ dùng dev; ping cron chỉ là synthetic monitoring, không phải cách chống sập.
 
-## Những gì chưa được làm ở thời điểm duyệt
+## Những gì chưa được làm ở thời điểm hiện tại
 
-- Chưa tạo formal Goal, chưa init Git, chưa thêm remote, chưa commit/push.
+- Chưa tạo formal Goal và chưa có product code. C0-03 đã tạo local Git `main`, cấu hình `origin` và tạo một public-safe seed commit; chưa push.
 - Chưa gọi Stitch/DeepSeek trả phí, chưa provision Vercel/Supabase/backend, chưa deploy.
 - Chưa tạo ảnh/GIF/release/container vì chưa có build chạy thật để làm bằng chứng.
 - Khóa từng được dán trong chat phải rotate trước live smoke hoặc production; chỉ secret mới trong env/secret manager mới được dùng.
 
-## Quyết định còn cần bạn duyệt
+## Quyết định và gate còn lại
 
-Apache-2.0 đã được chốt ở DEC-015. Ưu tiên còn lại trước Goal: repository boundary, merge/push authority, budget, auth/tenant/data/AI contracts, lifecycle/retention, release identity, control-plane bootstrap, DEC-027 CSP/cache theo bề mặt và DEC-028 Supabase managed-boundary/Data API/extension compatibility. Toàn bộ khuyến nghị và tác động đã gom trong [Gói quyết định chốt trước Goal](./activation-decision-pack-vi.md). Trước production: Vercel/Supabase tier, Kubernetes provider/region, SLO/RPO/RTO, on-call/alert channel, DNS/email, embedding compute và chi phí tháng.
+Apache-2.0 đã được chốt ở DEC-015; toàn bộ default C0, gồm repository, merge/push authority, budget, auth/tenant/data/AI, lifecycle/retention, release identity, CSP/cache policy và Supabase boundary, đã được người dùng chấp thuận. Trước formal Goal vẫn phải hoàn tất C0 exact-head reviews, child-requirement catalog, final digest/binding và warmup. Trước production: Vercel/Supabase tier, Kubernetes provider/region, SLO/RPO/RTO, on-call/alert channel, DNS/email, embedding compute và chi phí tháng vẫn cần authority riêng.
 
 Khuyến nghị của team là giữ nguyên Phương án A: hoàn tất `v0.1.0-alpha.1` ở M4, rồi dùng Goal M6/M7 riêng để chứng minh production continuity. Nếu bắt Goal đầu phải live production luôn, scope phải mở rộng qua tối thiểu M6/M7, re-estimate và pin plan/Goal mới.

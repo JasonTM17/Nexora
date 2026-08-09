@@ -2,7 +2,7 @@
 
 ## Status
 
-- State: `PROPOSED — DEC-001 ACCEPTED; REMAINING ACTIVATION DECISIONS PENDING`
+- State: `USER-APPROVED — C0 CONTROL-PLANE IN PROGRESS; FORMAL GOAL NOT YET ACTIVE`
 - Owner: User
 - Maintainer: Controller/Delivery Manager
 - Change authority: User approval required for product boundary, release target, cost, hosting, security posture, or completion semantics
@@ -40,7 +40,7 @@ Scope is preserved in the master plan. `DEC-001` is accepted: the first formal G
 
 ## First Release Boundary
 
-The first Goal delivers a real integrated tenant CMS, publishing, knowledge and secure-RAG slice. It is proposed as `v0.1.0-alpha.1`, a production-shaped developer preview. It must not be called fully production-ready because whole-product hardening, hosted deployment, disaster recovery and final review remain in M6-M8.
+The first Goal delivers a real integrated tenant CMS, publishing, knowledge and secure-RAG slice. It is classified as `v0.1.0-alpha.1`, a production-shaped developer preview. It must not be called fully production-ready because whole-product hardening, hosted deployment, disaster recovery and final review remain in M6-M8.
 
 If the user requires serving real production users immediately after M4, the Goal must be amended before activation to pull in minimum C3 security, SBOM/scans, staging deployment, rollback and restore-smoke gates.
 

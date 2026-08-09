@@ -5,7 +5,7 @@
 - Release strategy: `ACCEPTED` through `DEC-001` on 2026-08-09.
 - Candidate Goal scope: milestones M0-M4, Prompt Phases 0-21, execution files 01-22.
 - Master-program scope retained: M0-M8, Prompt Phases 0-43.
-- Current activation state: `PENDING USER REVIEW`; this contract is not an active Goal.
+- Current activation state: `C0 CONTROL-PLANE IN PROGRESS`; this contract is not an active Goal.
 
 ## Three Authority Layers
 
@@ -100,12 +100,12 @@ Parallel agents can reduce elapsed time only where paths and contracts are genui
 
 ## Pre-Goal Control-Plane Bootstrap
 
-The future Goal must pin a Git SHA, but the current workspace is not yet a Git repository. Resolve that in this exact order:
+The future Goal must pin a Git SHA. C0-03 has created the local `main` seed in `D:\Nexora` and configured `origin` without pushing; the remaining ordered C0 gates below still decide whether a formal Goal may exist.
 
 1. User approves this parent plan, recommended decisions and workflow; that answer is approval evidence, not remote-write/provision authority.
 2. Resolve the repository boundary and exact approval point for remote write; run a public-safe secret/provenance check without printing values. Accepted Apache-2.0 plus third-party provenance remains mandatory before publication.
-3. Initialize exact `D:\Nexora` with `main`, configure the supplied `origin` without pushing, reserve ignored `engineer/`, `.worktrees/` and local env/runtime state, then create one root seed commit containing only the user-approved parent plan/governance/ignore/env-template allowlist.
-4. Treat step 3 as the sole pre-ledger exception: one Git Manager, one direct `main` commit, no concurrent writer, no product code and no remote mutation. Pin its staged paths, public-safe scan and user-approved candidate digest.
+3. **Completed in C0-03:** initialize exact `D:\Nexora` with `main`, configure the supplied `origin` without pushing, reserve ignored `engineer/`, `.worktrees/` and local env/runtime state, then create one root seed commit containing only the user-approved parent plan/governance/ignore/env-template allowlist.
+4. **Completed in C0-03:** treat step 3 as the sole pre-ledger exception: one Git Manager, one direct `main` commit, no concurrent writer, no product code and no remote mutation. Pin its staged paths, public-safe scan and user-approved candidate digest.
 5. Resolve the absolute Git common directory and create the versioned shared control ledger/genesis record bound to the seed SHA/parent digest/user-decision receipt with child catalog explicitly `PENDING_C0_01R`. Before either semantic writer dispatches, run the complete C0-05 gate: prove two temporary worktrees under `D:\Nexora\.worktrees\` contend against the same database with exactly one same-boundary lease winner, then dry-run the dependency graph to prove `M3-T04` stays non-`READY` until `M3-T02` is `INTEGRATED` and the Go/NATS ADR is dual-reviewed; M3-T05 consumes only a pinned M3-T04 `frozen_interfaces` head while M3-T04 remains non-`MERGE_READY`, head movement blocks both, and joint evidence makes both `MERGE_READY` without a cycle.
 6. Through that ledger, dispatch `docs/c0-decision-ratification` in its own worktree/lease to apply only the exact user-approved decisions. Obtain exact-head independent and dual receipts; Git Manager mechanically integrates its `MERGE_READY` head and records the resulting clean main SHA before any catalog writer starts.
 7. From that exact integrated decision head, dispatch `docs/c0-requirements-catalog` in its own worktree/lease. Expand all 141 source-hashed parent spans over lines `1..5169` plus every `UREQ-*` into stable bullet-level IDs with zero unclassified normative lines; obtain same-catalog Advisor/Kongming receipts, then Git Manager mechanically integrates its exact `MERGE_READY` head and records the second clean main SHA.

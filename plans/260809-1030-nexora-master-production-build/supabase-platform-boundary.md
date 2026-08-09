@@ -2,7 +2,7 @@
 
 ## Status and Purpose
 
-- Status: `PROPOSED FOR USER APPROVAL` under `DEC-028`.
+- Status: `ACCEPTED POLICY BOUNDARY` under `DEC-028`; hosted configuration, provisioning and production proof remain separately authorized.
 - Applies to: M0-M4 implementation compatibility and later M7 hosted-production proof.
 - Source review date: 2026-08-09.
 - Purpose: keep Supabase useful for identity, managed PostgreSQL, private Storage and private Realtime without turning provider schemas, implicit Data API grants or dashboard state into hidden application authority.

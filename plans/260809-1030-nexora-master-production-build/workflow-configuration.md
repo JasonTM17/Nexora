@@ -2,7 +2,7 @@
 
 ## Review Status
 
-- Document state: `PROPOSED — DEC-001 ACCEPTED; USER REVIEW REQUIRED`
+- Document state: `USER-APPROVED FOR C0 CONTROL-PLANE; FORMAL GOAL AND PRODUCT DISPATCH REMAIN BLOCKED`
 - Explicitly named C0/pre-Goal bootstrap, packet-overlay, ledger and warmup sections apply before Goal activation; ordinary M0-M8 product dispatch and runtime states apply only after the formal Goal is activated.
 - No configuration in this document is proof of live runtime availability.
 - Every run must discover and record the actual runtime, agent, model, tools, permissions, isolation, and cancellation behavior.
@@ -11,8 +11,8 @@
 
 | Item | Observed state | Consequence |
 |---|---|---|
-| Workspace | `D:\Nexora` exists but is not yet a Git repository | No branches, worktrees, commits, merges, or remote push yet |
-| Remote | `JasonTM17/Nexora` exists, public, empty, caller has admin permission | First push requires public-content and secret gate |
+| Workspace | Local `main` seed exists in `D:\Nexora`; C0 writers use isolated worktrees and leases | No product dispatch until C0-06/07 final binding and formal Goal record |
+| Remote | `origin` is configured as `https://github.com/JasonTM17/Nexora.git`; no ref has been pushed | First push remains a separate public-content and secret-gated R3 action |
 | Root contents | `.agentkit/`, `engineer/`, env template/ignore, this plan | `engineer/` remains local tooling boundary by default |
 | AgentKit CLI | `ak 2.7.0`; preferences validation succeeds | Plan CLI is usable; runtime surfaces still need live discovery |
 | Root AgentKit prefs | Mostly commented template | Privacy/artifact/project rules must be explicitly proposed and validated |
@@ -232,7 +232,7 @@ Plan checkboxes are durable. Runtime state is a projection and must sync back be
 
 ## Branch and Worktree Topology
 
-Proposed topology after Git bootstrap:
+Approved topology after C0-03 Git bootstrap:
 
 ```text
 main                              # protected accepted release line; M0 baseline is reviewed directly here

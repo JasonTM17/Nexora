@@ -2,7 +2,7 @@
 
 ## Trạng thái
 
-Tài liệu này gom các lựa chọn còn lại để người dùng chốt rõ ràng. Nó không tự đổi trạng thái trong Decision Log. Chỉ câu trả lời chấp thuận/sửa đổi của người dùng, hai receipt Advisor/Kongming trên cùng candidate và Controller disposition mới làm quyết định có hiệu lực.
+Tài liệu này đã được người dùng chấp thuận đầy đủ vào 2026-08-09, gồm `DEC-011` và `DEC-016`. C0-01D ghi nhận ratification vào Decision Log; hiệu lực dispatch vẫn cần exact-head Advisor/Kongming review, Controller disposition và mechanical integration. Đây chưa phải formal Goal.
 
 ## Đã chốt
 
@@ -14,7 +14,7 @@ Tài liệu này gom các lựa chọn còn lại để người dùng chốt r�
 | DEC-022 | Ảnh/GIF/sơ đồ thật, GitHub About/Releases, GHCR, SBOM/provenance bắt buộc |
 | DEC-025 | Ant Design 6.x cho Studio; Ant Design X đánh giá qua adapter; public dùng Tailwind/custom; không có hai design system đầy đủ |
 
-## Bộ mặc định đề xuất để kích hoạt Goal M0-M4
+## Bộ mặc định đã được người dùng chấp thuận cho Goal M0-M4
 
 | ID | Mặc định khuyến nghị | Tác động/rào chắn |
 |---|---|---|
@@ -26,10 +26,10 @@ Tài liệu này gom các lựa chọn còn lại để người dùng chốt r�
 | DEC-008 | Shared schema/database với tenant keys + composite constraints + Spring checks + forced RLS defense-in-depth | Bất kỳ cross-tenant success là STOP |
 | DEC-009 | Chỉ context tối thiểu đã authorize đi tới AI; raw prompt/source không log mặc định; CI có deterministic provider | Live và fixture evidence tách riêng |
 | DEC-010 | DeepSeek adapter env-only, runtime verify base URL/model; key đã dán phải rotate | Không bao giờ ghi key vào plan/Git/chat receipt |
-| DEC-011 | DeepSeek tối đa USD 5/25 calls, concurrency 1, một bounded retry + kill switch; Stitch so sánh đúng 3 hướng trên cùng 4 anchor, mỗi anchor gồm 1 lượt tạo ban đầu + tối đa 2 lượt edit, tức tối đa 36 generation/edit operations tổng. Bốn phần inventory còn lại của hướng được chọn mặc định được design/hand-build từ hệ token đã duyệt; muốn gọi Stitch thêm phải có amendment số lượng riêng được chấp nhận. Cloud mới USD 0 trong M0-M4 nếu chưa có R3 riêng | OPEN: không mua credit/upgrade, provision paid project hay phát sinh recurring spend; ngoại lệ phải ghi provider/project/region, hard cap, TTL và owner teardown |
+| DEC-011 | DeepSeek tối đa USD 5/25 calls, concurrency 1, một bounded retry + kill switch; Stitch so sánh đúng 3 hướng trên cùng 4 anchor, mỗi anchor gồm 1 lượt tạo ban đầu + tối đa 2 lượt edit, tức tối đa 36 generation/edit operations tổng. Bốn phần inventory còn lại của hướng được chọn mặc định được design/hand-build từ hệ token đã duyệt; muốn gọi Stitch thêm phải có amendment số lượng riêng được chấp nhận. Cloud mới USD 0 trong M0-M4 nếu chưa có R3 riêng | R3 boundary: không mua credit/upgrade, không provision paid project, không gọi provider bằng credential và không phát sinh recurring spend; ngoại lệ phải ghi provider/project/region, hard cap, TTL và owner teardown |
 | DEC-013 | 5 block đầu: Hero, RichText, FeatureGrid, CTA, FAQ | Có schema/version/a11y/visibility, không raw executable content |
 | DEC-014 | PostgreSQL durable jobs/outbox trước; Go/NATS chỉ giữ khi real consumer + benchmark/failure evidence chứng minh | Không microservice vì “trông production” |
-| DEC-016 | Chấp thuận data-lifecycle matrix và các v0.1 defaults trong `data-lifecycle-and-privacy-contract.md` hoặc sửa từng window | OPEN: account/tenant delete, export, chat/document purge, anonymization, backup resurrection |
+| DEC-016 | Chấp thuận data-lifecycle matrix và các v0.1 defaults trong `data-lifecycle-and-privacy-contract.md` | Execution boundary: account/tenant delete, export, chat/document purge, anonymization và backup resurrection vẫn cần implementation/evidence; không phải compliance claim |
 | DEC-018 | Sau duyệt plan, bootstrap public-safe local Git/control-plane; Goal pin Git SHA + semantic/source/catalog digests | Giải quyết vòng lặp Goal cần SHA nhưng Git chưa tồn tại |
 | DEC-019 | Release đầu là `v0.1.0-alpha.1` production-shaped developer preview | Không claim production-certified trước M6/M7 |
 | DEC-020 | Baseline embedding: local pinned TEI + `Qwen/Qwen3-Embedding-0.6B`, 1024 dimensions; M0 benchmark hardware/corpus có quyền HOLD/đề xuất đổi | DeepSeek chat không bị giả định là embedding API |
@@ -52,6 +52,6 @@ Tài liệu này gom các lựa chọn còn lại để người dùng chốt r�
 | DEC-017 | Chốt SLO/RPO/RTO sau M6 measurement và cost model |
 | DEC-024 | Chọn managed Kubernetes provider/region/capacity khi vào M7 |
 
-## Cách trả lời để chốt
+## Receipt đã nhận
 
-Người dùng có thể trả lời: “Chấp nhận toàn bộ mặc định trong gói quyết định, gồm budget DEC-011 và lifecycle defaults DEC-016” rồi liệt kê ngoại lệ nếu có. Controller sau đó phải cập nhật từng DEC, chạy consistency/digest lại và lấy Advisor/Kongming cùng revision; câu trả lời không tự cấp quyền first push, paid provision, release hay deploy nếu chưa nêu hành động R3 đó.
+Người dùng đã trả lời: “Tôi chấp nhận toàn bộ mặc định trong gói quyết định, gồm DEC-011 và DEC-016; cho phép thực hiện C0-01 đến C0-07 trong D:\Nexora để tạo Goal M0-M4. Chưa cho phép first push, paid provision, release hoặc deploy.” Controller phải cập nhật từng DEC, chạy consistency/digest lại và lấy Advisor/Kongming cùng exact revision; câu trả lời không tự cấp quyền first push, paid provision, release hay deploy.

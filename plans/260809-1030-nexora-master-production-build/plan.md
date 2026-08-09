@@ -1,7 +1,7 @@
 ---
 title: "Nexora Master Production Build"
 description: "Files-first production program for the complete Nexora prompt, with 44 traceable phases, supervised multi-agent delivery, and evidence-gated integration."
-status: pending
+status: in-progress
 priority: P1
 effort: "Multi-release program; estimate after Prompt Phase 0"
 branch: "pending-repository-bootstrap"
@@ -15,7 +15,7 @@ created: 2026-08-09
 
 ## Status
 
-`PENDING USER REVIEW`. This plan is durable, but it is not permission to create the formal Goal, implement product code, initialize Git, push, spend money, provision infrastructure, or deploy.
+`USER-APPROVED — C0 CONTROL-PLANE IN PROGRESS`. This plan permits only the approved local C0-01 through C0-07 control-plane work. It is not permission to implement product code, push, spend money, provision infrastructure, release, or deploy; the formal Goal remains blocked until C0-06/07 complete.
 
 ## Outcome
 

@@ -2,9 +2,9 @@
 
 ## Status and Honesty Boundary
 
-- Status: `OPEN USER DECISION` under expanded `DEC-016`.
+- Status: `ACCEPTED V0.1 DEFAULTS` under expanded `DEC-016`.
 - Scope: design and testable lifecycle behavior; this plan does not claim GDPR, CCPA or another legal certification.
-- Activation rule: M4 storage/chat work cannot dispatch until the v0.1 fields of DEC-016 are accepted. Later analytics/production retention values remain explicit later-Goal decisions where appropriate.
+- Activation rule: M4 storage/chat work must implement and evidence the accepted v0.1 fields of DEC-016. Later analytics/production retention values remain explicit later-Goal decisions where appropriate.
 
 Privacy behavior is implemented as domain state and evidence, not a privacy-policy sentence. Deletion, export, anonymization and retention must cross database, Storage, vectors, caches, jobs, events, providers, telemetry and backups without allowing a hidden copy to become normal application truth.
 
@@ -85,13 +85,13 @@ Every request has a stable ID, requester, verified authority, scope digest, requ
 | Backups/snapshots | retention, encryption/key custody and purge-on-restore process | isolated restore and post-restore purge |
 | Provider | DeepSeek/request metadata retention settings and deletion limitations | current provider contract/config receipt |
 
-The user may accept different windows per environment/data class. Until accepted, code uses deterministic fixtures and no production-retention claim.
+The accepted defaults below may be amended only through a new user decision and same-candidate dual review. Until implementation evidence exists, code uses deterministic fixtures and makes no production-retention claim.
 
-### Advisor-recommended v0.1 defaults for user decision
+### Accepted v0.1 defaults
 
-These are safe planning defaults for the alpha, not current behavior or legal advice:
+These are accepted planning defaults for the alpha, not current behavior, implementation evidence, or legal advice:
 
-| Item | Proposed v0.1 value |
+| Item | Accepted v0.1 value |
 |---|---|
 | Account deletion | Reauthenticate; block last-owner deletion until transfer; revoke refresh sessions immediately; domain authorization denies removed membership on the next request; active-plane purge job target <=24h after final confirmation |
 | Tenant deletion | Separate R3 operation, impact inventory, ownership transfer checks, explicit second confirmation and 7-day cooling window; no automatic cascade from account deletion |
@@ -101,9 +101,9 @@ These are safe planning defaults for the alpha, not current behavior or legal ad
 | CMS soft-deleted drafts/media | 30-day recoverable window, then purge unless an accepted tenant/audit hold applies; published-version retention remains tenant-policy controlled and visible |
 | Raw analytics | 90 days; derived anonymized/aggregated metrics 13 months only after re-identification review and minimum-cohort policy |
 | Application logs/traces | 7 days in preview/non-production, 30 days in production candidate; security incidents use a separately approved hold |
-| Safe audit metadata | 365 days proposed; contents remain bounded to actor/action/resource/result identifiers and never prompts, source bodies or secrets |
+| Safe audit metadata | 365 days; contents remain bounded to actor/action/resource/result identifiers and never prompts, source bodies or secrets |
 | PostgreSQL recovery | Paid PITR target and retention selected with DEC-017/M7 cost; a restored environment replays the deletion ledger before serving |
-| Storage backup copies | Separate encrypted versioned export/replication, proposed 30-day retention; DB PITR never stands in for object-byte recovery |
+| Storage backup copies | Separate encrypted versioned export/replication, 30-day retention; DB PITR never stands in for object-byte recovery |
 | DeepSeek/provider | v0.1 live smoke uses synthetic/non-sensitive fixtures only until current provider retention/processing terms and configuration are recorded and accepted |
 
 Advisor may recommend shorter windows after cost/data-minimization review; Kongming must challenge resurrection, partial-delete and re-identification paths on the same decision candidate.

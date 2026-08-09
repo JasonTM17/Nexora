@@ -2,7 +2,7 @@
 
 ## Status and Version Policy
 
-- State: `PROPOSED FOR USER APPROVAL`.
+- State: `USER-APPROVED V0.1 BASELINE`; exact pins and runtime evidence remain task-owned.
 - Scope: architecture direction for the complete program, with implementation priority on v0.1 M0-M4.
 - Sources live-checked: 2026-08-09 from primary project documentation.
 - Major/minor lines below are planning baselines. Prompt Phase 0 records source-backed compatibility candidates and the owner/gate that will materialize each pin; it does not invent product lockfiles or artifacts. The owning M1+ task pins exact patches, lockfiles/BOMs, container digests and model revisions before dependent implementation or acceptance.
@@ -34,13 +34,13 @@
 | TD-020 Documents | PDF, Markdown and plain text initially; Apache PDFBox plus bounded parsers; URL/DOCX disabled | Narrows parser and SSRF attack surface while covering useful sources | URL ingestion before independent SSRF gate |
 | TD-021 Retrieval | PostgreSQL full-text search + pgvector + deterministic reciprocal-rank fusion; authorization predicates in both branches before candidates leave storage | One permission model, reproducible ranking and no extra search cluster | Elasticsearch/OpenSearch until corpus/latency/facet evidence exceeds PostgreSQL |
 | TD-022 Chat model | DeepSeek adapter using `https://api.deepseek.com` and current model ID `deepseek-v4-flash`; model list verified at runtime; secret referenced only as `DEEPSEEK_API_KEY` | Matches the user's chosen live chat provider and current official V4 identifier | Deprecated `deepseek-chat`/`deepseek-reasoner` aliases; hard-coded key |
-| TD-023 Embeddings | Proposed local default: version-pinned Hugging Face Text Embeddings Inference with `Qwen/Qwen3-Embedding-0.6B`, fixed at 1024 dimensions after corpus/hardware benchmark | Open-weight Apache-2.0 model, 100+ languages, explicit dimensions, CPU/GPU serving options, no document egress by default | Assuming DeepSeek chat provides embeddings; dimension chosen after migration |
+| TD-023 Embeddings | Accepted local default: version-pinned Hugging Face Text Embeddings Inference with `Qwen/Qwen3-Embedding-0.6B`, fixed at 1024 dimensions after corpus/hardware benchmark | Open-weight Apache-2.0 model, 100+ languages, explicit dimensions, CPU/GPU serving options, no document egress by default | Assuming DeepSeek chat provides embeddings; dimension chosen after migration |
 | TD-024 Reranker | Interface exists but disabled by default; enable a version-pinned local/managed adapter only if fixed-corpus quality gain justifies latency/cost | Preserves Phase 20 without paying for unproven complexity | Always-on paid reranking |
 | TD-025 AI testing | Separate chat/embedding/rerank interfaces; deterministic CI providers; live smoke evidence labeled with provider/model/date/dimension | CI remains reliable and no mock is presented as a live integration | One generic interface that hides incompatible capabilities |
 | TD-026 Observability | OpenTelemetry instrumentation, structured JSON logs, trace IDs, Micrometer/Prometheus metrics from service introduction | Vendor-neutral evidence early; full backend/dashboard can arrive in M6 | Raw prompt/source text in telemetry, waiting until M6 to instrument |
 | TD-027 Testing | JUnit 5, Testcontainers, ArchUnit; Vitest, React Testing Library, Playwright and axe; Go table/integration tests; pgTAP or equivalent RLS fixtures; k6 for bounded load evidence | Matches unit, integration, browser, security and distributed failure risks | Mock-only acceptance or screenshot-only UI acceptance |
 | TD-028 Delivery | Docker/Compose production-shaped v0.1; Next.js standalone output; non-root containers; GitHub Actions mirrors local commands | Reproducible integrated release without choosing Kubernetes prematurely | Kubernetes/Helm/Terraform/Argo before M7 target approval |
-| TD-029 Production hosting | Vercel is the primary Next.js target; paid Supabase is the production data plane; managed Kubernetes is the proposed Spring/Go/NATS/embedding runtime for M7 | Aligns each workload with its platform while preserving the prompt's container/Kubernetes/GitOps requirements | Free/sleeping tiers, ping-based keepalive, single-VPS production |
+| TD-029 Production hosting | Vercel is the primary Next.js target; paid Supabase is the production data plane; managed Kubernetes is the later-Goal Spring/Go/NATS/embedding runtime candidate for M7 | Aligns each workload with its platform while preserving the prompt's container/Kubernetes/GitOps requirements | Free/sleeping tiers, ping-based keepalive, single-VPS production |
 | TD-030 Distribution | GitHub Releases plus repository-linked GHCR images; SemVer/SHA tags, immutable digests, SPDX SBOM, provenance and verifiable attestations | Connects reviewed source to pullable artifacts and makes release claims auditable | Mutable `latest` deployment, manual opaque images, source-only release claim |
 | TD-031 AI UI | Evaluate version-pinned Ant Design X 2.x components for conversations, sender, prompts, actions and sources behind Nexora-owned adapters; citations/security/rendering remain domain-owned | Accelerates polished AI interaction while preserving secure-RAG contracts and visual identity | Browser-side provider keys, library-owned authorization, unreviewed dynamic HTML/A2UI |
 | TD-032 CSP/cache boundary | Resolve a per-surface ADR in M1: dynamic Studio/auth may use strict request nonces; public schema pages must preserve a tested cacheable rendering path through external/static CSS, hashes or another documented compatible strategy | Next.js nonce CSP forces dynamic rendering, so one global policy would silently trade away public ISR/PPR/CDN behavior; explicit route evidence keeps security and performance honest | Blanket nonce middleware, default `unsafe-inline`, or claiming cacheability from headers/config without browser/CDN evidence |
@@ -185,14 +185,14 @@ Every change creates an ADR with problem, evidence, alternatives, security/cost 
 - [Docker build best practices](https://docs.docker.com/build/building/best-practices/)
 - [Docker SBOM attestations](https://docs.docker.com/build/metadata/attestations/sbom/)
 
-## Decisions Still Requiring Explicit Approval
+## Execution Gates and Later Decisions
 
-1. Accept this stack direction, including AntD for studio surfaces and custom/Tailwind public surfaces, or name required substitutions.
-2. Confirm local/private Qwen3 embeddings versus an approved managed embedding provider.
-3. Apply accepted Apache-2.0 repository licensing and independently verify third-party dependency/model/font/media provenance before first public push.
-4. Accept or amend DEC-011: DeepSeek USD/call ceiling, Stitch direction/screen/edit-operation quota, and the default USD 0 new managed-cloud spend boundary for M0-M4.
-5. Select v0.1 public site routing: subdomain/host or path-based.
-6. Approve Vercel/Supabase production tiers, managed Kubernetes provider/region and monthly continuity budget before hosted production.
+1. Materialize exact stack pins only through the named M1+ owners after their source-backed compatibility checks.
+2. Run the accepted local/private Qwen3 embedding route through the M0 hardware/corpus benchmark; a material replacement requires a new decision.
+3. Apply the accepted Apache-2.0 repository licensing and independently verify third-party dependency/model/font/media provenance before first public push.
+4. Enforce DEC-011 ceilings; no credit purchase, credentialed provider call, paid upgrade or new managed-cloud spend occurs without fresh R3 authority.
+5. Implement accepted path-based v0.1 routing through the site resolver; any later host/subdomain deployment decision remains separately approved.
+6. Select Vercel/Supabase production tiers, managed Kubernetes provider/region and monthly continuity budget before hosted production in M7.
 7. Choose one of the three same-candidate Advisor/Kongming-reviewed Stitch directions before the frontend design-system implementation branch starts.
-8. Approve the M1 per-surface CSP/cache ADR before frontend-foundation dispatch; do not assume a nonce strategy for cacheable public pages.
-9. Approve `DEC-028`: non-exposed application schemas, no implicit Data API grants, provider-supported managed-schema policy DDL only and observed managed-extension compatibility.
+8. Record and accept the M1 per-surface CSP/cache ADR before frontend-foundation dispatch; do not assume a nonce strategy for cacheable public pages.
+9. Observe managed extension compatibility at the M0/M1 gate; `DEC-028` is accepted policy, not evidence that a hosted project has been provisioned or tested.
