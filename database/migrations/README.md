@@ -64,6 +64,10 @@ without modifying that contract:
 3. `V004__tenant_rbac.sql` seeds the exact 51-row v1 permission matrix, adds
    guarded membership/organization mutations, and enforces a deferred
    composite reference to one `ACTIVE` `OWNER` per organization.
+4. `V005__membership_management_target_rls.sql` adds a private, forced-RLS
+   membership authorization projection and permits a manager to read or mutate
+   one explicitly named target membership only. It does not add tenant member
+   enumeration or any `SECURITY DEFINER`/`BYPASSRLS` path.
 
 Every M2 object is owned by `nexora_migrator`. `nexora_runtime` remains a
 non-owner `NOBYPASSRLS` group role and receives explicit object/column grants
@@ -82,11 +86,21 @@ Tenant resolution and domain access use separate transaction-local phases:
 
 Direct membership reads under a resolved runtime context intentionally expose
 only the actor's exact membership. Cross-member status/role changes therefore
-remain a backend authorization-operation concern; broad tenant membership
-visibility and a `SECURITY DEFINER` mutation shortcut are deliberately absent.
-The database still fixes the role matrix, guards inserts/self-transitions, and
-enforces the last-owner reference. A later accepted contract is required before
-expanding the direct table mutation surface.
+remain a backend authorization-operation concern. For the bounded M2-T02
+management operation, the backend must, inside the same transaction and only
+after `TenantContextService.withFreshTenant` has revalidated/promoted the
+actor, call `set_config(..., true)` for both `nexora.target_membership_id` and
+`nexora.target_membership_version`. Immediately around the one expected-version
+`UPDATE`, it must set `nexora.target_membership_mutation` to `true` and clear it
+again before any subsequent query; this lets PostgreSQL validate the incremented
+post-update image without turning a stale target read into a success. The target
+policy requires the exact target ID/version, resolved organization equality, and
+a current ACTIVE actor with both `user.manage` and `role.manage`; normal
+membership reads still expose only the actor. Commit or rollback clears all six
+settings. Broad tenant membership visibility and a `SECURITY DEFINER` mutation
+shortcut remain absent. The
+database fixes the role matrix, guards assignment/escalation, and enforces the
+last-owner reference.
 
 The frozen database context contains subject, organization, and membership IDs
 but no membership-version setting. M2-DB01 therefore proves that the referenced
@@ -102,9 +116,10 @@ Run the complete disposable PostgreSQL 17.5 proof from the repository root:
 pwsh -NoProfile -File database/migrations/scripts/verify-m2-schema-auth.ps1
 ```
 
-The script applies `V001` through `V004`, reruns the M1 boundary checks, proves
+The script applies `V001` through `V005`, reruns the M1 boundary checks, proves
 M2 role/grant/forced-RLS behavior, two-tenant isolation, `REMOVED` membership
-denial, transaction-local reset, matrix assignment denials, profile versioning,
-and the last-owner invariant, then removes only its Compose project and volumes.
-It does not prove version-only freshness and does not use a Supabase project,
-provider API, provider credential, or Supabase CLI/MCP call.
+denial, target ID/version management scope, transaction-local reset, matrix
+assignment denials, profile versioning, and the last-owner invariant, then
+removes only its Compose project and volumes. It does not prove version-only
+actor freshness and does not use a Supabase project, provider API, provider
+credential, or Supabase CLI/MCP call.
