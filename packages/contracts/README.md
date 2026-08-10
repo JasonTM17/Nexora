@@ -47,6 +47,15 @@ Safe problem codes may use the established lowercase validation form or the
 uppercase identity/domain form, while the envelope and detail-value guards stay
 unchanged.
 
+The M3 event contract freezes the versioned event envelope, private topic
+vocabulary, outbox state semantics, and safe payload allowlist. Topics follow
+the server-derived `scope:tenant-or-resource-id:purpose` rule, where the
+identifier alone never grants access. Payloads may carry only allowlisted IDs,
+versions, job state, and safe display metadata; no bodies, prompts, tokens,
+secrets, raw provider output, or unowned tenant data. This contract is a
+vocabulary only; M3-DB01 owns the migration DDL and M3-T02/T03/T04/T05 own the
+runtime implementations and consumers.
+
 Problem `details` are limited to short printable validation messages or codes.
 Detail keys are normalized from camelCase and `.`, `_`, `-` separators into
 lowercase segments. The generated client rejects the entire problem envelope

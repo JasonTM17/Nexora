@@ -1,0 +1,121 @@
+{
+  "contractVersion": "1.0.0",
+  "task": "M3-T01",
+  "status": "frozen-contract-only",
+  "authority": {
+    "tenantAuthority": "A topic or channel identifier is never authority; the server derives tenant and subject ownership from trusted authentication context plus current tenant state.",
+    "subjectAuthority": "The authenticated subject and current membership determine who may publish or consume an event.",
+    "outboxAuthority": "Committed domain changes emit an outbox row in the same transaction; the outbox row is downstream durable evidence, not the business truth.",
+    "deliveryAuthority": "Private Realtime and NATS consumers are progressive delivery mechanisms only.",
+    "apiProjection": "packages/contracts/fixtures/v1/event-contract.json"
+  },
+  "eventEnvelope": {
+    "version": "1.0.0",
+    "requiredFields": [
+      "eventId",
+      "eventType",
+      "eventVersion",
+      "organizationId",
+      "subjectId",
+      "resourceType",
+      "resourceId",
+      "topic",
+      "actorId",
+      "traceId",
+      "idempotencyKeyDigest",
+      "payloadDigest",
+      "safePayload",
+      "occurredAt"
+    ],
+    "rules": [
+      "eventId and payloadDigest are opaque digests, not authorization proof.",
+      "organizationId, subjectId, actorId, resourceType and resourceId are server-derived from trusted context, not browser input.",
+      "topic follows scope:tenant-or-resource-id:purpose and is only a routing candidate.",
+      "safePayload contains allowlisted IDs, versions, job state and safe display metadata only.",
+      "No body, prompt, token, secret, raw provider output, unbounded PII or cross-tenant identifier may appear in the envelope or payload."
+    ]
+  },
+  "eventTypes": [
+    "PUBLICATION_INVALIDATED",
+    "WORKFLOW_TRANSITIONED",
+    "JOB_PROGRESS_CHANGED",
+    "NOTIFICATION_ENQUEUED",
+    "PRESENCE_CHANGED",
+    "OUTBOX_RECORDED"
+  ],
+  "topicVocabulary": {
+    "pattern": "scope:tenant-or-resource-id:purpose",
+    "scopes": ["tenant", "resource", "job"],
+    "purposes": ["publication", "workflow", "job-progress", "notification", "presence", "outbox"],
+    "ownership": "The owner id encoded in the topic is derived from current server-authorized tenant or resource identity; guessing it never grants access.",
+    "examples": [
+      "tenant:10000000-0000-4000-8000-000000000001:publication",
+      "tenant:10000000-0000-4000-8000-000000000001:workflow",
+      "resource:50000000-0000-4000-8000-000000000001:job-progress",
+      "tenant:10000000-0000-4000-8000-000000000001:notification",
+      "resource:60000000-0000-4000-8000-000000000001:presence",
+      "tenant:10000000-0000-4000-8000-000000000001:outbox"
+    ]
+  },
+  "outbox": {
+    "states": ["PENDING", "CLAIMED", "PUBLISHED", "FAILED", "DEAD_LETTER"],
+    "rules": [
+      "Business row and outbox row are committed in one transaction.",
+      "Claims use bounded locking or lease semantics and are idempotent.",
+      "Duplicate publish attempts never create a second logical effect.",
+      "A terminal failure is visible and never silently dropped."
+    ]
+  },
+  "idempotency": {
+    "requestKey": "A publish or job submission may carry one opaque idempotency key digest scoped to organizationId, topic and operation.",
+    "sameRequest": "A retried request with the same fingerprint reuses the original terminal receipt without creating another outbox row.",
+    "differentRequest": "A reused key with a different fingerprint fails closed with IDEMPOTENCY_KEY_REUSED.",
+    "retention": "Reuse safety after expiry is a future persistence policy; the contract does not promise it."
+  },
+  "safePayload": {
+    "allowedFields": [
+      "resourceId",
+      "resourceType",
+      "organizationId",
+      "subjectId",
+      "actorId",
+      "eventVersion",
+      "jobState",
+      "progress",
+      "correlationId",
+      "traceId",
+      "receiptId",
+      "schemaVersion",
+      "safeDisplay"
+    ],
+    "forbiddenFields": [
+      "body",
+      "content",
+      "documentBody",
+      "prompt",
+      "secret",
+      "token",
+      "accessToken",
+      "cookie",
+      "providerPayload",
+      "rawHtml",
+      "pii",
+      "email",
+      "phone"
+    ]
+  },
+  "errors": [
+    "INVALID_EVENT_VERSION",
+    "INVALID_TOPIC",
+    "PII_REJECTED",
+    "UNOWNED_SUBJECT",
+    "IDEMPOTENCY_KEY_REUSED",
+    "PAYLOAD_REJECTED",
+    "OUTBOX_TERMINAL_FAILURE"
+  ],
+  "limitations": [
+    "This contract defines no migration, producer implementation, worker code, browser UI, provider call or hosted behavior.",
+    "Private Realtime and NATS delivery remain downstream implementation and evidence work.",
+    "M3-DB01 owns migration/index/policy DDL; M3-T02/T03/T04/T05 own runtime consumers."
+  ]
+}

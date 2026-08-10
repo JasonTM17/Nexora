@@ -1,0 +1,101 @@
+{
+  "fixtureVersion": "1.0.0",
+  "authority": "M3-T01 contract fixture only; it is not a broker topic list, outbox table or runtime publish record.",
+  "tenants": [
+    {
+      "organizationId": "10000000-0000-4000-8000-000000000001",
+      "siteId": "20000000-0000-4000-8000-000000000001",
+      "canonicalHost": "alpha.example.test"
+    },
+    {
+      "organizationId": "10000000-0000-4000-8000-000000000002",
+      "siteId": "20000000-0000-4000-8000-000000000002",
+      "canonicalHost": "beta.example.test"
+    }
+  ],
+  "events": [
+    {
+      "eventId": "70000000-0000-4000-8000-000000000001",
+      "eventType": "PUBLICATION_INVALIDATED",
+      "eventVersion": 1,
+      "topic": "tenant:10000000-0000-4000-8000-000000000001:publication",
+      "organizationId": "10000000-0000-4000-8000-000000000001",
+      "subjectId": "90000000-0000-4000-8000-000000000001",
+      "resourceType": "page",
+      "resourceId": "30000000-0000-4000-8000-000000000001",
+      "actorId": "80000000-0000-4000-8000-000000000001",
+      "traceId": "trace-event-alpha-publication",
+      "idempotencyKeyDigest": "sha256:event-contract-alpha-publication",
+      "payloadDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "occurredAt": "2026-08-10T00:00:00Z",
+      "safePayload": {
+        "resourceId": "30000000-0000-4000-8000-000000000001",
+        "resourceType": "page",
+        "organizationId": "10000000-0000-4000-8000-000000000001",
+        "subjectId": "90000000-0000-4000-8000-000000000001",
+        "actorId": "80000000-0000-4000-8000-000000000001",
+        "eventVersion": 1,
+        "jobState": "PENDING",
+        "progress": 0,
+        "correlationId": "corr-alpha-001",
+        "traceId": "trace-event-alpha-publication",
+        "receiptId": "receipt-alpha-publication-001",
+        "schemaVersion": "1.0.0",
+        "safeDisplay": {
+          "label": "Alpha publication invalidated",
+          "status": "queued"
+        }
+      }
+    },
+    {
+      "eventId": "70000000-0000-4000-8000-000000000002",
+      "eventType": "JOB_PROGRESS_CHANGED",
+      "eventVersion": 1,
+      "topic": "resource:50000000-0000-4000-8000-000000000001:job-progress",
+      "organizationId": "10000000-0000-4000-8000-000000000001",
+      "subjectId": "90000000-0000-4000-8000-000000000001",
+      "resourceType": "job",
+      "resourceId": "50000000-0000-4000-8000-000000000001",
+      "actorId": "80000000-0000-4000-8000-000000000001",
+      "traceId": "trace-event-alpha-job",
+      "idempotencyKeyDigest": "sha256:event-contract-alpha-job",
+      "payloadDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "occurredAt": "2026-08-10T00:05:00Z",
+      "safePayload": {
+        "resourceId": "50000000-0000-4000-8000-000000000001",
+        "resourceType": "job",
+        "organizationId": "10000000-0000-4000-8000-000000000001",
+        "subjectId": "90000000-0000-4000-8000-000000000001",
+        "actorId": "80000000-0000-4000-8000-000000000001",
+        "eventVersion": 1,
+        "jobState": "RUNNING",
+        "progress": 45,
+        "correlationId": "corr-alpha-002",
+        "traceId": "trace-event-alpha-job",
+        "receiptId": "receipt-alpha-job-001",
+        "schemaVersion": "1.0.0",
+        "safeDisplay": {
+          "label": "Alpha job progress",
+          "status": "running"
+        }
+      }
+    }
+  ],
+  "outbox": {
+    "states": ["PENDING", "CLAIMED", "PUBLISHED", "FAILED", "DEAD_LETTER"],
+    "sameTransactionRule": "Domain change and outbox record commit together or not at all.",
+    "duplicateRule": "A duplicate publish attempt never creates a second logical effect.",
+    "failureRule": "A terminal failure remains visible and does not become silent loss."
+  },
+  "idempotency": {
+    "sameRequest": "same-terminal-receipt",
+    "differentRequest": "IDEMPOTENCY_KEY_REUSED",
+    "negativeCases": [
+      "A guessed tenant topic for another organization never grants access.",
+      "A payload with a body, prompt, token, secret or providerPayload is rejected.",
+      "A payload with unowned subject data or cross-tenant resource IDs is rejected.",
+      "A reused idempotency key with a different fingerprint fails closed.",
+      "A terminal outbox failure remains visible instead of being hidden."
+    ]
+  }
+}
