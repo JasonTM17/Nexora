@@ -31,7 +31,8 @@ final class NexoraJwtValidator implements OAuth2TokenValidator<Jwt> {
         if (token.getExpiresAt() == null) {
             return failure("missing_expiration");
         }
-        if (!ACCEPTED_AAL.contains(token.getClaimAsString("aal"))) {
+        String assuranceLevel = token.getClaimAsString("aal");
+        if (assuranceLevel == null || !ACCEPTED_AAL.contains(assuranceLevel)) {
             return failure("invalid_aal");
         }
         try {

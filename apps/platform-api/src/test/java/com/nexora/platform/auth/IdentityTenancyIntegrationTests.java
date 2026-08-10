@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexora.platform.tenant.TenantContext;
-import com.nexora.platform.tenant.TransactionLocalDatabaseContext;
+import com.nexora.platform.tenant.TenantContextService;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
@@ -49,7 +50,7 @@ class IdentityTenancyIntegrationTests {
     private int port;
 
     @Autowired
-    private TransactionLocalDatabaseContext databaseContext;
+    private TenantContextService tenantContexts;
 
     @Autowired
     private DataSource dataSource;
@@ -176,10 +177,10 @@ class IdentityTenancyIntegrationTests {
 
     @Test
     void clearsAllTransactionLocalSettingsAfterAnExceptionOnThePooledConnection() throws Exception {
-        TenantContext context = new TenantContext(
-                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), 1, "USER");
+        OrganizationFixture tenant = seedOrganization(UUID.randomUUID());
+        TenantContext context = tenant.ownerContext();
 
-        assertThatThrownBy(() -> databaseContext.forTenant(context, jdbc -> {
+        assertThatThrownBy(() -> tenantContexts.withFreshTenant(context, (authoritative, jdbc) -> {
             throw new IllegalStateException("forced rollback");
         })).isInstanceOf(IllegalStateException.class).hasMessage("forced rollback");
 
@@ -197,6 +198,64 @@ class IdentityTenancyIntegrationTests {
         }
     }
 
+    @Test
+    void resetsAfterCommitAndPreventsTenantContextOrDataLeakOnRealPooledReuse() throws Exception {
+        UUID tenantASubject = UUID.randomUUID();
+        UUID tenantBSubject = UUID.randomUUID();
+        OrganizationFixture tenantA = seedOrganization(tenantASubject);
+        OrganizationFixture tenantB = seedOrganization(tenantBSubject);
+        TenantContext contextA = tenantA.ownerContext();
+        TenantContext contextB = tenantB.ownerContext();
+
+        Integer backendA = tenantContexts.withFreshTenant(contextA, (authoritative, jdbc) -> {
+            assertCurrentContext(jdbc, contextA);
+            assertThat(jdbc.queryForObject(
+                    "SELECT count(*) FROM nexora.organizations WHERE id = ?", Integer.class,
+                    tenantA.organizationId())).isEqualTo(1);
+            assertThat(jdbc.queryForObject(
+                    "SELECT count(*) FROM nexora.organizations WHERE id = ?", Integer.class,
+                    tenantB.organizationId())).isZero();
+            return jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class);
+        });
+
+        assertPooledSettingsAreEmpty();
+
+        Integer backendB = tenantContexts.withFreshTenant(contextB, (authoritative, jdbc) -> {
+            assertCurrentContext(jdbc, contextB);
+            assertThat(jdbc.queryForObject(
+                    "SELECT count(*) FROM nexora.organizations WHERE id = ?", Integer.class,
+                    tenantA.organizationId())).isZero();
+            assertThat(jdbc.queryForObject(
+                    "SELECT count(*) FROM nexora.organizations WHERE id = ?", Integer.class,
+                    tenantB.organizationId())).isEqualTo(1);
+            return jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class);
+        });
+
+        assertThat(backendB).isEqualTo(backendA);
+        assertPooledSettingsAreEmpty();
+    }
+
+    @Test
+    void deniesChangedMembershipVersionAndRoleBeforePromotingOrRunningTenantWork() throws Exception {
+        UUID subject = UUID.randomUUID();
+        OrganizationFixture tenant = seedOrganization(UUID.randomUUID());
+        UUID membershipId = seedMembership(tenant, subject, "USER", "ACTIVE");
+        TenantContext resolved = tenantContexts.resolve(subject, tenant.organizationId());
+        AtomicBoolean tenantWorkRan = new AtomicBoolean();
+
+        changeMembershipRole(tenant, membershipId, "REVIEWER");
+
+        assertThatThrownBy(() -> tenantContexts.withFreshTenant(resolved, (context, jdbc) -> {
+            tenantWorkRan.set(true);
+            return null;
+        })).isInstanceOfSatisfying(DomainAccessException.class, exception -> {
+            assertThat(exception.code()).isEqualTo("PERMISSION_DENIED");
+            assertThat(exception.getMessage()).contains("stale");
+        });
+        assertThat(tenantWorkRan).isFalse();
+        assertPooledSettingsAreEmpty();
+    }
+
     private HttpResponse<String> get(String path, String token, UUID organizationId) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
                 .header("Authorization", "Bearer " + token)
@@ -205,6 +264,32 @@ class IdentityTenancyIntegrationTests {
             request.header("X-Nexora-Organization-Id", organizationId.toString());
         }
         return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private void assertCurrentContext(org.springframework.jdbc.core.JdbcTemplate jdbc, TenantContext context) {
+        Map<String, Object> settings = jdbc.queryForMap("""
+                SELECT current_setting('nexora.subject_id', true) AS subject_id,
+                       current_setting('nexora.organization_id', true) AS organization_id,
+                       current_setting('nexora.membership_id', true) AS membership_id
+                """);
+        assertThat(settings.get("subject_id")).isEqualTo(context.subjectId().toString());
+        assertThat(settings.get("organization_id")).isEqualTo(context.organizationId().toString());
+        assertThat(settings.get("membership_id")).isEqualTo(context.membershipId().toString());
+    }
+
+    private void assertPooledSettingsAreEmpty() throws Exception {
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement();
+             ResultSet settings = statement.executeQuery("""
+                     SELECT current_setting('nexora.subject_id', true),
+                            current_setting('nexora.organization_id', true),
+                            current_setting('nexora.membership_id', true)
+                     """)) {
+            assertThat(settings.next()).isTrue();
+            assertThat(settings.getString(1)).isEmpty();
+            assertThat(settings.getString(2)).isEmpty();
+            assertThat(settings.getString(3)).isEmpty();
+        }
     }
 
     private HttpResponse<String> putProfile(String token, String body) throws Exception {
@@ -300,6 +385,20 @@ class IdentityTenancyIntegrationTests {
         }
     }
 
+    private void changeMembershipRole(
+            OrganizationFixture organization, UUID membershipId, String tenantRole) throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                DATABASE.getJdbcUrl(), DATABASE.getUsername(), DATABASE.getPassword());
+             Statement statement = connection.createStatement()) {
+            connection.setAutoCommit(false);
+            setContext(statement, organization.ownerSubjectId(),
+                    organization.organizationId(), organization.ownerMembershipId());
+            statement.execute("UPDATE nexora.memberships SET tenant_role = '" + tenantRole
+                    + "' WHERE id = '" + membershipId + "'");
+            connection.commit();
+        }
+    }
+
     private static void setContext(
             Statement statement, UUID subjectId, UUID organizationId, UUID membershipId) throws Exception {
         statement.execute("SELECT set_config('nexora.subject_id', '" + subjectId + "', true)");
@@ -308,5 +407,8 @@ class IdentityTenancyIntegrationTests {
     }
 
     private record OrganizationFixture(UUID organizationId, UUID ownerMembershipId, UUID ownerSubjectId) {
+        TenantContext ownerContext() {
+            return new TenantContext(ownerSubjectId, organizationId, ownerMembershipId, 1, "OWNER");
+        }
     }
 }

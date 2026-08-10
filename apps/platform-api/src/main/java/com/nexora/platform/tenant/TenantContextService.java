@@ -45,11 +45,19 @@ public class TenantContextService {
     public <T> T withFreshTenant(
             UUID subjectId, UUID selectedOrganizationId, BiFunction<TenantContext, JdbcTemplate, T> work) {
         TenantContext resolved = resolve(subjectId, selectedOrganizationId);
-        return databaseContext.forTenant(resolved, jdbc -> {
-            if (!memberships.isCurrent(jdbc, resolved)) {
-                throw denied("PERMISSION_DENIED", "The active membership context is stale.");
-            }
-            return work.apply(resolved, jdbc);
+        return withFreshTenant(resolved, work);
+    }
+
+    public <T> T withFreshTenant(
+            TenantContext expected, BiFunction<TenantContext, JdbcTemplate, T> work) {
+        return databaseContext.forSubject(expected.subjectId(), jdbc -> {
+            TenantContext authoritative = memberships.findActiveForAuthorization(jdbc, expected)
+                    .filter(current -> current.membershipId().equals(expected.membershipId()))
+                    .filter(current -> current.membershipVersion() == expected.membershipVersion())
+                    .filter(current -> current.role().equals(expected.role()))
+                    .orElseThrow(() -> denied("PERMISSION_DENIED", "The active membership context is stale."));
+            databaseContext.promoteToTenant(authoritative);
+            return work.apply(authoritative, jdbc);
         });
     }
 

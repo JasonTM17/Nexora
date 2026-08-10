@@ -1,11 +1,13 @@
 package com.nexora.platform.tenant;
 
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Component
 @Profile("database")
@@ -22,8 +24,22 @@ public class TransactionLocalDatabaseContext {
         return execute(subjectId, null, null, work);
     }
 
-    public <T> T forTenant(TenantContext context, Function<JdbcTemplate, T> work) {
-        return execute(context.subjectId(), context.organizationId(), context.membershipId(), work);
+    void promoteToTenant(TenantContext context) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("Tenant context promotion requires an active transaction");
+        }
+        Map<String, Object> current = jdbc.queryForMap("""
+                SELECT current_setting('nexora.subject_id', true) AS subject_id,
+                       current_setting('nexora.organization_id', true) AS organization_id,
+                       current_setting('nexora.membership_id', true) AS membership_id
+                """);
+        if (!context.subjectId().toString().equals(current.get("subject_id"))
+                || !"".equals(current.get("organization_id"))
+                || !"".equals(current.get("membership_id"))) {
+            throw new IllegalStateException("Tenant context may only promote a matching subject-only transaction");
+        }
+        setLocal("nexora.organization_id", context.organizationId());
+        setLocal("nexora.membership_id", context.membershipId());
     }
 
     private <T> T execute(

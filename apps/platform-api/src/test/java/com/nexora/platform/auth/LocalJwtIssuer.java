@@ -17,9 +17,10 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 final class LocalJwtIssuer implements AutoCloseable {
     private final HttpServer server;
@@ -69,6 +70,23 @@ final class LocalJwtIssuer implements AutoCloseable {
     }
 
     String token(UUID subjectId, Instant expiresAt, Map<String, Object> extraClaims) {
+        return token(JWSAlgorithm.RS256, subjectId, expiresAt,
+                claims -> extraClaims.forEach(claims::claim));
+    }
+
+    String token(Consumer<JWTClaimsSet.Builder> customize) {
+        return token(JWSAlgorithm.RS256, UUID.randomUUID(), Instant.now().plusSeconds(60), customize);
+    }
+
+    String token(JWSAlgorithm algorithm, Consumer<JWTClaimsSet.Builder> customize) {
+        return token(algorithm, UUID.randomUUID(), Instant.now().plusSeconds(60), customize);
+    }
+
+    private String token(
+            JWSAlgorithm algorithm,
+            UUID subjectId,
+            Instant expiresAt,
+            Consumer<JWTClaimsSet.Builder> customize) {
         try {
             Instant now = Instant.now();
             JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
@@ -81,9 +99,9 @@ final class LocalJwtIssuer implements AutoCloseable {
                     .claim("role", "authenticated")
                     .claim("aal", "aal1")
                     .claim("is_anonymous", false);
-            extraClaims.forEach(claims::claim);
+            customize.accept(claims);
             SignedJWT token = new SignedJWT(
-                    new JWSHeader.Builder(JWSAlgorithm.RS256)
+                    new JWSHeader.Builder(algorithm)
                             .type(JOSEObjectType.JWT)
                             .keyID(signingKey.getKeyID())
                             .build(),

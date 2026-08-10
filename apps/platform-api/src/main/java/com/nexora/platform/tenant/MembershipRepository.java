@@ -1,6 +1,7 @@
 package com.nexora.platform.tenant;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -23,14 +24,18 @@ class MembershipRepository {
                         result.getString("tenant_role")), subjectId);
     }
 
-    boolean isCurrent(JdbcTemplate jdbc, TenantContext context) {
-        Integer count = jdbc.queryForObject("""
-                SELECT count(*)
+    Optional<TenantContext> findActiveForAuthorization(JdbcTemplate jdbc, TenantContext expected) {
+        return jdbc.query("""
+                SELECT id, organization_id, version, tenant_role::text
                 FROM nexora.memberships
                 WHERE id = ? AND organization_id = ? AND subject_id = ?
-                  AND version = ? AND status = 'ACTIVE'
-                """, Integer.class, context.membershipId(), context.organizationId(),
-                context.subjectId(), context.membershipVersion());
-        return count != null && count == 1;
+                  AND status = 'ACTIVE'
+                """, (result, row) -> new TenantContext(
+                        expected.subjectId(),
+                        result.getObject("organization_id", UUID.class),
+                        result.getObject("id", UUID.class),
+                        result.getLong("version"),
+                        result.getString("tenant_role")),
+                expected.membershipId(), expected.organizationId(), expected.subjectId()).stream().findFirst();
     }
 }
