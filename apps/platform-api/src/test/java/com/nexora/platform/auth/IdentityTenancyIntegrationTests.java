@@ -6,6 +6,8 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexora.platform.authorization.MembershipManagementService;
+import com.nexora.platform.authorization.MembershipManagementService.MembershipStatus;
 import com.nexora.platform.tenant.TenantContext;
 import com.nexora.platform.tenant.TenantContextService;
 import java.net.URI;
@@ -53,6 +55,9 @@ class IdentityTenancyIntegrationTests {
 
     @Autowired
     private TenantContextService tenantContexts;
+
+    @Autowired
+    private MembershipManagementService membershipManagement;
 
     @Autowired
     private DataSource dataSource;
@@ -191,12 +196,18 @@ class IdentityTenancyIntegrationTests {
              ResultSet settings = statement.executeQuery("""
                      SELECT current_setting('nexora.subject_id', true),
                             current_setting('nexora.organization_id', true),
-                            current_setting('nexora.membership_id', true)
+                            current_setting('nexora.membership_id', true),
+                            current_setting('nexora.target_membership_id', true),
+                            current_setting('nexora.target_membership_version', true),
+                            current_setting('nexora.target_membership_mutation', true)
                      """)) {
             assertThat(settings.next()).isTrue();
             assertThat(settings.getString(1)).isEmpty();
             assertThat(settings.getString(2)).isEmpty();
             assertThat(settings.getString(3)).isEmpty();
+            assertThat(settings.getString(4)).isNullOrEmpty();
+            assertThat(settings.getString(5)).isNullOrEmpty();
+            assertThat(settings.getString(6)).isNullOrEmpty();
         }
     }
 
@@ -270,6 +281,123 @@ class IdentityTenancyIntegrationTests {
                 .doesNotContainIgnoringCase("stale", "membership", "version", "role");
     }
 
+    @Test
+    void ownerMayChangeOneExactTargetRoleAndTargetContextIsCleared() throws Exception {
+        OrganizationFixture tenant = seedOrganization(UUID.randomUUID());
+        UUID target = seedMembership(tenant, UUID.randomUUID(), "USER", "ACTIVE");
+
+        MembershipManagementService.MembershipView changed = membershipManagement.assignRole(
+                tenant.ownerContext(), target, 1, "REVIEWER");
+
+        assertThat(changed.membershipId()).isEqualTo(target);
+        assertThat(changed.role()).isEqualTo("REVIEWER");
+        assertThat(changed.version()).isEqualTo(2);
+        assertPooledSettingsAreEmpty();
+    }
+
+    @Test
+    void editorCannotAssignRoleAndCrossTenantTargetIsDenied() throws Exception {
+        OrganizationFixture tenant = seedOrganization(UUID.randomUUID());
+        UUID editorSubject = UUID.randomUUID();
+        UUID editor = seedMembership(tenant, editorSubject, "EDITOR", "ACTIVE");
+        UUID target = seedMembership(tenant, UUID.randomUUID(), "USER", "ACTIVE");
+        TenantContext editorContext = new TenantContext(
+                editorSubject, tenant.organizationId(), editor, 1, "EDITOR");
+
+        assertThatThrownBy(() -> membershipManagement.assignRole(editorContext, target, 1, "USER"))
+                .isInstanceOf(DomainAccessException.class)
+                .extracting(exception -> ((DomainAccessException) exception).code())
+                .isEqualTo("PERMISSION_DENIED");
+
+        OrganizationFixture other = seedOrganization(UUID.randomUUID());
+        UUID otherTarget = seedMembership(other, UUID.randomUUID(), "USER", "ACTIVE");
+        assertThatThrownBy(() -> membershipManagement.assignRole(tenant.ownerContext(), otherTarget, 1, "USER"))
+                .isInstanceOf(DomainAccessException.class)
+                .extracting(exception -> ((DomainAccessException) exception).code())
+                .isEqualTo("VERSION_CONFLICT");
+        assertPooledSettingsAreEmpty();
+    }
+
+    @Test
+    void staleTargetVersionCannotMutateOrReactivateMembership() throws Exception {
+        OrganizationFixture tenant = seedOrganization(UUID.randomUUID());
+        UUID target = seedMembership(tenant, UUID.randomUUID(), "USER", "ACTIVE");
+        membershipManagement.changeStatus(tenant.ownerContext(), target, 1, MembershipStatus.SUSPENDED);
+
+        assertThatThrownBy(() -> membershipManagement.assignRole(tenant.ownerContext(), target, 1, "REVIEWER"))
+                .isInstanceOf(DomainAccessException.class)
+                .extracting(exception -> ((DomainAccessException) exception).code())
+                .isEqualTo("VERSION_CONFLICT");
+        assertThatThrownBy(() -> membershipManagement.changeStatus(
+                tenant.ownerContext(), target, 2, MembershipStatus.ACTIVE))
+                .isInstanceOf(DomainAccessException.class)
+                .extracting(exception -> ((DomainAccessException) exception).code())
+                .isEqualTo("PERMISSION_DENIED");
+        assertPooledSettingsAreEmpty();
+    }
+
+    @Test
+    void lastDesignatedOwnerCannotBeDemotedOrSuspended() throws Exception {
+        OrganizationFixture tenant = seedOrganization(UUID.randomUUID());
+
+        assertThatThrownBy(() -> membershipManagement.assignRole(
+                tenant.ownerContext(), tenant.ownerMembershipId(), 1, "ADMIN"))
+                .isInstanceOf(DomainAccessException.class)
+                .extracting(exception -> ((DomainAccessException) exception).code())
+                .isEqualTo("REJECT_LAST_OWNER_INVARIANT");
+        assertPooledSettingsAreEmpty();
+    }
+
+    @Test
+    void targetMutationMarkerOnlyCoversTheExpectedVersionUpdate() throws Exception {
+        OrganizationFixture tenant = seedOrganization(UUID.randomUUID());
+        UUID target = seedMembership(tenant, UUID.randomUUID(), "USER", "ACTIVE");
+
+        tenantContexts.withFreshTenantTarget(tenant.ownerContext(), target, 1, (actor, jdbc) -> {
+            assertThat(jdbc.queryForObject(
+                    "SELECT current_setting('nexora.target_membership_mutation', true)", String.class)).isEmpty();
+            assertThat(jdbc.queryForObject(
+                    "SELECT count(*) FROM nexora.memberships WHERE id = ? AND version = 1",
+                    Integer.class, target)).isEqualTo(1);
+
+            int changed = tenantContexts.withTargetMembershipMutation(() -> jdbc.update("""
+                    UPDATE nexora.memberships
+                    SET tenant_role = 'REVIEWER'::nexora.tenant_role
+                    WHERE id = ? AND version = 1
+                    """, target));
+
+            assertThat(changed).isEqualTo(1);
+            assertThat(jdbc.queryForObject(
+                    "SELECT current_setting('nexora.target_membership_mutation', true)", String.class)).isEmpty();
+            assertThat(jdbc.queryForObject(
+                    "SELECT count(*) FROM nexora.memberships WHERE id = ? AND version = 2",
+                    Integer.class, target)).isZero();
+            return null;
+        });
+        assertPooledSettingsAreEmpty();
+    }
+
+    @Test
+    void membershipMutationHttpBoundaryReturnsAControlledPermissionEnvelope() throws Exception {
+        UUID ownerSubject = UUID.randomUUID();
+        OrganizationFixture tenant = seedOrganization(ownerSubject);
+        UUID target = seedMembership(tenant, UUID.randomUUID(), "USER", "ACTIVE");
+        String ownerToken = ISSUER.token(ownerSubject, Instant.now().plusSeconds(120));
+
+        HttpResponse<String> allowed = patchMembership(
+                ownerToken, tenant.organizationId(), target,
+                "{\"expectedVersion\":1,\"role\":\"REVIEWER\"}");
+        HttpResponse<String> invalidStatus = patchMembership(
+                ownerToken, tenant.organizationId(), target,
+                "{\"expectedVersion\":2,\"status\":\"NOT_A_STATUS\"}");
+
+        assertThat(allowed.statusCode()).isEqualTo(200);
+        assertThat(json.readTree(allowed.body()).path("role").asText()).isEqualTo("REVIEWER");
+        assertThat(invalidStatus.statusCode()).isEqualTo(400);
+        assertThat(json.readTree(invalidStatus.body()).path("code").asText()).isEqualTo("VALIDATION_FAILED");
+        assertPooledSettingsAreEmpty();
+    }
+
     private HttpResponse<String> get(String path, String token, UUID organizationId) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
                 .header("Authorization", "Bearer " + token)
@@ -297,12 +425,18 @@ class IdentityTenancyIntegrationTests {
              ResultSet settings = statement.executeQuery("""
                      SELECT current_setting('nexora.subject_id', true),
                             current_setting('nexora.organization_id', true),
-                            current_setting('nexora.membership_id', true)
+                            current_setting('nexora.membership_id', true),
+                            current_setting('nexora.target_membership_id', true),
+                            current_setting('nexora.target_membership_version', true),
+                            current_setting('nexora.target_membership_mutation', true)
                      """)) {
             assertThat(settings.next()).isTrue();
             assertThat(settings.getString(1)).isEmpty();
             assertThat(settings.getString(2)).isEmpty();
             assertThat(settings.getString(3)).isEmpty();
+            assertThat(settings.getString(4)).isNullOrEmpty();
+            assertThat(settings.getString(5)).isNullOrEmpty();
+            assertThat(settings.getString(6)).isNullOrEmpty();
         }
     }
 
@@ -311,6 +445,18 @@ class IdentityTenancyIntegrationTests {
                 .header("Authorization", "Bearer " + token)
                 .header("Content-Type", "application/json")
                 .PUT(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> patchMembership(
+            String token, UUID organizationId, UUID membershipId, String body) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                        + "/api/v1/authorization/memberships/" + membershipId))
+                .header("Authorization", "Bearer " + token)
+                .header("X-Nexora-Organization-Id", organizationId.toString())
+                .header("Content-Type", "application/json")
+                .method("PATCH", HttpRequest.BodyPublishers.ofString(body))
                 .build();
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
@@ -334,7 +480,7 @@ class IdentityTenancyIntegrationTests {
         try {
             migrationDirectory = Files.createTempDirectory("nexora-m2-flyway-");
             Path source = Path.of("..", "..", "database", "migrations").toAbsolutePath().normalize();
-            for (int version = 1; version <= 4; version++) {
+            for (int version = 1; version <= 5; version++) {
                 String prefix = "V%03d__".formatted(version);
                 try (Stream<Path> candidates = Files.list(source)) {
                     Path migration = candidates

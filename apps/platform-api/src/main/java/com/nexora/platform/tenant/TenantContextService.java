@@ -4,6 +4,7 @@ import com.nexora.platform.auth.DomainAccessException;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.BiFunction;
+import java.util.function.Supplier;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -60,6 +61,27 @@ public class TenantContextService {
             databaseContext.promoteToTenant(authoritative);
             return work.apply(authoritative, jdbc);
         });
+    }
+
+    /**
+     * Runs one authorization operation with an exact, transaction-local target
+     * membership. The target settings are never promoted to a pooled session
+     * and are only populated after the actor's fresh ACTIVE membership has
+     * passed the normal stale-context gate.
+     */
+    public <T> T withFreshTenantTarget(
+            TenantContext expected,
+            UUID targetMembershipId,
+            long targetMembershipVersion,
+            BiFunction<TenantContext, JdbcTemplate, T> work) {
+        return withFreshTenant(expected, (authoritative, jdbc) -> {
+            databaseContext.setTargetMembership(targetMembershipId, targetMembershipVersion);
+            return work.apply(authoritative, jdbc);
+        });
+    }
+
+    public <T> T withTargetMembershipMutation(Supplier<T> work) {
+        return databaseContext.withTargetMembershipMutation(work);
     }
 
     private DomainAccessException staleMembershipContext() {
