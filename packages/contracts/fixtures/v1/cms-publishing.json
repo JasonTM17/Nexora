@@ -1,0 +1,47 @@
+{
+  "fixtureVersion": "1.0.0",
+  "authority": "M2-C02 contract fixture only; it is not a database seed or publication record.",
+  "tenants": [
+    { "organizationId": "10000000-0000-4000-8000-000000000001", "siteId": "20000000-0000-4000-8000-000000000001", "canonicalHost": "alpha.example.test" },
+    { "organizationId": "10000000-0000-4000-8000-000000000002", "siteId": "20000000-0000-4000-8000-000000000002", "canonicalHost": "beta.example.test" }
+  ],
+  "pages": [
+    {
+      "pageId": "30000000-0000-4000-8000-000000000001",
+      "organizationId": "10000000-0000-4000-8000-000000000001",
+      "siteId": "20000000-0000-4000-8000-000000000001",
+      "slug": "welcome",
+      "draftVersion": 3,
+      "state": "APPROVED",
+      "publishedVersionId": "40000000-0000-4000-8000-000000000003",
+      "themeVersion": 2,
+      "seo": { "title": "Welcome to Alpha", "description": "Alpha tenant welcome page.", "canonical": "https://alpha.example.test/welcome", "locale": "en-US" }
+    },
+    {
+      "pageId": "30000000-0000-4000-8000-000000000002",
+      "organizationId": "10000000-0000-4000-8000-000000000002",
+      "siteId": "20000000-0000-4000-8000-000000000002",
+      "slug": "welcome",
+      "draftVersion": 1,
+      "state": "DRAFT",
+      "publishedVersionId": null,
+      "themeVersion": 1,
+      "seo": { "title": "Welcome to Beta", "description": "Beta tenant welcome page.", "canonical": "https://beta.example.test/welcome", "locale": "en-US" }
+    }
+  ],
+  "publication": {
+    "idempotencyKey": "publish-alpha-welcome-v3",
+    "fingerprint": "sha256:fixture-publish-alpha-welcome-v3",
+    "firstResult": { "publishedVersionId": "40000000-0000-4000-8000-000000000003", "receiptId": "50000000-0000-4000-8000-000000000003" },
+    "retryResult": "same-receipt-no-new-version",
+    "differentFingerprintResult": "IDEMPOTENCY_KEY_REUSED"
+  },
+  "negativeCases": [
+    "Alpha and Beta may both use the welcome slug because tenant/site scopes differ.",
+    "A second Alpha welcome slug is rejected.",
+    "A stale draftVersion 2 cannot publish Alpha draftVersion 3.",
+    "Beta cannot read, publish, rollback or resolve Alpha page/version/canonical output.",
+    "A foreign canonical host, raw script JSON-LD, arbitrary CSS theme value and self approval are rejected.",
+    "Rollback creates a distinct new immutable version and receipt."
+  ]
+}

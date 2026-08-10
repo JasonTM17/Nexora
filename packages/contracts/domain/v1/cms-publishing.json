@@ -1,0 +1,92 @@
+{
+  "contractVersion": "1.0.0",
+  "task": "M2-C02",
+  "status": "frozen-contract-only",
+  "authority": {
+    "tenantAuthority": "current ACTIVE membership resolved by the M2-T01 boundary",
+    "permissionAuthority": "central M2-T02 permission evaluator backed by the frozen tenant role matrix",
+    "persistenceAuthority": "future M2-DB02 migrations only",
+    "apiProjection": "packages/contracts/openapi/v1/openapi.json"
+  },
+  "pageAggregate": {
+    "identity": "A page identity is tenant/site scoped and distinct from every mutable draft and immutable published version.",
+    "slug": {
+      "scope": ["organizationId", "siteId"],
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "minimumLength": 1,
+      "maximumLength": 120,
+      "uniqueness": "A slug may repeat in another tenant or site but never within one active tenant/site scope."
+    },
+    "lifecycle": ["DRAFT", "IN_REVIEW", "APPROVED", "PUBLISHED", "ARCHIVED"],
+    "archiveRule": "Archive preserves immutable published/history/audit evidence and makes the page unavailable for new draft mutation until an explicitly accepted restore contract exists.",
+    "draftConcurrency": "Every draft mutation supplies expectedDraftVersion; a mismatch returns VERSION_CONFLICT without a lost write."
+  },
+  "versioning": {
+    "publishedVersion": "An immutable snapshot with pageId, content digest, schemaVersion, themeVersion, SEO snapshot, actor, correlationId and publication receipt.",
+    "immutability": "Published version payloads and receipt fields never mutate. Corrections create a new version.",
+    "rollback": "Rollback validates a prior immutable version and creates a distinct new publication receipt/version; it never rewrites the old version or moves history in place.",
+    "preview": "Preview is draft-bound, authorized and non-public. It never changes public resolution or crawler output."
+  },
+  "workflow": {
+    "transitions": {
+      "DRAFT": ["IN_REVIEW"],
+      "IN_REVIEW": ["APPROVED", "DRAFT"],
+      "APPROVED": ["PUBLISHED", "DRAFT"],
+      "PUBLISHED": ["DRAFT", "ARCHIVED"],
+      "ARCHIVED": []
+    },
+    "rules": [
+      "The server evaluates fresh tenant permission and the exact candidate draft version before every transition.",
+      "A rejection returns to DRAFT and requires a bounded human-readable reason.",
+      "A creator cannot self-approve or self-publish unless a later accepted role policy explicitly permits it.",
+      "Every transition has immutable safe actor, tenant, page, candidate version, action, result, trace and timestamp metadata."
+    ]
+  },
+  "publishing": {
+    "idempotency": {
+      "requestKey": "An authenticated publish or rollback request carries one opaque Idempotency-Key scoped to organizationId, pageId and operation.",
+      "sameRequest": "A retried key with the same request fingerprint returns the original terminal receipt without creating another version or audit record.",
+      "differentRequest": "A reused key with a different fingerprint returns IDEMPOTENCY_KEY_REUSED and performs no transition.",
+      "retention": "Retention/expiry is a future persistence policy; no client may assume key reuse is safe after expiry."
+    },
+    "durableTruth": "Publication commit and immutable receipt are durable truth. Cache, search, realtime and outbox invalidation are downstream consumers and never the source of publish correctness.",
+    "receipt": ["receiptId", "operation", "organizationId", "siteId", "pageId", "sourceDraftVersion", "publishedVersionId", "schemaVersion", "themeVersion", "seoSnapshotDigest", "actorId", "traceId", "idempotencyKeyDigest", "createdAt"]
+  },
+  "seo": {
+    "snapshot": "Each publication freezes typed SEO metadata with the immutable published version.",
+    "fields": {
+      "title": { "minimumLength": 1, "maximumLength": 70 },
+      "description": { "minimumLength": 1, "maximumLength": 160 },
+      "locale": "BCP-47 language tag from an accepted allowlist",
+      "canonical": "Derived only from an accepted site canonical host/path policy; editor input cannot choose a foreign host or arbitrary URL.",
+      "openGraph": ["title", "description", "imageAssetId", "type"],
+      "twitter": ["card", "title", "description", "imageAssetId"],
+      "jsonLd": "One allowlisted structured data type and bounded typed fields; arbitrary JSON, script, HTML and remote URLs are rejected."
+    },
+    "crawlerOutputs": ["canonical", "openGraph", "twitter", "jsonLd", "sitemap", "robots"],
+    "crawlerRule": "Crawler output resolves only from the exact published tenant/site version. It never exposes a draft, private preview, unpublished metadata or another tenant's cache entry."
+  },
+  "theme": {
+    "reference": "A publication references one immutable, validated theme version.",
+    "tokens": ["color", "typography", "spacing", "radius", "container", "surface", "border", "focus", "motion"],
+    "forbidden": ["arbitrary CSS", "stylesheet text", "script", "unsafe URL", "unbounded font or asset URL"],
+    "fallback": "If a referenced published theme is unavailable, public resolution uses the accepted safe fallback and records a safe degraded result; it never executes an editor-supplied style."
+  },
+  "authorization": {
+    "pageRead": "organization.read plus a resolved current tenant context",
+    "draftWrite": "page.create or page.update as appropriate plus a resolved current tenant context",
+    "workflowTransition": "server-owned action-to-permission mapping evaluated freshly at execution",
+    "publishRollback": "page.publish plus fresh workflow/candidate/theme/SEO validation",
+    "tenantBoundary": "A request-supplied organization, page, site, version, slug, canonical host or idempotency key is never authorization proof."
+  },
+  "safeAuditVocabulary": {
+    "allowedFields": ["auditId", "actorId", "organizationId", "siteId", "pageId", "versionId", "operation", "result", "traceId", "idempotencyKeyDigest", "createdAt"],
+    "forbiddenFields": ["accessToken", "cookie", "credential", "secret", "prompt", "sourceBody", "draftContent", "providerPayload"]
+  },
+  "errors": ["VERSION_CONFLICT", "PERMISSION_DENIED", "IDEMPOTENCY_KEY_REUSED", "WORKFLOW_TRANSITION_DENIED", "SEO_VALIDATION_FAILED", "THEME_REFERENCE_INVALID"],
+  "limitations": [
+    "This contract defines no migration, persistence, backend, UI, preview token issuer, cache, realtime, outbox, provider call or hosted behavior.",
+    "Page block schema and rendering are owned by M2-T04/M2-T05 and are referenced by schemaVersion only.",
+    "M2-T07 implements the publishing transaction; M2-T08 owns theme persistence; M2-T09 owns executable workflow transitions."
+  ]
+}
