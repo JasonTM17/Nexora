@@ -161,9 +161,15 @@ for Presence; M3-T03 must validate a bounded same-origin intent and emit the
 canonical ephemeral state server-side. V015 does not configure a hosted Auth
 Hook, signing key or Supabase project, and it makes no hosted-provider claim.
 
+`V016__realtime_presence_resource_projection.sql` keeps page-resource identity
+in a private trigger-maintained projection so the scoped Realtime helper can
+authorize Presence without bypassing or relaxing the CMS page table's forced
+RLS. The projection contains only resource and organization identifiers, never
+page content; it has no browser or direct runtime read path.
+
 The M3 proof script creates a disposable local stand-in for `auth.uid()`,
 `auth.jwt()`, `realtime.topic()`, and `realtime.messages`, applies `V001`
-through `V015`, reruns the M2 tenant/CMS fixtures, then executes the actual
+through `V016`, reruns the M2 tenant/CMS fixtures, then executes the actual
 private-channel RLS expression plus the outbox fixture. The stand-in is torn
 down with the Compose project; it is policy-conformance evidence, not hosted
 Supabase proof.
