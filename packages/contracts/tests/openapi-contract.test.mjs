@@ -264,6 +264,7 @@ test("projects bounded CMS drafting, workflow, publication, theme, and SEO contr
     { name: "limit", in: "query", required: false, type: "integer" },
   ]);
   const generated = renderClient(spec);
+  assert.match(generated, /export type PageListResponse = \{[\s\S]*?"nextCursor": string \| null;/);
   assert.match(generated, /export interface ListCmsPagesQuery[\s\S]*?"cursor"\?: string;[\s\S]*?"limit"\?: number;/);
   assert.match(generated, /async listCmsPages\(headers: ListCmsPagesHeaders, query: ListCmsPagesQuery = \{\}/);
   assert.match(generated, /queryParameters\.set\("cursor", String\(query\["cursor"\]\)\)/);

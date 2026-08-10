@@ -60,11 +60,15 @@ function conditionalObjectType(schema) {
 function typeFor(schema) {
   if (!schema) return "unknown";
   if (schema.$ref) return refName(schema.$ref);
+  if (Array.isArray(schema.type)) {
+    return schema.type.map((type) => typeFor({ ...schema, type })).join(" | ");
+  }
   if (schema.enum) return schema.enum.map((value) => JSON.stringify(value)).join(" | ");
   if (schema.oneOf) return schema.oneOf.map(typeFor).join(" | ");
   if (schema.type === "array") return `ReadonlyArray<${typeFor(schema.items)}>`;
   if (schema.type === "integer" || schema.type === "number") return "number";
   if (schema.type === "boolean") return "boolean";
+  if (schema.type === "null") return "null";
   if (schema.type === "object") return conditionalObjectType(schema);
   if (schema.allOf) return schema.allOf.map(typeFor).join(" & ");
   if (schema.type === "string") return "string";

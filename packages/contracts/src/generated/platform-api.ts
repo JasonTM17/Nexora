@@ -59,7 +59,7 @@ export type PageSummary = { readonly "pageId": PageId; readonly "siteId": SiteId
 
 export type PageDetail = { readonly "pageId": PageId; readonly "siteId": SiteId; readonly "slug": string; readonly "title": string; readonly "state": PageState; readonly "draftVersion": number; readonly "updatedAt": string; readonly "schemaVersion": string; readonly "contentDigest": string; readonly "themeVersionId": ThemeVersionId; readonly "seo": SeoSnapshot; readonly "publishedVersionId"?: PageVersionId; };
 
-export type PageListResponse = { readonly "items": ReadonlyArray<PageSummary>; readonly "nextCursor": unknown; };
+export type PageListResponse = { readonly "items": ReadonlyArray<PageSummary>; readonly "nextCursor": string | null; };
 
 export type ArchivePageResponse = { readonly "pageId": PageId; readonly "state": string; readonly "archivedAt": string; };
 
