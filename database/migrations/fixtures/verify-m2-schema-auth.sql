@@ -25,7 +25,13 @@ BEGIN
     JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
     JOIN pg_roles owner_role ON owner_role.oid = relation.relowner
     WHERE namespace.nspname = 'nexora'
-      AND relation.relname IN ('profiles', 'organizations', 'memberships', 'tenant_role_permissions')
+      AND relation.relname IN (
+        'profiles',
+        'organizations',
+        'memberships',
+        'membership_authorizations',
+        'tenant_role_permissions'
+      )
       AND owner_role.rolname <> 'nexora_migrator'
   ) THEN
     RAISE EXCEPTION 'every M2 relation must be owned by nexora_migrator';
@@ -34,10 +40,15 @@ BEGIN
   IF (SELECT count(*) FROM pg_class relation
       JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
       WHERE namespace.nspname = 'nexora'
-        AND relation.relname IN ('profiles', 'organizations', 'memberships')
+        AND relation.relname IN (
+          'profiles',
+          'organizations',
+          'memberships',
+          'membership_authorizations'
+        )
         AND relation.relrowsecurity
-        AND relation.relforcerowsecurity) <> 3 THEN
-    RAISE EXCEPTION 'profiles, organizations, and memberships must enable and force RLS';
+        AND relation.relforcerowsecurity) <> 4 THEN
+    RAISE EXCEPTION 'profiles, organizations, memberships, and membership_authorizations must enable and force RLS';
   END IF;
 
   IF EXISTS (
@@ -46,7 +57,12 @@ BEGIN
     JOIN pg_class relation ON relation.oid = policy.polrelid
     JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
     WHERE namespace.nspname = 'nexora'
-      AND relation.relname IN ('profiles', 'organizations', 'memberships')
+      AND relation.relname IN (
+        'profiles',
+        'organizations',
+        'memberships',
+        'membership_authorizations'
+      )
       AND policy.polroles <> ARRAY[(SELECT oid FROM pg_roles WHERE rolname = 'nexora_runtime')]
   ) THEN
     RAISE EXCEPTION 'every M2 RLS policy must target nexora_runtime explicitly';
@@ -79,6 +95,7 @@ BEGIN
       'nexora.profiles',
       'nexora.organizations',
       'nexora.memberships',
+      'nexora.membership_authorizations',
       'nexora.tenant_role_permissions'
     ]
     LOOP
@@ -104,6 +121,10 @@ BEGIN
      OR has_table_privilege('nexora_runtime', 'nexora.organizations', 'DELETE')
      OR has_table_privilege('nexora_runtime', 'nexora.profiles', 'DELETE') THEN
     RAISE EXCEPTION 'runtime hard-delete privileges are forbidden for M2 lifecycle data';
+  END IF;
+
+  IF has_function_privilege('nexora_runtime', 'nexora.sync_membership_authorization()', 'EXECUTE') THEN
+    RAISE EXCEPTION 'runtime must not invoke membership authorization synchronization directly';
   END IF;
 END
 $$;
@@ -345,6 +366,8 @@ SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000007', t
 SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
 SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000007', true);
 DO $$
+DECLARE
+  updated_count bigint;
 BEGIN
   BEGIN
     INSERT INTO nexora.memberships (id, organization_id, subject_id, status, tenant_role)
@@ -363,16 +386,190 @@ END
 $$;
 COMMIT;
 
--- Apply the authoritative lifecycle outcome through the disposable migration
--- connection while still supplying Dave's exact pre-removal context to the
--- invoker trigger. The runtime role itself cannot retain or reveal REMOVED rows.
+-- A manager cannot enumerate Alpha. Without an explicitly scoped target the
+-- normal SELECT policy still exposes only the current actor membership.
 BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000007', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000007', true);
+DO $$
+DECLARE
+  updated_count bigint;
+BEGIN
+  IF (SELECT count(*) FROM nexora.memberships) <> 1
+     OR EXISTS (
+       SELECT 1 FROM nexora.memberships
+       WHERE id = '30000000-0000-4000-8000-000000000003'
+     ) THEN
+    RAISE EXCEPTION 'manager context without a target must not enumerate tenant memberships';
+  END IF;
+
+  IF (SELECT count(*) FROM nexora.membership_authorizations) <> 1 THEN
+    RAISE EXCEPTION 'runtime must not enumerate membership authorization projections';
+  END IF;
+
+  UPDATE nexora.membership_authorizations
+  SET tenant_role = 'OWNER'
+  WHERE membership_id = '30000000-0000-4000-8000-000000000007';
+  GET DIAGNOSTICS updated_count = ROW_COUNT;
+  IF updated_count <> 0 THEN
+    RAISE EXCEPTION 'runtime directly mutated the private authorization projection';
+  END IF;
+END
+$$;
+COMMIT;
+
+-- ADMIN may inspect and change exactly Bob's current row when both target ID
+-- and expected version are transaction-local. The same policy prevents a stale
+-- expected version and any cross-tenant target before the write is attempted.
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000007', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000007', true);
+SELECT set_config('nexora.target_membership_id', '30000000-0000-4000-8000-000000000003', true);
+SELECT set_config('nexora.target_membership_version', '1', true);
+DO $$
+DECLARE
+  updated_count bigint;
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM nexora.memberships
+    WHERE id = '30000000-0000-4000-8000-000000000003'
+      AND organization_id = '10000000-0000-4000-8000-000000000001'
+      AND version = 1
+      AND tenant_role = 'EDITOR'
+  ) THEN
+    RAISE EXCEPTION 'manager must inspect the exact expected target membership';
+  END IF;
+
+  PERFORM set_config('nexora.target_membership_mutation', 'true', true);
+  UPDATE nexora.memberships
+  SET tenant_role = 'REVIEWER'
+  WHERE id = '30000000-0000-4000-8000-000000000003';
+  GET DIAGNOSTICS updated_count = ROW_COUNT;
+  IF updated_count <> 1 THEN
+    RAISE EXCEPTION 'manager exact target update must affect one row, observed %', updated_count;
+  END IF;
+
+  PERFORM set_config('nexora.target_membership_mutation', '', true);
+
+  IF EXISTS (
+    SELECT 1 FROM nexora.memberships
+    WHERE id = '30000000-0000-4000-8000-000000000003'
+  ) THEN
+    RAISE EXCEPTION 'stale target version unexpectedly read a target membership';
+  END IF;
+
+  UPDATE nexora.memberships
+  SET tenant_role = 'EDITOR'
+  WHERE id = '30000000-0000-4000-8000-000000000003';
+  GET DIAGNOSTICS updated_count = ROW_COUNT;
+  IF updated_count <> 0 THEN
+    RAISE EXCEPTION 'stale target version unexpectedly updated % row(s)', updated_count;
+  END IF;
+
+  PERFORM set_config('nexora.target_membership_id', '30000000-0000-4000-8000-000000000004', true);
+  PERFORM set_config('nexora.target_membership_version', '1', true);
+  IF EXISTS (
+    SELECT 1 FROM nexora.memberships
+    WHERE id = '30000000-0000-4000-8000-000000000004'
+  ) THEN
+    RAISE EXCEPTION 'Alpha management context leaked a Beta target';
+  END IF;
+END
+$$;
+COMMIT;
+
+-- Alice changes Dave from ADMIN to EDITOR. A caller holding Dave's previous
+-- ADMIN/version context is then denied target visibility and mutation because
+-- the private projection re-reads the current actor role under forced RLS.
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.target_membership_id', '30000000-0000-4000-8000-000000000005', true);
+SELECT set_config('nexora.target_membership_version', '1', true);
+SELECT set_config('nexora.target_membership_mutation', 'true', true);
+UPDATE nexora.memberships
+SET tenant_role = 'EDITOR'
+WHERE id = '30000000-0000-4000-8000-000000000005';
+COMMIT;
+
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
 SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000004', true);
 SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
 SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000005', true);
+SELECT set_config('nexora.target_membership_id', '30000000-0000-4000-8000-000000000003', true);
+SELECT set_config('nexora.target_membership_version', '2', true);
+DO $$
+DECLARE
+  updated_count bigint;
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM nexora.memberships
+    WHERE id = '30000000-0000-4000-8000-000000000003'
+  ) THEN
+    RAISE EXCEPTION 'stale actor role/version unexpectedly read a target membership';
+  END IF;
+
+  UPDATE nexora.memberships
+  SET tenant_role = 'USER'
+  WHERE id = '30000000-0000-4000-8000-000000000003';
+  GET DIAGNOSTICS updated_count = ROW_COUNT;
+  IF updated_count <> 0 THEN
+    RAISE EXCEPTION 'stale actor role/version unexpectedly updated % row(s)', updated_count;
+  END IF;
+END
+$$;
+COMMIT;
+
+-- Alice removes Dave through the same runtime-only target contract. A removed
+-- actor cannot revive a target operation even if old full-context and target
+-- settings are supplied on a pooled connection.
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.target_membership_id', '30000000-0000-4000-8000-000000000005', true);
+SELECT set_config('nexora.target_membership_version', '2', true);
+SELECT set_config('nexora.target_membership_mutation', 'true', true);
 UPDATE nexora.memberships
 SET status = 'REMOVED'
 WHERE id = '30000000-0000-4000-8000-000000000005';
+COMMIT;
+
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000004', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000005', true);
+SELECT set_config('nexora.target_membership_id', '30000000-0000-4000-8000-000000000003', true);
+SELECT set_config('nexora.target_membership_version', '2', true);
+DO $$
+DECLARE
+  updated_count bigint;
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM nexora.memberships
+    WHERE id = '30000000-0000-4000-8000-000000000003'
+  ) THEN
+    RAISE EXCEPTION 'REMOVED actor unexpectedly read a target membership';
+  END IF;
+
+  UPDATE nexora.memberships
+  SET tenant_role = 'USER'
+  WHERE id = '30000000-0000-4000-8000-000000000003';
+  GET DIAGNOSTICS updated_count = ROW_COUNT;
+  IF updated_count <> 0 THEN
+    RAISE EXCEPTION 'REMOVED actor unexpectedly updated % row(s)', updated_count;
+  END IF;
+END
+$$;
 COMMIT;
 
 BEGIN;
@@ -410,9 +607,13 @@ COMMIT;
 -- Beta's only owner cannot be demoted, suspended, or removed. Each attempted
 -- transition violates the deferred composite ACTIVE OWNER reference.
 BEGIN;
+SET LOCAL ROLE nexora_runtime;
 SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000003', true);
 SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000002', true);
 SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000004', true);
+SELECT set_config('nexora.target_membership_id', '30000000-0000-4000-8000-000000000004', true);
+SELECT set_config('nexora.target_membership_version', '1', true);
+SELECT set_config('nexora.target_membership_mutation', 'true', true);
 DO $$
 DECLARE
   blocked_status nexora.membership_status;
@@ -453,6 +654,9 @@ SET LOCAL ROLE nexora_runtime;
 SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000001', true);
 SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
 SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.target_membership_id', '30000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.target_membership_version', '1', true);
+SELECT set_config('nexora.target_membership_mutation', 'true', true);
 UPDATE nexora.organizations
 SET owner_membership_id = '30000000-0000-4000-8000-000000000006'
 WHERE id = '10000000-0000-4000-8000-000000000001';
@@ -469,11 +673,15 @@ DO $$
 BEGIN
   IF NULLIF(current_setting('nexora.subject_id', true), '') IS NOT NULL
      OR NULLIF(current_setting('nexora.organization_id', true), '') IS NOT NULL
-     OR NULLIF(current_setting('nexora.membership_id', true), '') IS NOT NULL THEN
+     OR NULLIF(current_setting('nexora.membership_id', true), '') IS NOT NULL
+     OR NULLIF(current_setting('nexora.target_membership_id', true), '') IS NOT NULL
+     OR NULLIF(current_setting('nexora.target_membership_version', true), '') IS NOT NULL
+     OR NULLIF(current_setting('nexora.target_membership_mutation', true), '') IS NOT NULL THEN
     RAISE EXCEPTION 'transaction-local context leaked across commit';
   END IF;
   IF (SELECT count(*) FROM nexora.organizations) <> 0
      OR (SELECT count(*) FROM nexora.memberships) <> 0
+     OR (SELECT count(*) FROM nexora.membership_authorizations) <> 0
      OR (SELECT count(*) FROM nexora.profiles) <> 0 THEN
     RAISE EXCEPTION 'pooled session without new context must remain denied';
   END IF;

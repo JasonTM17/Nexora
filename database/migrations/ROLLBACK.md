@@ -17,19 +17,24 @@ is outside M1-DB01.
 
 ## M2-DB01 ordered rollback notes
 
-`V002`, `V003`, and `V004` are append-only once applied. Do not edit their SQL,
+`V002`, `V003`, `V004`, and `V005` are append-only once applied. Do not edit their SQL,
 drop the private schema, disable or relax forced RLS, remove the active-owner
 reference, or grant Data API roles as an ad-hoc rollback.
 
 Before a shared-environment corrective migration, record the exact checksums
 and dependency order:
 
-1. `V004` depends on the role/status types and tenant relations from `V003` and
+1. `V005` depends on the membership relation, forced RLS, role matrix, and
+   mutation guard from `V003`/`V004`. It owns the private synchronized
+   `membership_authorizations` projection and bounded target ID/version policy;
+   rollback must be a new forward migration and must preserve the existing
+   target-operation transaction contract.
+2. `V004` depends on the role/status types and tenant relations from `V003` and
    the version trigger from `V002`.
-2. `V003` depends on the private schema and roles from `V001`; organizations and
+3. `V003` depends on the private schema and roles from `V001`; organizations and
    memberships have mutually deferred foreign keys, so partial table removal is
    unsupported.
-3. `V002` depends on the `V001` schema/role boundary and owns the shared version
+4. `V002` depends on the `V001` schema/role boundary and owns the shared version
    trigger used by `V003`.
 
 For the supported local rollback, remove the disposable
