@@ -88,6 +88,14 @@ The database still fixes the role matrix, guards inserts/self-transitions, and
 enforces the last-owner reference. A later accepted contract is required before
 expanding the direct table mutation surface.
 
+The frozen database context contains subject, organization, and membership IDs
+but no membership-version setting. M2-DB01 therefore proves that the referenced
+membership row is currently `ACTIVE`, including denial after `REMOVED` or
+`SUSPENDED`; it does not claim to detect a version-only mismatch while the same
+membership remains active. The later backend freshness gate must compare the
+resolved `membershipId` and `membershipVersion` against the current row before
+setting the database context.
+
 Run the complete disposable PostgreSQL 17.5 proof from the repository root:
 
 ```powershell
@@ -95,8 +103,8 @@ pwsh -NoProfile -File database/migrations/scripts/verify-m2-schema-auth.ps1
 ```
 
 The script applies `V001` through `V004`, reruns the M1 boundary checks, proves
-M2 role/grant/forced-RLS behavior, two-tenant isolation, removed/stale denial,
-transaction-local reset, matrix assignment denials, profile versioning, and the
-last-owner invariant, then removes only its Compose project and volumes. It
-does not use a Supabase project, provider API, provider credential, or Supabase
-CLI/MCP call.
+M2 role/grant/forced-RLS behavior, two-tenant isolation, `REMOVED` membership
+denial, transaction-local reset, matrix assignment denials, profile versioning,
+and the last-owner invariant, then removes only its Compose project and volumes.
+It does not prove version-only freshness and does not use a Supabase project,
+provider API, provider credential, or Supabase CLI/MCP call.

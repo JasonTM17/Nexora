@@ -384,7 +384,24 @@ DO $$
 BEGIN
   IF (SELECT count(*) FROM nexora.memberships) <> 0
      OR (SELECT count(*) FROM nexora.organizations) <> 0 THEN
-    RAISE EXCEPTION 'removed/stale membership context must deny the next request';
+    RAISE EXCEPTION 'REMOVED membership context must deny the next request';
+  END IF;
+END
+$$;
+COMMIT;
+
+-- The REMOVED subject also cannot substitute the committed tenant's real
+-- designated owner membership id to reopen pending-bootstrap visibility.
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000004', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000001', true);
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM nexora.organizations) <> 0
+     OR (SELECT count(*) FROM nexora.memberships) <> 0 THEN
+    RAISE EXCEPTION 'REMOVED subject with real committed organization/owner IDs must be denied';
   END IF;
 END
 $$;
