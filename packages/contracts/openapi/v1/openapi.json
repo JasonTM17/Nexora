@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "info": {
     "title": "Nexora Platform API",
-    "version": "1.1.0",
-    "description": "Canonical browser-facing contract for the Nexora platform API v1, including the M2 identity, tenant-context, authorization, and profile projection."
+    "version": "1.2.0",
+    "description": "Canonical browser-facing contract for the Nexora platform API v1, including the M2 identity, tenant-context, authorization, profile, and bounded membership-mutation projection."
   },
   "servers": [
     {
@@ -198,6 +198,46 @@
         }
       }
     },
+    "/api/v1/authorization/memberships/{membershipId}": {
+      "patch": {
+        "operationId": "updateMembership",
+        "summary": "Mutate one selected tenant membership with optimistic versioning",
+        "description": "The server derives the acting membership and permissions from current tenant authority. The target identifier and organization header are routing candidates only; no browser-provided role or status grants authority.",
+        "tags": ["Authorization"],
+        "parameters": [
+          {
+            "name": "membershipId",
+            "in": "path",
+            "required": true,
+            "schema": { "$ref": "#/components/schemas/MembershipId" }
+          },
+          {
+            "name": "X-Nexora-Organization-Id",
+            "in": "header",
+            "required": true,
+            "x-nexora-client-name": "organizationId",
+            "description": "Organization selection candidate. The server resolves a fresh active acting membership and checks assignment authority.",
+            "schema": { "$ref": "#/components/schemas/OrganizationId" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MembershipMutationRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "The authoritative target membership after one permitted mutation",
+            "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } },
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MembershipMutationResponse" } } }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
+          "403": { "$ref": "#/components/responses/PermissionDenied" },
+          "409": { "$ref": "#/components/responses/VersionConflict" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
     "/api/v1/profile": {
       "get": {
         "operationId": "getProfile",
@@ -367,7 +407,7 @@
         }
       },
       "VersionConflict": {
-        "description": "The profile version in the request is stale.",
+        "description": "The request's optimistic version or protected ownership state conflicts with current authoritative state.",
         "headers": {
           "X-Trace-Id": { "$ref": "#/components/headers/TraceId" }
         },
@@ -608,6 +648,47 @@
             "type": "array",
             "items": { "type": "string", "pattern": "^[a-z]+(?:\\.[a-z]+)+$" }
           }
+        }
+      },
+      "MembershipStatus": {
+        "type": "string",
+        "enum": ["INVITED", "ACTIVE", "SUSPENDED", "REMOVED"],
+        "description": "Authoritative lifecycle state returned by the server. Direct activation is not supported by the v1 mutation boundary."
+      },
+      "MembershipMutationRequest": {
+        "description": "Exactly one role or status mutation with the target's current optimistic version. The server independently verifies current actor authority, target tenant, target version, and ownership invariants.",
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["expectedVersion", "role"],
+            "properties": {
+              "expectedVersion": { "type": "integer", "minimum": 1, "format": "int64" },
+              "role": { "$ref": "#/components/schemas/TenantRole" }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["expectedVersion", "status"],
+            "properties": {
+              "expectedVersion": { "type": "integer", "minimum": 1, "format": "int64" },
+              "status": { "$ref": "#/components/schemas/MembershipStatus" }
+            }
+          }
+        ]
+      },
+      "MembershipMutationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["membershipId", "organizationId", "subjectId", "status", "role", "version"],
+        "properties": {
+          "membershipId": { "$ref": "#/components/schemas/MembershipId" },
+          "organizationId": { "$ref": "#/components/schemas/OrganizationId" },
+          "subjectId": { "$ref": "#/components/schemas/SubjectId" },
+          "status": { "$ref": "#/components/schemas/MembershipStatus" },
+          "role": { "$ref": "#/components/schemas/TenantRole" },
+          "version": { "type": "integer", "minimum": 1, "format": "int64" }
         }
       },
       "UpdateProfileRequest": {

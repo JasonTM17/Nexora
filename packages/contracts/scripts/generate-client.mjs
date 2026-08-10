@@ -54,14 +54,14 @@ function typeName(operationId, suffix) {
   return `${operationId.charAt(0).toUpperCase()}${operationId.slice(1)}${suffix}`;
 }
 
-function headerParametersFor(operation) {
+function parametersFor(operation, location) {
   return (operation.parameters ?? [])
-    .filter((parameter) => parameter?.in === "header")
+    .filter((parameter) => parameter?.in === location)
     .map((parameter) => {
       if (typeof parameter.name !== "string" || !parameter.name) {
-        throw new Error("Header parameters must have a name");
+        throw new Error(`${location} parameters must have a name`);
       }
-      if (!parameter.schema) throw new Error(`Header parameter ${parameter.name} has no schema`);
+      if (!parameter.schema) throw new Error(`${location} parameter ${parameter.name} has no schema`);
       return {
         name: parameter.name,
         propertyName: parameter["x-nexora-client-name"] ?? parameter.name,
@@ -77,8 +77,6 @@ function operationsFor(spec) {
     for (const [method, operation] of Object.entries(pathItem)) {
       if (!HTTP_METHODS.has(method)) continue;
       if (!operation.operationId) throw new Error(`${method.toUpperCase()} ${path} has no operationId`);
-      if (path.includes("{")) throw new Error(`Path parameters are not supported yet: ${path}`);
-
       const requestSchema = operation.requestBody?.content?.["application/json"]?.schema;
       const successEntry = Object.entries(operation.responses ?? {}).find(([status]) => /^2\d\d$/.test(status));
       if (!successEntry) throw new Error(`${operation.operationId} has no explicit 2xx response`);
@@ -87,6 +85,14 @@ function operationsFor(spec) {
       if (!responseSchema) throw new Error(`${operation.operationId} has no application/json success schema`);
       const effectiveSecurity = operation.security ?? spec.security ?? [];
 
+      const pathParameters = parametersFor(operation, "path");
+      const referencedPathParameters = [...path.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]);
+      if (pathParameters.length !== referencedPathParameters.length
+        || !referencedPathParameters.every((name) => pathParameters.some((parameter) => parameter.name === name))
+        || pathParameters.some((parameter) => !parameter.required)) {
+        throw new Error(`${operation.operationId} must declare every path parameter as required`);
+      }
+
       operations.push({
         operationId: operation.operationId,
         method: method.toUpperCase(),
@@ -94,7 +100,8 @@ function operationsFor(spec) {
         requestType: requestSchema ? typeFor(requestSchema) : null,
         responseType: typeFor(responseSchema),
         requiresAuth: effectiveSecurity.some((requirement) => Object.hasOwn(requirement, "bearerAuth")),
-        headerParameters: headerParametersFor(operation),
+        headerParameters: parametersFor(operation, "header"),
+        pathParameters,
       });
     }
   }
@@ -102,6 +109,8 @@ function operationsFor(spec) {
 }
 
 function renderOperation(operation) {
+  const pathType = typeName(operation.operationId, "Path");
+  const pathParameter = operation.pathParameters.length ? `path: ${pathType}, ` : "";
   const bodyParameter = operation.requestType ? `body: ${operation.requestType}, ` : "";
   const bodyOption = operation.requestType ? ", body" : "";
   const headerType = typeName(operation.operationId, "Headers");
@@ -109,10 +118,14 @@ function renderOperation(operation) {
     ? `headers: ${headerType}${operation.headerParameters.some((parameter) => parameter.required) ? "" : " = {}"}, `
     : "";
   const headerOption = operation.headerParameters.length
-    ? `, headers: { ${operation.headerParameters.map((parameter) => `${JSON.stringify(parameter.name)}: headers.${parameter.propertyName}`).join(", ")} }`
+    ? `, headers: { ${operation.headerParameters.map((parameter) => `${JSON.stringify(parameter.name)}: headers[${JSON.stringify(parameter.propertyName)}]`).join(", ")} }`
     : "";
-  return `  async ${operation.operationId}(${bodyParameter}${headerParameter}options: RequestOptions = {}): Promise<ApiResponse<${operation.responseType}>> {
-    return this.request<${operation.responseType}>(${JSON.stringify(operation.path)}, { method: ${JSON.stringify(operation.method)}${bodyOption}${headerOption} }, options, ${operation.requiresAuth});
+  const path = operation.path.replace(/\{([^}]+)\}/g, (_match, name) => {
+    const parameter = operation.pathParameters.find((candidate) => candidate.name === name);
+    return `\${encodeURIComponent(String(path[${JSON.stringify(parameter.propertyName)}]))}`;
+  });
+  return `  async ${operation.operationId}(${pathParameter}${bodyParameter}${headerParameter}options: RequestOptions = {}): Promise<ApiResponse<${operation.responseType}>> {
+    return this.request<${operation.responseType}>(\`${path}\`, { method: ${JSON.stringify(operation.method)}${bodyOption}${headerOption} }, options, ${operation.requiresAuth});
   }`;
 }
 
@@ -125,9 +138,19 @@ function renderHeaderTypes(spec) {
     .join("\n\n");
 }
 
+function renderPathTypes(spec) {
+  return operationsFor(spec)
+    .filter((operation) => operation.pathParameters.length > 0)
+    .map((operation) => `export interface ${typeName(operation.operationId, "Path")} {\n${operation.pathParameters
+      .map((parameter) => `  readonly ${JSON.stringify(parameter.propertyName)}: ${parameter.type};`)
+      .join("\n")}\n}`)
+    .join("\n\n");
+}
+
 export function renderClient(spec) {
   const schemas = renderSchemas(spec);
   const headerTypes = renderHeaderTypes(spec);
+  const pathTypes = renderPathTypes(spec);
   const operations = operationsFor(spec).map(renderOperation).join("\n\n");
   const detailPropertyRules = spec.components?.schemas?.ApiProblem?.properties?.details?.propertyNames?.allOf ?? [];
   const forbiddenDetailKeys = detailPropertyRules.find((rule) => Array.isArray(rule.not?.enum))?.not.enum;
@@ -158,6 +181,8 @@ export const API_CONTRACT_VERSION = ${JSON.stringify(spec.info.version)} as cons
 ${schemas}
 
 ${headerTypes}
+
+${pathTypes}
 
 export interface ApiResponse<T> {
   readonly data: T;

@@ -106,6 +106,48 @@ test("projects protected identity, tenant selection, and profile calls with the 
   assert.equal(requests[5].init.headers.get("Content-Type"), "application/json");
 });
 
+test("projects the protected optimistic membership mutation with a generated path and selected-tenant header", async () => {
+  let observedUrl;
+  let observedInit;
+  const client = new PlatformApiClient({
+    baseUrl: "https://nexora.test/",
+    accessToken: "short-lived-token",
+    fetch: async (url, init) => {
+      observedUrl = url;
+      observedInit = init;
+      return new Response(JSON.stringify({
+        membershipId: "40000000-0000-4000-8000-000000000001",
+        organizationId: "30000000-0000-4000-8000-000000000001",
+        subjectId: "10000000-0000-4000-8000-000000000001",
+        status: "ACTIVE",
+        role: "REVIEWER",
+        version: 2,
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "X-Trace-Id": "trace-membership-mutation" },
+      });
+    },
+  });
+
+  const response = await client.updateMembership(
+    { membershipId: "40000000-0000-4000-8000-000000000001" },
+    { expectedVersion: 1, role: "REVIEWER" },
+    { organizationId: "30000000-0000-4000-8000-000000000001" },
+    { traceId: "trace-membership-mutation" },
+  );
+
+  assert.equal(observedUrl, "https://nexora.test/api/v1/authorization/memberships/40000000-0000-4000-8000-000000000001");
+  assert.equal(observedInit.method, "PATCH");
+  assert.equal(observedInit.headers.get("Authorization"), "Bearer short-lived-token");
+  assert.equal(observedInit.headers.get("X-Nexora-Organization-Id"), "30000000-0000-4000-8000-000000000001");
+  assert.equal(observedInit.headers.get("X-Trace-Id"), "trace-membership-mutation");
+  assert.equal(observedInit.headers.get("Content-Type"), "application/json");
+  assert.equal(observedInit.body, JSON.stringify({ expectedVersion: 1, role: "REVIEWER" }));
+  assert.equal(response.data.role, "REVIEWER");
+  assert.equal(response.data.version, 2);
+  assert.equal(response.traceId, "trace-membership-mutation");
+});
+
 test("surfaces only a valid safe problem envelope", async () => {
   const problem = {
     code: "validation_failed",

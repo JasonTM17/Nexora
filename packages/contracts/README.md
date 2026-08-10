@@ -17,9 +17,14 @@ header on `getTenantContext`; that header is a selection candidate, never
 tenant authority. It exposes no provider-credential or arbitrary-header input.
 
 The protected M2 projection supplies generated request/response types for the
-identity access context, explicit tenant-context resolution/selection, and
-allowlisted profile read/update routes. Profile updates carry `expectedVersion`
-for optimistic conflict handling; profile fields never authorize tenant access.
+identity access context, explicit tenant-context resolution/selection, bounded
+membership mutation, and allowlisted profile read/update routes. Membership
+mutation requires a target path identifier, selected-organization header and
+`expectedVersion`; the server still derives the acting membership and assignment
+authority from current tenant state. Role/status input never grants authority,
+and the client exposes no arbitrary-header input. Profile updates also carry
+`expectedVersion` for optimistic conflict handling; profile fields never
+authorize tenant access.
 Safe problem codes may use the established lowercase validation form or the
 uppercase identity/domain form, while the envelope and detail-value guards stay
 unchanged.
