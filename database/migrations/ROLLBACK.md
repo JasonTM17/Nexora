@@ -14,3 +14,30 @@ or grants in those schemas. Create a new reviewed, ordered forward migration
 only after confirming no dependent objects and satisfying the applicable
 backup/restore and platform-change authority. Hosted rollback or provisioning
 is outside M1-DB01.
+
+## M2-DB01 ordered rollback notes
+
+`V002`, `V003`, and `V004` are append-only once applied. Do not edit their SQL,
+drop the private schema, disable or relax forced RLS, remove the active-owner
+reference, or grant Data API roles as an ad-hoc rollback.
+
+Before a shared-environment corrective migration, record the exact checksums
+and dependency order:
+
+1. `V004` depends on the role/status types and tenant relations from `V003` and
+   the version trigger from `V002`.
+2. `V003` depends on the private schema and roles from `V001`; organizations and
+   memberships have mutually deferred foreign keys, so partial table removal is
+   unsupported.
+3. `V002` depends on the `V001` schema/role boundary and owns the shared version
+   trigger used by `V003`.
+
+For the supported local rollback, remove the disposable
+`nexora-m2-db01-verify` Compose project with its volumes. The verification
+script performs this teardown after success or failure unless
+`-KeepOnFailure` was explicitly supplied.
+
+For a shared database, use a new reviewed forward migration after backup/restore
+authority and dependent-object inspection. Preserve membership history and the
+last-owner invariant during any expand/contract sequence. Hosted Supabase
+rollback, provider configuration, and deployment remain outside M2-DB01.
