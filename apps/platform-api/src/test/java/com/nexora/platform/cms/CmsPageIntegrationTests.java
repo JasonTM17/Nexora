@@ -21,6 +21,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
@@ -253,7 +254,8 @@ class CmsPageIntegrationTests {
         CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "outbox-page"),
                 "cms-outbox-create-1");
         publish(tenant, page.pageId());
-        pages.archive(tenant.ownerContext(), page.pageId(), 1, "cms-outbox-archive-1");
+        String traceId = "cms-outbox-archive-1";
+        pages.archive(tenant.ownerContext(), page.pageId(), 1, traceId);
         long messagesBefore = streamMessageCount();
 
         OutboxPublisher.PublishResult result = publisher.publishAvailable();
@@ -262,6 +264,22 @@ class CmsPageIntegrationTests {
         assertThat(result.published()).isGreaterThanOrEqualTo(1);
         assertThat(result.acknowledgementUncertain()).isZero();
         assertThat(streamMessageCount()).isGreaterThan(messagesBefore);
+        JsonNode envelope = latestStreamMessage();
+        assertThat(envelope.path("eventType").asText()).isEqualTo("WORKFLOW_TRANSITIONED");
+        assertThat(envelope.path("eventVersion").asLong()).isEqualTo(1);
+        assertThat(envelope.path("organizationId").asText()).isEqualTo(tenant.organizationId().toString());
+        assertThat(envelope.path("subjectId").asText()).isEqualTo(tenant.ownerSubjectId().toString());
+        assertThat(envelope.path("actorId").asText()).isEqualTo(tenant.ownerSubjectId().toString());
+        assertThat(envelope.path("resourceType").asText()).isEqualTo("page");
+        assertThat(envelope.path("resourceId").asText()).isEqualTo(page.pageId().toString());
+        assertThat(envelope.path("topic").asText()).isEqualTo("tenant:%s:workflow".formatted(tenant.organizationId()));
+        assertThat(envelope.path("traceId").asText()).isEqualTo(traceId);
+        assertThat(envelope.path("idempotencyKeyDigest").asText()).startsWith("sha256:");
+        assertThat(envelope.path("payloadDigest").asText()).startsWith("sha256:");
+        assertThat(envelope.path("safePayload").path("traceId").asText()).isEqualTo(traceId);
+        assertThat(envelope.path("safePayload").has("body")).isFalse();
+        assertThat(envelope.path("safePayload").has("token")).isFalse();
+        assertThat(envelope.path("occurredAt").asText()).isNotBlank();
         assertThat(count("SELECT count(*) FROM nexora.outbox_events WHERE resource_id = '" + page.pageId()
                 + "' AND state = 'PUBLISHED' AND attempt_count = 1 AND published_at IS NOT NULL"))
                 .isEqualTo(1);
@@ -486,6 +504,14 @@ class CmsPageIntegrationTests {
     private long streamMessageCount() throws Exception {
         try (io.nats.client.Connection connection = Nats.connect(natsUrl())) {
             return connection.jetStreamManagement().getStreamInfo(OUTBOX_STREAM).getStreamState().getMsgCount();
+        }
+    }
+
+    private JsonNode latestStreamMessage() throws Exception {
+        try (io.nats.client.Connection connection = Nats.connect(natsUrl())) {
+            var management = connection.jetStreamManagement();
+            long lastSequence = management.getStreamInfo(OUTBOX_STREAM).getStreamState().getLastSequence();
+            return json.readTree(new String(management.getMessage(OUTBOX_STREAM, lastSequence).getData(), StandardCharsets.UTF_8));
         }
     }
 

@@ -6,6 +6,8 @@ import io.nats.client.JetStreamApiException;
 import io.nats.client.Nats;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.format.DateTimeFormatter;
+import java.util.regex.Pattern;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Component;
 @Profile("database")
 @ConditionalOnProperty(prefix = "nexora.outbox.publisher", name = "enabled", havingValue = "true")
 public class NatsJetStreamOutboxTransport implements OutboxTransport {
+    private static final Pattern SAFE_TRACE_ID = Pattern.compile("[A-Za-z0-9._-]{1,128}");
     private final OutboxPublisherProperties properties;
 
     public NatsJetStreamOutboxTransport(OutboxPublisherProperties properties) {
@@ -35,11 +38,18 @@ public class NatsJetStreamOutboxTransport implements OutboxTransport {
     }
 
     private String envelope(OutboxEvent event) {
+        if (event.traceId() == null || !SAFE_TRACE_ID.matcher(event.traceId()).matches()) {
+            throw new OutboxTransportException("The outbox event has no safe trace identifier.", null);
+        }
         return """
-                {"eventId":"%s","eventType":"%s","schemaVersion":"%s","topic":"%s",
-                "idempotencyKeyDigest":"%s","payloadDigest":"%s","safePayload":%s}
-                """.formatted(event.id(), event.eventType(), event.schemaVersion(), event.topic(),
-                event.idempotencyKeyDigest(), event.payloadDigest(), event.safePayloadJson())
+                {"eventId":"%s","eventType":"%s","eventVersion":%d,"organizationId":"%s",
+                "subjectId":"%s","resourceType":"%s","resourceId":"%s","topic":"%s",
+                "actorId":"%s","traceId":"%s","idempotencyKeyDigest":"%s","payloadDigest":"%s",
+                "safePayload":%s,"occurredAt":"%s","schemaVersion":"%s"}
+                """.formatted(event.id(), event.eventType(), event.eventVersion(), event.organizationId(),
+                event.subjectId(), event.resourceType(), event.resourceId(), event.topic(), event.actorId(),
+                event.traceId(), event.idempotencyKeyDigest(), event.payloadDigest(), event.safePayloadJson(),
+                DateTimeFormatter.ISO_INSTANT.format(event.occurredAt()), event.schemaVersion())
                 .replaceAll("\\s+", "");
     }
 }

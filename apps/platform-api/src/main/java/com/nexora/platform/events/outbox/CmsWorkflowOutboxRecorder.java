@@ -6,6 +6,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -22,16 +23,22 @@ import org.springframework.stereotype.Component;
 @Profile("database")
 public class CmsWorkflowOutboxRecorder {
     private static final String SCHEMA_VERSION = "1.0.0";
+    private static final Pattern SAFE_TRACE_ID = Pattern.compile("[A-Za-z0-9._-]{1,128}");
+
     public UUID recordArchivedPage(
-            JdbcTemplate jdbc, TenantContext actor, UUID pageId, long pageVersion) {
+            JdbcTemplate jdbc, TenantContext actor, UUID pageId, long pageVersion, String traceId) {
+        if (traceId == null || !SAFE_TRACE_ID.matcher(traceId).matches()) {
+            throw new IllegalArgumentException("A safe trace identifier is required for an outbox event.");
+        }
         String topic = "tenant:%s:workflow".formatted(actor.organizationId());
         String payloadJson = """
                 {"resourceId":"%s","resourceType":"page","organizationId":"%s",
                 "subjectId":"%s","actorId":"%s","eventVersion":%d,"schemaVersion":"%s",
+                "traceId":"%s",
                 "safeDisplay":{"label":"Page workflow","status":"ARCHIVED","state":"ARCHIVED",
                 "variant":"info","hint":"Published page archived"}}
                 """.formatted(pageId, actor.organizationId(), actor.subjectId(), actor.subjectId(),
-                pageVersion, SCHEMA_VERSION).replaceAll("\\s+", "");
+                pageVersion, SCHEMA_VERSION, traceId).replaceAll("\\s+", "");
 
         String identity = "cms-page-archive|%s|%s|%d".formatted(
                 actor.organizationId(), pageId, pageVersion);

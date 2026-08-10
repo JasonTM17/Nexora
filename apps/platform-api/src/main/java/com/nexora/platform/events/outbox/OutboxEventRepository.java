@@ -3,6 +3,7 @@ package com.nexora.platform.events.outbox;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.context.annotation.Profile;
@@ -21,8 +22,10 @@ public class OutboxEventRepository {
 
     public List<OutboxEvent> claim(String owner, Duration lease, int batchSize) {
         return jdbc.query("""
-                SELECT id, topic, event_type::text, schema_version, idempotency_key_digest,
-                       payload_digest, safe_payload::text, attempt_count
+                SELECT id, organization_id, subject_id, actor_id, resource_type, resource_id,
+                       event_version, topic, event_type::text, schema_version, idempotency_key_digest,
+                       payload_digest, safe_payload::text, safe_payload ->> 'traceId' AS trace_id,
+                       occurred_at, attempt_count
                 FROM nexora.claim_outbox_events(?, ?::interval, ?)
                 """, this::map, owner, interval(lease), batchSize);
     }
@@ -33,8 +36,10 @@ public class OutboxEventRepository {
 
     public OutboxEvent markFailed(UUID eventId, String owner, String errorCode) {
         return jdbc.queryForObject("""
-                SELECT id, topic, event_type::text, schema_version, idempotency_key_digest,
-                       payload_digest, safe_payload::text, attempt_count
+                SELECT id, organization_id, subject_id, actor_id, resource_type, resource_id,
+                       event_version, topic, event_type::text, schema_version, idempotency_key_digest,
+                       payload_digest, safe_payload::text, safe_payload ->> 'traceId' AS trace_id,
+                       occurred_at, attempt_count
                 FROM nexora.fail_claimed_outbox_event(?, ?, ?)
                 """, this::map, eventId, owner, errorCode);
     }
@@ -46,9 +51,13 @@ public class OutboxEventRepository {
 
     private OutboxEvent map(ResultSet result, int row) throws SQLException {
         return new OutboxEvent(
-                result.getObject("id", UUID.class), result.getString("topic"), result.getString("event_type"),
+                result.getObject("id", UUID.class), result.getObject("organization_id", UUID.class),
+                result.getObject("subject_id", UUID.class), result.getObject("actor_id", UUID.class),
+                result.getString("resource_type"), result.getObject("resource_id", UUID.class),
+                result.getLong("event_version"), result.getString("topic"), result.getString("event_type"),
                 result.getString("schema_version"), result.getString("idempotency_key_digest"),
-                result.getString("payload_digest"), result.getString("safe_payload"), result.getInt("attempt_count"));
+                result.getString("payload_digest"), result.getString("safe_payload"), result.getString("trace_id"),
+                result.getObject("occurred_at", OffsetDateTime.class).toInstant(), result.getInt("attempt_count"));
     }
 
     private String interval(Duration duration) {

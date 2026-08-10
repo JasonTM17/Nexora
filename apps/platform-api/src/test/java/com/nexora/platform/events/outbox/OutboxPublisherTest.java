@@ -3,6 +3,7 @@ package com.nexora.platform.events.outbox;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -31,8 +32,9 @@ class OutboxPublisherTest {
 
     private static OutboxEvent event(int attemptCount) {
         return new OutboxEvent(
-                UUID.randomUUID(), "tenant:00000000-0000-0000-0000-000000000001:workflow", "WORKFLOW_TRANSITIONED",
-                "1.0.0", "sha256:idempotency", "sha256:payload", "{\"safeDisplay\":{}}", attemptCount);
+                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "page", UUID.randomUUID(), 1,
+                "tenant:00000000-0000-0000-0000-000000000001:workflow", "WORKFLOW_TRANSITIONED", "1.0.0",
+                "sha256:idempotency", "sha256:payload", "{\"safeDisplay\":{}}", "outbox-test-1", Instant.now(), attemptCount);
     }
 
     private static final class RecordingEvents extends OutboxEventRepository {
