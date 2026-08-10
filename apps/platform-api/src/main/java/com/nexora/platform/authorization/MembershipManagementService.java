@@ -3,6 +3,7 @@ package com.nexora.platform.authorization;
 import com.nexora.platform.auth.DomainAccessException;
 import com.nexora.platform.tenant.TenantContext;
 import com.nexora.platform.tenant.TenantContextService;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.context.annotation.Profile;
 import org.springframework.dao.DataAccessException;
@@ -35,6 +36,20 @@ public class MembershipManagementService {
         } catch (RuntimeException exception) {
             throw translateCommitFailure(exception);
         }
+    }
+
+    /** Lists the selected tenant only after the same fresh actor and permission checks as mutations. */
+    public List<MembershipView> list(TenantContext actor) {
+        return tenantContexts.withFreshTenant(actor, (authoritative, jdbc) -> {
+            permissions.require(jdbc, authoritative, "user.manage");
+            permissions.require(jdbc, authoritative, "role.manage");
+            return jdbc.query("""
+                    SELECT id, organization_id, subject_id, status::text, tenant_role::text, version
+                    FROM nexora.memberships
+                    WHERE organization_id = ?
+                    ORDER BY id
+                    """, this::map, authoritative.organizationId());
+        });
     }
 
     public MembershipView changeStatus(
