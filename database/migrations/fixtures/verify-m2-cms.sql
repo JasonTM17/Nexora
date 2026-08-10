@@ -45,13 +45,38 @@ VALUES ('a0000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-0000000
 INSERT INTO nexora.cms_audit_events (id, organization_id, site_id, page_id, version_id, operation, result, actor_id, trace_id, idempotency_key_digest)
 VALUES ('b0000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000001', '80000000-0000-4000-8000-000000000001', 'PUBLISH', 'ACCEPTED', '20000000-0000-4000-8000-000000000001', 'cms-fixture-1', 'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd');
 
+INSERT INTO nexora.pages (id, organization_id, site_id, slug, title, schema_version, content_digest, theme_version_id, seo_title, seo_description, seo_locale, canonical_path)
+VALUES ('70000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', 'about', 'About', '1.0.0', 'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', '60000000-0000-4000-8000-000000000001', 'About', 'About Alpha.', 'en-US', '/about');
+INSERT INTO nexora.page_versions (id, organization_id, site_id, page_id, source_draft_version, publication_operation, schema_version, content_digest, theme_version_id, seo_title, seo_description, seo_locale, canonical_path, seo_snapshot_digest, actor_id, trace_id)
+VALUES ('80000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000001', 2, 'PUBLISH', '1.0.0', 'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', '60000000-0000-4000-8000-000000000001', 'Welcome revision two', 'Welcome revision two.', 'en-US', '/welcome', 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '20000000-0000-4000-8000-000000000001', 'cms-fixture-2');
+
 DO $$
 BEGIN
   IF (SELECT count(*) FROM nexora.pages WHERE slug = 'welcome') <> 1
-     OR (SELECT count(*) FROM nexora.page_versions) <> 1
+     OR (SELECT count(*) FROM nexora.page_versions) <> 2
      OR (SELECT count(*) FROM nexora.page_publications) <> 1 THEN
     RAISE EXCEPTION 'same-tenant CMS rows were not visible to authorized owner';
   END IF;
+END $$;
+
+DO $$
+BEGIN
+  BEGIN
+    UPDATE nexora.pages
+    SET published_version_id = '80000000-0000-4000-8000-000000000001'
+    WHERE id = '70000000-0000-4000-8000-000000000002';
+    SET CONSTRAINTS ALL IMMEDIATE;
+    RAISE EXCEPTION 'same-tenant cross-page published version unexpectedly succeeded';
+  EXCEPTION WHEN foreign_key_violation THEN
+    SET CONSTRAINTS ALL DEFERRED;
+  END;
+
+  BEGIN
+    INSERT INTO nexora.page_publications (id, organization_id, site_id, page_id, source_draft_version, published_version_id, publication_operation, actor_id, trace_id, idempotency_key_digest, request_fingerprint)
+    VALUES ('90000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000002', 2, '80000000-0000-4000-8000-000000000002', 'PUBLISH', '20000000-0000-4000-8000-000000000001', 'cms-fixture-cross-page', 'sha256:1111111111111111111111111111111111111111111111111111111111111111', 'sha256:2222222222222222222222222222222222222222222222222222222222222222');
+    RAISE EXCEPTION 'same-tenant cross-page publication receipt unexpectedly succeeded';
+  EXCEPTION WHEN foreign_key_violation THEN NULL;
+  END;
 END $$;
 COMMIT;
 
