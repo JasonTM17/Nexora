@@ -96,7 +96,10 @@ finally {
             Write-Output "Removed disposable Compose project $projectName."
         }
         catch {
-            Write-Warning "Disposable Compose cleanup failed: $($_.Exception.Message)"
+            if ($succeeded) {
+                throw "Disposable Compose cleanup failed after successful verification: $($_.Exception.Message)"
+            }
+            Write-Warning "Disposable Compose cleanup also failed: $($_.Exception.Message)"
         }
     }
     elseif ($cleanupRequired) {
