@@ -136,22 +136,21 @@ public class CmsPageService {
 
     public ArchiveResult archive(TenantContext actor, UUID pageId, long expectedDraftVersion, String traceId) {
         return tenantContexts.withFreshTenant(actor, (authoritative, jdbc) -> {
-            permissions.require(jdbc, authoritative, "page.update");
+            permissions.require(jdbc, authoritative, "page.publish");
             PageView existing = find(jdbc, pageId);
             if (!"PUBLISHED".equals(existing.state())) {
                 throw workflowDenied();
             }
             int updated = jdbc.update("""
                     UPDATE nexora.pages
-                    SET state = 'ARCHIVED', draft_version = draft_version + 1,
-                        updated_at = transaction_timestamp()
+                    SET state = 'ARCHIVED', updated_at = transaction_timestamp()
                     WHERE id = ? AND draft_version = ? AND state = 'PUBLISHED'
                     """, pageId, expectedDraftVersion);
             if (updated != 1) {
                 throw versionConflict();
             }
             PageView archived = find(jdbc, pageId);
-            audit(jdbc, authoritative, archived.siteId(), pageId, "PAGE_UPDATE", traceId);
+            audit(jdbc, authoritative, archived.siteId(), pageId, "WORKFLOW", traceId);
             return new ArchiveResult(archived.pageId(), archived.state(), archived.updatedAt());
         });
     }

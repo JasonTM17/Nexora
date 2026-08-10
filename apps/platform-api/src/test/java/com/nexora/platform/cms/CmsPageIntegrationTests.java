@@ -180,6 +180,32 @@ class CmsPageIntegrationTests {
         assertThat(body.path("seo").path("canonicalPath").asText()).isEqualTo("/welcome");
     }
 
+    @Test
+    void httpArchiveRequiresPublishPermissionAndAuditsWorkflow() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "archive-page"),
+                "cms-archive-create-1");
+        publish(tenant, page.pageId());
+        UUID contributor = UUID.randomUUID();
+        addMembership(tenant, contributor, "CONTENT_CREATOR");
+
+        HttpResponse<String> denied = archive(tenant.organizationId(), contributor, page.pageId(), 1);
+
+        assertThat(denied.statusCode()).isEqualTo(403);
+        assertThat(json.readTree(denied.body()).path("code").asText()).isEqualTo("PERMISSION_DENIED");
+        setMembershipRole(tenant, contributor, "REVIEWER");
+
+        HttpResponse<String> allowed = archive(tenant.organizationId(), contributor, page.pageId(), 1);
+
+        assertThat(allowed.statusCode()).isEqualTo(200);
+        assertThat(json.readTree(allowed.body()).path("state").asText()).isEqualTo("ARCHIVED");
+        assertThat(pages.get(tenant.ownerContext(), page.pageId()).draftVersion()).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM nexora.cms_audit_events WHERE page_id = '" + page.pageId()
+                + "' AND operation = 'WORKFLOW'")).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM nexora.cms_audit_events WHERE page_id = '" + page.pageId()
+                + "' AND operation = 'PAGE_UPDATE'")).isZero();
+    }
+
     private CmsPageService.CreateCommand create(CmsFixture tenant, String slug) {
         return new CmsPageService.CreateCommand(tenant.siteId(), slug, "Welcome", "1.0.0", digest('a'),
                 tenant.themeVersionId(), seo());
@@ -200,6 +226,55 @@ class CmsPageIntegrationTests {
         return "sha256:" + String.valueOf(character).repeat(64);
     }
 
+    private HttpResponse<String> archive(UUID organizationId, UUID subjectId, UUID pageId, long expectedDraftVersion)
+            throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                        + "/api/v1/cms/pages/" + pageId + "?expectedDraftVersion=" + expectedDraftVersion))
+                .header("Authorization", "Bearer " + ISSUER.token(subjectId, Instant.now().plusSeconds(60)))
+                .header("X-Nexora-Organization-Id", organizationId.toString())
+                .DELETE()
+                .build();
+        return http.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private void publish(CmsFixture actor, UUID pageId) throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                DATABASE.getJdbcUrl(), DATABASE.getUsername(), DATABASE.getPassword());
+             Statement statement = connection.createStatement()) {
+            connection.setAutoCommit(false);
+            setContext(statement, actor.ownerSubjectId(), actor.organizationId(), actor.ownerMembershipId());
+            statement.execute("UPDATE nexora.pages SET state = 'IN_REVIEW' WHERE id = '" + pageId + "'");
+            statement.execute("UPDATE nexora.pages SET state = 'APPROVED' WHERE id = '" + pageId + "'");
+            statement.execute("UPDATE nexora.pages SET state = 'PUBLISHED' WHERE id = '" + pageId + "'");
+            connection.commit();
+        }
+    }
+
+    private void addMembership(CmsFixture actor, UUID subjectId, String role) throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                DATABASE.getJdbcUrl(), DATABASE.getUsername(), DATABASE.getPassword());
+             Statement statement = connection.createStatement()) {
+            connection.setAutoCommit(false);
+            setContext(statement, actor.ownerSubjectId(), actor.organizationId(), actor.ownerMembershipId());
+            statement.execute("INSERT INTO nexora.memberships (id, organization_id, subject_id, status, tenant_role) VALUES ('"
+                    + UUID.randomUUID() + "', '" + actor.organizationId() + "', '" + subjectId + "', 'ACTIVE', '" + role + "')");
+            connection.commit();
+        }
+    }
+
+    private void setMembershipRole(CmsFixture actor, UUID subjectId, String role) throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                DATABASE.getJdbcUrl(), DATABASE.getUsername(), DATABASE.getPassword());
+             Statement statement = connection.createStatement()) {
+            connection.setAutoCommit(false);
+            setContext(statement, actor.ownerSubjectId(), actor.organizationId(), actor.ownerMembershipId());
+            statement.execute("UPDATE nexora.memberships SET tenant_role = '" + role
+                    + "', version = version + 1 WHERE organization_id = '" + actor.organizationId()
+                    + "' AND subject_id = '" + subjectId + "'");
+            connection.commit();
+        }
+    }
+
     private static void prepareRuntimeRole() {
         try (Connection connection = DriverManager.getConnection(
                 DATABASE.getJdbcUrl(), DATABASE.getUsername(), DATABASE.getPassword());
@@ -217,7 +292,7 @@ class CmsPageIntegrationTests {
         try {
             migrationDirectory = Files.createTempDirectory("nexora-cms-flyway-");
             Path source = Path.of("..", "..", "database", "migrations").toAbsolutePath().normalize();
-            for (int version = 1; version <= 11; version++) {
+            for (int version = 1; version <= 13; version++) {
                 String prefix = "V%03d__".formatted(version);
                 try (Stream<Path> candidates = Files.list(source)) {
                     Path migration = candidates.filter(path -> path.getFileName().toString().startsWith(prefix))
