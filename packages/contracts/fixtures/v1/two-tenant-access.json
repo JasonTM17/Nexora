@@ -220,5 +220,66 @@
       "permission": "tenant.escape",
       "expected": "DENY"
     }
+  ],
+  "staleMembershipContextCases": [
+    {
+      "id": "stale-active-context-after-removal-denied",
+      "initialContext": {
+        "membershipId": "30000000-0000-4000-8000-000000000005",
+        "membershipVersion": 1,
+        "membershipStatus": "ACTIVE"
+      },
+      "authoritativeAfterChange": {
+        "membershipVersion": 2,
+        "membershipStatus": "REMOVED"
+      },
+      "permission": "organization.read",
+      "expected": "DENY_STALE_MEMBERSHIP_CONTEXT"
+    }
+  ],
+  "authorityBoundaryCases": [
+    {
+      "id": "tenantless-super-admin-denied",
+      "subjectId": "20000000-0000-4000-8000-000000000005",
+      "selectedOrganizationId": "10000000-0000-4000-8000-000000000001",
+      "assertedPlatformRole": "SUPER_ADMIN",
+      "permission": "organization.read",
+      "expected": "DENY"
+    },
+    {
+      "id": "forged-metadata-roles-ignored",
+      "subjectId": "20000000-0000-4000-8000-000000000005",
+      "selectedOrganizationId": "10000000-0000-4000-8000-000000000001",
+      "assertedMetadata": {
+        "user_metadata": {
+          "role": "OWNER"
+        },
+        "app_metadata": {
+          "role": "ADMIN"
+        }
+      },
+      "permission": "organization.read",
+      "expected": "DENY"
+    }
+  ],
+  "lastOwnerInvariantCases": [
+    {
+      "id": "last-owner-removal-rejected",
+      "membershipId": "30000000-0000-4000-8000-000000000001",
+      "transition": "REMOVE",
+      "expected": "REJECT_LAST_OWNER_INVARIANT"
+    },
+    {
+      "id": "last-owner-suspension-rejected",
+      "membershipId": "30000000-0000-4000-8000-000000000001",
+      "transition": "SUSPEND",
+      "expected": "REJECT_LAST_OWNER_INVARIANT"
+    },
+    {
+      "id": "last-owner-demotion-rejected",
+      "membershipId": "30000000-0000-4000-8000-000000000001",
+      "transition": "DEMOTE",
+      "expected": "REJECT_LAST_OWNER_INVARIANT"
+    }
   ]
 }

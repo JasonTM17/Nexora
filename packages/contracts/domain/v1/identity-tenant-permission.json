@@ -97,7 +97,27 @@
     "roleCardinality": "exactly one tenant role for every ACTIVE membership in v1",
     "customRoles": "not-supported-in-v1",
     "versioning": "all membership and role mutations require expectedVersion and increment version",
+    "freshness": {
+      "check": "before-permission-evaluation-and-transaction-context",
+      "authority": "current-membership-row",
+      "requiredMatch": [
+        "membershipId",
+        "membershipVersion"
+      ],
+      "requiredAuthorityStatus": "ACTIVE",
+      "mismatchResult": "DENY_STALE_MEMBERSHIP_CONTEXT"
+    },
     "ownerInvariant": "every non-deleting organization has at least one ACTIVE OWNER; the last owner cannot leave, be removed, suspended, or demoted until another owner is active",
+    "ownerMutationGuard": {
+      "protectedRole": "OWNER",
+      "minimumActiveOwners": 1,
+      "blockedLastOwnerTransitions": [
+        "REMOVE",
+        "SUSPEND",
+        "DEMOTE"
+      ],
+      "violationResult": "REJECT_LAST_OWNER_INVARIANT"
+    },
     "assignmentRule": "the actor requires both user.manage and role.manage, must hold every permission granted by the target role, and only an OWNER may assign OWNER"
   },
   "roles": {

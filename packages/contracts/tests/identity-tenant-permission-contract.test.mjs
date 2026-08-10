@@ -36,10 +36,50 @@ function evaluatePermission(testCase) {
   return contract.permissionMatrix[membership.role]?.includes(testCase.permission) ? "ALLOW" : "DENY";
 }
 
+function evaluateMembershipContext(testCase) {
+  const authoritative = fixture.memberships.find(({ id }) => id === testCase.initialContext.membershipId);
+  if (!authoritative
+    || authoritative.version !== testCase.initialContext.membershipVersion
+    || authoritative.status !== contract.membership.grantingStatus) {
+    return contract.membership.freshness.mismatchResult;
+  }
+  return contract.permissionMatrix[authoritative.role]?.includes(testCase.permission) ? "ALLOW" : "DENY";
+}
+
+function evaluateAuthorityBoundary(testCase) {
+  const membership = activeMemberships(testCase.subjectId)
+    .find(({ organizationId }) => organizationId === testCase.selectedOrganizationId);
+  if (!membership) return "DENY";
+  return contract.permissionMatrix[membership.role]?.includes(testCase.permission) ? "ALLOW" : "DENY";
+}
+
+function evaluateOwnerMutation(testCase) {
+  const target = fixture.memberships.find(({ id }) => id === testCase.membershipId);
+  if (!target || target.status !== "ACTIVE" || target.role !== contract.membership.ownerMutationGuard.protectedRole) return "DENY";
+  const activeOwners = fixture.memberships.filter((membership) =>
+    membership.organizationId === target.organizationId
+      && membership.status === "ACTIVE"
+      && membership.role === contract.membership.ownerMutationGuard.protectedRole);
+  if (activeOwners.length <= contract.membership.ownerMutationGuard.minimumActiveOwners
+    && contract.membership.ownerMutationGuard.blockedLastOwnerTransitions.includes(testCase.transition)) {
+    return contract.membership.ownerMutationGuard.violationResult;
+  }
+  return "ALLOW";
+}
+
 test("validates the canonical contract and fixture shape without dependencies", () => {
   assert.equal(fixture.contractVersion, contract.contractVersion);
   assert.equal(fixture.fixtureVersion, "1.0.0");
-  for (const collection of ["organizations", "subjects", "memberships", "tenantResolutionCases", "permissionCases"]) {
+  for (const collection of [
+    "organizations",
+    "subjects",
+    "memberships",
+    "tenantResolutionCases",
+    "permissionCases",
+    "staleMembershipContextCases",
+    "authorityBoundaryCases",
+    "lastOwnerInvariantCases",
+  ]) {
     assert.ok(Array.isArray(fixture[collection]) && fixture[collection].length > 0, `${collection} must be populated`);
   }
   for (const organization of fixture.organizations) {
@@ -112,7 +152,7 @@ test("executes every tenant-resolution fixture including selection, removed-memb
   }
 });
 
-test("executes the tenant and permission matrix with negative cross-tenant cases", () => {
+test("executes stale-context, removed-member, and cross-tenant denials", () => {
   for (const testCase of fixture.permissionCases) {
     assert.equal(evaluatePermission(testCase), testCase.expected, testCase.id);
   }
@@ -120,6 +160,51 @@ test("executes the tenant and permission matrix with negative cross-tenant cases
     testCase.resolvedOrganizationId !== testCase.resourceOrganizationId);
   assert.ok(crossTenantCases.length >= 2);
   assert.ok(crossTenantCases.every(({ expected }) => expected === "DENY"));
+  assert.ok(fixture.permissionCases.some(({ id, expected }) => id === "removed-admin-denied" && expected === "DENY"));
+
+  assert.equal(fixture.staleMembershipContextCases.length, 1);
+  for (const testCase of fixture.staleMembershipContextCases) {
+    const authoritative = fixture.memberships.find(({ id }) => id === testCase.initialContext.membershipId);
+    assert.deepEqual(
+      { membershipVersion: authoritative?.version, membershipStatus: authoritative?.status },
+      testCase.authoritativeAfterChange,
+      `${testCase.id} must model the authoritative version/status change`,
+    );
+    assert.ok(testCase.initialContext.membershipVersion < testCase.authoritativeAfterChange.membershipVersion);
+    assert.equal(testCase.expected, contract.membership.freshness.mismatchResult);
+    assert.equal(evaluateMembershipContext(testCase), testCase.expected, testCase.id);
+  }
+});
+
+test("denies tenantless SUPER_ADMIN and ignores forged metadata roles", () => {
+  assert.deepEqual(
+    new Set(fixture.authorityBoundaryCases.map(({ id }) => id)),
+    new Set(["tenantless-super-admin-denied", "forged-metadata-roles-ignored"]),
+  );
+  for (const testCase of fixture.authorityBoundaryCases) {
+    assert.equal(evaluateAuthorityBoundary(testCase), testCase.expected, testCase.id);
+  }
+  const superAdmin = fixture.authorityBoundaryCases.find(({ id }) => id === "tenantless-super-admin-denied");
+  assert.equal(superAdmin.assertedPlatformRole, "SUPER_ADMIN");
+  assert.deepEqual(contract.roles.platform[0].tenantPermissions, []);
+  const forgedMetadata = fixture.authorityBoundaryCases.find(({ id }) => id === "forged-metadata-roles-ignored");
+  assert.equal(contract.identity.authorizationClaimRules.user_metadata, "never-authoritative");
+  assert.equal(contract.identity.authorizationClaimRules.app_metadata, "never-membership-authoritative");
+  assert.deepEqual(forgedMetadata.assertedMetadata, {
+    user_metadata: { role: "OWNER" },
+    app_metadata: { role: "ADMIN" },
+  });
+});
+
+test("rejects removal, suspension, and demotion of the last active owner", () => {
+  assert.deepEqual(
+    new Set(fixture.lastOwnerInvariantCases.map(({ transition }) => transition)),
+    new Set(contract.membership.ownerMutationGuard.blockedLastOwnerTransitions),
+  );
+  for (const testCase of fixture.lastOwnerInvariantCases) {
+    assert.equal(testCase.expected, contract.membership.ownerMutationGuard.violationResult);
+    assert.equal(evaluateOwnerMutation(testCase), testCase.expected, testCase.id);
+  }
 });
 
 test("freezes the non-owner forced-RLS and transaction-local pool contract", () => {
