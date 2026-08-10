@@ -64,6 +64,7 @@ function operationsFor(spec) {
       const success = resolveLocalRef(spec, successEntry[1]);
       const responseSchema = jsonSchema(success);
       if (!responseSchema) throw new Error(`${operation.operationId} has no application/json success schema`);
+      const effectiveSecurity = operation.security ?? spec.security ?? [];
 
       operations.push({
         operationId: operation.operationId,
@@ -71,6 +72,7 @@ function operationsFor(spec) {
         path,
         requestType: requestSchema ? typeFor(requestSchema) : null,
         responseType: typeFor(responseSchema),
+        requiresAuth: effectiveSecurity.some((requirement) => Object.hasOwn(requirement, "bearerAuth")),
       });
     }
   }
@@ -81,13 +83,16 @@ function renderOperation(operation) {
   const bodyParameter = operation.requestType ? `body: ${operation.requestType}, ` : "";
   const bodyOption = operation.requestType ? ", body" : "";
   return `  async ${operation.operationId}(${bodyParameter}options: RequestOptions = {}): Promise<ApiResponse<${operation.responseType}>> {
-    return this.request<${operation.responseType}>(${JSON.stringify(operation.path)}, { method: ${JSON.stringify(operation.method)}${bodyOption} }, options);
+    return this.request<${operation.responseType}>(${JSON.stringify(operation.path)}, { method: ${JSON.stringify(operation.method)}${bodyOption} }, options, ${operation.requiresAuth});
   }`;
 }
 
 export function renderClient(spec) {
   const schemas = renderSchemas(spec);
   const operations = operationsFor(spec).map(renderOperation).join("\n\n");
+  const detailPropertyRules = spec.components?.schemas?.ApiProblem?.properties?.details?.propertyNames?.allOf ?? [];
+  const forbiddenDetailKeys = detailPropertyRules.find((rule) => Array.isArray(rule.not?.enum))?.not.enum;
+  if (!forbiddenDetailKeys) throw new Error("ApiProblem details must define forbidden property names");
   const hasBearerAuth = Object.values(spec.components?.securitySchemes ?? {}).some(
     (scheme) => scheme.type === "http" && scheme.scheme === "bearer",
   );
@@ -134,6 +139,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+const FORBIDDEN_DETAIL_KEYS = new Set(${JSON.stringify(forbiddenDetailKeys)});
+
 function asProblem(value: unknown): ApiProblem | null {
   if (!isRecord(value) || typeof value.code !== "string" || typeof value.message !== "string") return null;
   if (!isRecord(value.details) || typeof value.traceId !== "string") return null;
@@ -141,8 +148,13 @@ function asProblem(value: unknown): ApiProblem | null {
   if (keys.length !== 4 || !keys.every((key) => ["code", "message", "details", "traceId"].includes(key))) return null;
   if (!/^[a-z][a-z0-9_]{0,63}$/.test(value.code) || value.message.length < 1 || value.message.length > 512) return null;
   if (!/^[A-Za-z0-9._-]{1,128}$/.test(value.traceId)) return null;
-  const details = Object.values(value.details);
-  if (details.length > 50 || !details.every((detail) => typeof detail === "string" && detail.length <= 512)) return null;
+  const details = Object.entries(value.details);
+  if (details.length > 50 || !details.every(([key, detail]) =>
+    /^[a-z][a-z0-9_.-]{0,63}$/.test(key)
+      && !FORBIDDEN_DETAIL_KEYS.has(key)
+      && typeof detail === "string"
+      && detail.length <= 512
+  )) return null;
   return value as ApiProblem;
 }
 
@@ -164,13 +176,16 @@ ${operations}
     path: string,
     request: { readonly method: string; readonly body?: unknown },
     options: RequestOptions,
+    requiresAuth: boolean,
   ): Promise<ApiResponse<T>> {
     const headers = new Headers({ Accept: "application/json" });
     if (request.body !== undefined) headers.set("Content-Type", "application/json");
     if (options.traceId) headers.set("X-Trace-Id", options.traceId);
 
-    const token = typeof this.accessToken === "function" ? await this.accessToken() : this.accessToken;
-    if (token) headers.set("Authorization", \`Bearer \${token}\`);
+    if (requiresAuth) {
+      const token = typeof this.accessToken === "function" ? await this.accessToken() : this.accessToken;
+      if (token) headers.set("Authorization", \`Bearer \${token}\`);
+    }
 
     const init: RequestInit = { method: request.method, headers };
     if (request.body !== undefined) init.body = JSON.stringify(request.body);

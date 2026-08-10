@@ -47,6 +47,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+const FORBIDDEN_DETAIL_KEYS = new Set(["api_key","access_token","authorization","client_secret","cookie","credential","credentials","exception","exception_message","password","private_key","provider_response","refresh_token","request_source","secret","stack","stack_trace","token"]);
+
 function asProblem(value: unknown): ApiProblem | null {
   if (!isRecord(value) || typeof value.code !== "string" || typeof value.message !== "string") return null;
   if (!isRecord(value.details) || typeof value.traceId !== "string") return null;
@@ -54,8 +56,13 @@ function asProblem(value: unknown): ApiProblem | null {
   if (keys.length !== 4 || !keys.every((key) => ["code", "message", "details", "traceId"].includes(key))) return null;
   if (!/^[a-z][a-z0-9_]{0,63}$/.test(value.code) || value.message.length < 1 || value.message.length > 512) return null;
   if (!/^[A-Za-z0-9._-]{1,128}$/.test(value.traceId)) return null;
-  const details = Object.values(value.details);
-  if (details.length > 50 || !details.every((detail) => typeof detail === "string" && detail.length <= 512)) return null;
+  const details = Object.entries(value.details);
+  if (details.length > 50 || !details.every(([key, detail]) =>
+    /^[a-z][a-z0-9_.-]{0,63}$/.test(key)
+      && !FORBIDDEN_DETAIL_KEYS.has(key)
+      && typeof detail === "string"
+      && detail.length <= 512
+  )) return null;
   return value as ApiProblem;
 }
 
@@ -72,24 +79,27 @@ export class PlatformApiClient {
   }
 
   async getPlatform(options: RequestOptions = {}): Promise<ApiResponse<PlatformResponse>> {
-    return this.request<PlatformResponse>("/api/v1/platform", { method: "GET" }, options);
+    return this.request<PlatformResponse>("/api/v1/platform", { method: "GET" }, options, false);
   }
 
   async echoPlatform(body: EchoRequest, options: RequestOptions = {}): Promise<ApiResponse<EchoResponse>> {
-    return this.request<EchoResponse>("/api/v1/platform/echo", { method: "POST", body }, options);
+    return this.request<EchoResponse>("/api/v1/platform/echo", { method: "POST", body }, options, false);
   }
 
   private async request<T>(
     path: string,
     request: { readonly method: string; readonly body?: unknown },
     options: RequestOptions,
+    requiresAuth: boolean,
   ): Promise<ApiResponse<T>> {
     const headers = new Headers({ Accept: "application/json" });
     if (request.body !== undefined) headers.set("Content-Type", "application/json");
     if (options.traceId) headers.set("X-Trace-Id", options.traceId);
 
-    const token = typeof this.accessToken === "function" ? await this.accessToken() : this.accessToken;
-    if (token) headers.set("Authorization", `Bearer ${token}`);
+    if (requiresAuth) {
+      const token = typeof this.accessToken === "function" ? await this.accessToken() : this.accessToken;
+      if (token) headers.set("Authorization", `Bearer ${token}`);
+    }
 
     const init: RequestInit = { method: request.method, headers };
     if (request.body !== undefined) init.body = JSON.stringify(request.body);

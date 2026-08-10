@@ -12,6 +12,11 @@
       "description": "Same-origin API boundary"
     }
   ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
   "tags": [
     {
       "name": "Platform",
@@ -26,6 +31,11 @@
         "tags": [
           "Platform"
         ],
+        "security": [],
+        "x-nexora-public": {
+          "access": "public",
+          "reason": "Unauthenticated loopback bootstrap endpoint; it exposes platform contract metadata but no tenant or actor data."
+        },
         "responses": {
           "200": {
             "description": "Platform baseline",
@@ -55,6 +65,11 @@
         "tags": [
           "Platform"
         ],
+        "security": [],
+        "x-nexora-public": {
+          "access": "public",
+          "reason": "Unauthenticated loopback validation probe; it accepts only a bounded echo payload and exposes no tenant or actor data."
+        },
         "requestBody": {
           "required": true,
           "content": {
@@ -228,6 +243,37 @@
             "type": "object",
             "description": "Bounded field-level details safe for the caller.",
             "maxProperties": 50,
+            "propertyNames": {
+              "allOf": [
+                {
+                  "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+                },
+                {
+                  "not": {
+                    "enum": [
+                      "api_key",
+                      "access_token",
+                      "authorization",
+                      "client_secret",
+                      "cookie",
+                      "credential",
+                      "credentials",
+                      "exception",
+                      "exception_message",
+                      "password",
+                      "private_key",
+                      "provider_response",
+                      "refresh_token",
+                      "request_source",
+                      "secret",
+                      "stack",
+                      "stack_trace",
+                      "token"
+                    ]
+                  }
+                }
+              ]
+            },
             "additionalProperties": {
               "type": "string",
               "maxLength": 512

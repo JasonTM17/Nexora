@@ -51,6 +51,10 @@ test("freezes the safe error, authentication, authorization, and trace contracts
   assert.deepEqual(Object.keys(problem.properties), ["code", "message", "details", "traceId"]);
   assert.equal(problem.properties.traceId.$ref, "#/components/schemas/TraceId");
   assert.equal(spec.components.schemas.TraceId.pattern, "^[A-Za-z0-9._-]{1,128}$");
+  const forbiddenDetailKeys = problem.properties.details.propertyNames.allOf[1].not.enum;
+  for (const forbidden of ["stack", "exception", "credential", "password", "token", "provider_response"]) {
+    assert.ok(forbiddenDetailKeys.includes(forbidden), `details must reject ${forbidden}`);
+  }
 
   const bearer = spec.components.securitySchemes.bearerAuth;
   assert.deepEqual({ type: bearer.type, scheme: bearer.scheme }, { type: "http", scheme: "bearer" });
@@ -64,6 +68,44 @@ test("freezes the safe error, authentication, authorization, and trace contracts
   for (const forbidden of ["stack", "exception", "credential", "providerresponse", "requestsource"]) {
     assert.doesNotMatch(serializedProblem, new RegExp(`"${forbidden}"\\s*:`));
   }
+});
+
+test("requires bearer auth with 401/403 responses or an explicit public exception per operation", () => {
+  assert.deepEqual(spec.security, [{ bearerAuth: [] }]);
+
+  for (const { path, method, operation } of operations()) {
+    const label = `${method.toUpperCase()} ${path}`;
+    const effectiveSecurity = operation.security ?? spec.security;
+    const bearerProtected = effectiveSecurity.some((requirement) =>
+      Object.hasOwn(requirement, "bearerAuth"),
+    );
+
+    if (bearerProtected) {
+      assert.equal(operation.responses["401"]?.$ref, "#/components/responses/AuthenticationRequired", `${label} must declare 401`);
+      assert.equal(operation.responses["403"]?.$ref, "#/components/responses/PermissionDenied", `${label} must declare 403`);
+      continue;
+    }
+
+    assert.deepEqual(operation.security, [], `${label} public access must be explicit`);
+    assert.equal(operation["x-nexora-public"]?.access, "public", `${label} must identify the public exception`);
+    assert.match(operation["x-nexora-public"]?.reason ?? "", /unauthenticated/i, `${label} must explain why it is public`);
+  }
+});
+
+test("generates bearer handling when an operation inherits the protected default", () => {
+  const protectedSpec = structuredClone(spec);
+  const operation = protectedSpec.paths["/api/v1/platform"].get;
+  delete operation.security;
+  delete operation["x-nexora-public"];
+  operation.responses["401"] = { "$ref": "#/components/responses/AuthenticationRequired" };
+  operation.responses["403"] = { "$ref": "#/components/responses/PermissionDenied" };
+
+  const generated = renderClient(protectedSpec);
+  assert.match(
+    generated,
+    /getPlatform[\s\S]*?this\.request<PlatformResponse>\([\s\S]*?options, true\);/,
+  );
+  assert.match(generated, /if \(requiresAuth\)[\s\S]*?headers\.set\("Authorization"/);
 });
 
 test("has no generated-client drift", async () => {

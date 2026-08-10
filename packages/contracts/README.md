@@ -5,10 +5,14 @@ browser-facing `/api/v1` platform surface. `src/generated/platform-api.ts` is a
 deterministic TypeScript client generated from that source; do not edit it by
 hand.
 
-The v1 contract freezes the safe API error body, bearer authentication scheme,
-standard 401/403 responses and `X-Trace-Id` correlation header. Authentication
-does not imply organization authorization. The generated client API exposes a
-bearer access-token input, but no provider-credential or arbitrary-header input.
+The v1 contract freezes the safe API error body, bearer authentication default,
+standard 401/403 responses and `X-Trace-Id` correlation header. Each operation
+must either use bearer authentication and reference those responses, or declare
+an explicit reviewed public exception. The two current loopback bootstrap
+operations are explicit public exceptions, so the generated client does not
+resolve or send an access token for them. Authentication does not imply
+organization authorization. The generated client API exposes a bearer
+access-token input, but no provider-credential or arbitrary-header input.
 
 From the repository root:
 

@@ -5,12 +5,16 @@ import {
   PlatformApiClient,
 } from "../src/generated/platform-api.ts";
 
-test("sends bearer authentication and trace context through the generated client", async () => {
+test("keeps bearer credentials off an explicitly public operation while sending trace context", async () => {
   let observedUrl;
   let observedInit;
+  let tokenReads = 0;
   const client = new PlatformApiClient({
     baseUrl: "https://nexora.test/",
-    accessToken: async () => "short-lived-token",
+    accessToken: async () => {
+      tokenReads += 1;
+      return "short-lived-token";
+    },
     fetch: async (url, init) => {
       observedUrl = url;
       observedInit = init;
@@ -25,7 +29,8 @@ test("sends bearer authentication and trace context through the generated client
 
   assert.equal(observedUrl, "https://nexora.test/api/v1/platform");
   assert.equal(observedInit.method, "GET");
-  assert.equal(observedInit.headers.get("Authorization"), "Bearer short-lived-token");
+  assert.equal(tokenReads, 0);
+  assert.equal(observedInit.headers.get("Authorization"), null);
   assert.equal(observedInit.headers.get("X-Trace-Id"), "trace-client-1");
   assert.equal(response.traceId, "trace-client-1");
   assert.equal(response.data.apiVersion, "v1");
@@ -77,6 +82,29 @@ test("rejects an unsafe error payload instead of retaining extra fields", async 
       assert.equal(error.problem, null);
       assert.equal(error.traceId, "trace-safe-1");
       assert.doesNotMatch(error.message, /must not escape/);
+      return true;
+    },
+  );
+});
+
+test("rejects sensitive-looking detail keys without exposing their values", async () => {
+  const client = new PlatformApiClient({
+    baseUrl: "https://nexora.test",
+    fetch: async () => new Response(JSON.stringify({
+      code: "internal_error",
+      message: "An unexpected error occurred.",
+      details: { stack: "sensitive nested diagnostic" },
+      traceId: "trace-detail-1",
+    }), { status: 500, headers: { "Content-Type": "application/json", "X-Trace-Id": "trace-detail-1" } }),
+  });
+
+  await assert.rejects(
+    client.getPlatform(),
+    (error) => {
+      assert.ok(error instanceof NexoraApiError);
+      assert.equal(error.problem, null);
+      assert.equal(error.traceId, "trace-detail-1");
+      assert.doesNotMatch(error.message, /sensitive nested diagnostic/);
       return true;
     },
   );
