@@ -13,7 +13,7 @@ services:
       timeout: 5s
       retries: 12
     ports:
-      - "${NEXORA_POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${NEXORA_POSTGRES_PORT:-15432}:5432"
     volumes:
       - nexora-postgres-data:/var/lib/postgresql/data
 
@@ -26,8 +26,8 @@ services:
       timeout: 5s
       retries: 12
     ports:
-      - "${NEXORA_NATS_CLIENT_PORT:-4222}:4222"
-      - "${NEXORA_NATS_MONITOR_PORT:-8222}:8222"
+      - "127.0.0.1:${NEXORA_NATS_CLIENT_PORT:-14222}:4222"
+      - "127.0.0.1:${NEXORA_NATS_MONITOR_PORT:-18222}:8222"
     volumes:
       - nexora-nats-data:/data
 

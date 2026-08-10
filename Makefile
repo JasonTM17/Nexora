@@ -1,12 +1,13 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help validate compose-config compose-up compose-down
+.PHONY: help validate compose-config compose-up compose-health compose-down
 
 help:
 	@echo "Nexora repository commands"
 	@echo "  make validate       Run deterministic foundation checks"
 	@echo "  make compose-config Render Compose without starting services"
 	@echo "  make compose-up     Start local dependency services"
+	@echo "  make compose-health Wait for local dependency health checks"
 	@echo "  make compose-down   Stop local dependency services"
 
 validate:
@@ -17,6 +18,9 @@ compose-config:
 
 compose-up:
 	docker compose -f compose.yaml up -d
+
+compose-health:
+	docker compose -f compose.yaml up -d --wait
 
 compose-down:
 	docker compose -f compose.yaml down

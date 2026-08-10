@@ -9,8 +9,8 @@ workspace. This branch implements the M1-T01 repository foundation only.
 - Non-Node monorepo skeleton under `apps/`, `services/`, `packages/`,
   `database/`, `infrastructure/`, `observability/`, and `docs/`.
 - Reproducible toolchain declarations for Node, pnpm, Java, and Go.
-- Local PostgreSQL and NATS dependency Compose with health checks and named
-  volumes.
+- Loopback-only local PostgreSQL and NATS dependency Compose with health checks
+  and named volumes.
 - Cross-platform validation entrypoints and a pinned GitHub Actions baseline.
 - `.env.local`, `engineer/`, `.worktrees/`, and AgentKit runtime state remain
   ignored.
@@ -27,7 +27,8 @@ layout markers, not working application features.
 Run `make help` (or inspect `Makefile` on systems without Make) to see the
 canonical commands. `pwsh ./tools/validate-repo.ps1` performs deterministic
 repository checks, and `docker compose config --quiet` validates the local
-dependency definition without starting services.
+dependency definition without starting services. `make compose-health` starts
+the loopback-only dependencies and waits for their health checks.
 
 The first public push, remote configuration changes, provider calls, release,
 provisioning, and deployment are intentionally outside this branch.

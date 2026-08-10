@@ -29,6 +29,13 @@ foreach ($path in $forbidden) {
     if (Test-Path -LiteralPath $path) { throw "M1-T01 must not create Node dependency control: $path" }
 }
 
+$secretPattern = '(?i)sk-[a-z0-9]{20,}|ghp_[a-z0-9]{36}|github_pat_[a-z0-9_]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|postgres(?:ql)?://[^/\s:@]+:[^@\s]+@'
+$secretFindings = foreach ($trackedPath in (& git ls-files)) {
+    $content = Get-Content -LiteralPath $trackedPath -Raw
+    if ($content -match $secretPattern) { $trackedPath }
+}
+if ($secretFindings) { throw "Potential credential material found in tracked files: $($secretFindings -join ', ')" }
+
 & docker compose -f compose.yaml config --quiet
 if ($LASTEXITCODE -ne 0) { throw 'Compose configuration did not render' }
 
