@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexora.platform.auth.DomainAccessException;
 import com.nexora.platform.auth.LocalJwtIssuer;
+import com.nexora.platform.events.outbox.OutboxEvent;
 import com.nexora.platform.events.outbox.OutboxEventRepository;
 import com.nexora.platform.events.outbox.OutboxPublisher;
 import com.nexora.platform.events.outbox.OutboxPublisherProperties;
@@ -29,6 +30,7 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
@@ -282,6 +284,10 @@ class CmsPageIntegrationTests {
         assertThat(envelope.path("safePayload").has("body")).isFalse();
         assertThat(envelope.path("safePayload").has("token")).isFalse();
         assertThat(envelope.path("occurredAt").asText()).isNotBlank();
+        assertThat(fieldNames(envelope)).containsExactlyInAnyOrder(
+                "eventId", "eventType", "eventVersion", "organizationId", "subjectId", "resourceType",
+                "resourceId", "topic", "actorId", "traceId", "idempotencyKeyDigest", "payloadDigest",
+                "safePayload", "occurredAt", "schemaVersion");
         assertThat(count("SELECT count(*) FROM nexora.outbox_events WHERE resource_id = '" + page.pageId()
                 + "' AND state = 'PUBLISHED' AND attempt_count = 1 AND published_at IS NOT NULL"))
                 .isEqualTo(1);
@@ -340,6 +346,46 @@ class CmsPageIntegrationTests {
                 + "' AND state = 'PUBLISHED' AND attempt_count = 2")).isEqualTo(1);
     }
 
+    @Test
+    void encodesPermittedDigestTextWithoutInjectingEnvelopeFields() throws Exception {
+        String hostileDigest = "x\",\"body\":\"injected" + "z".repeat(32);
+        OutboxEvent hostile = new OutboxEvent(
+                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "page", UUID.randomUUID(), 1,
+                "tenant:00000000-0000-0000-0000-000000000001:workflow", "WORKFLOW_TRANSITIONED", "1.0.0",
+                hostileDigest, hostileDigest,
+                "{\"traceId\":\"safe-trace-1\",\"safeDisplay\":{\"label\":\"Page workflow\",\"status\":\"ARCHIVED\"}}",
+                "safe-trace-1", Instant.now(), 1);
+
+        outboxTransport.publish(hostile);
+
+        JsonNode envelope = latestStreamMessage();
+        assertThat(envelope.path("idempotencyKeyDigest").asText()).isEqualTo(hostileDigest);
+        assertThat(envelope.path("payloadDigest").asText()).isEqualTo(hostileDigest);
+        assertThat(envelope.has("body")).isFalse();
+        assertThat(fieldNames(envelope)).containsExactlyInAnyOrder(
+                "eventId", "eventType", "eventVersion", "organizationId", "subjectId", "resourceType",
+                "resourceId", "topic", "actorId", "traceId", "idempotencyKeyDigest", "payloadDigest",
+                "safePayload", "occurredAt", "schemaVersion");
+    }
+
+    @Test
+    void replacesTraceHeadersThatWouldBeRejectedByTheDurableSafePayloadPolicy() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "safe-trace"), "cms-trace-create-1");
+        publish(tenant, page.pageId());
+
+        HttpResponse<String> response = archive(
+                tenant.organizationId(), tenant.ownerSubjectId(), page.pageId(), 1, "token-1");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        String replacementTraceId = response.headers().firstValue("X-Trace-Id").orElseThrow();
+        assertThat(replacementTraceId).isNotEqualTo("token-1");
+        assertThat(replacementTraceId).matches("[A-Za-z0-9._-]{1,128}");
+        assertThat(count("SELECT count(*) FROM nexora.outbox_events WHERE resource_id = '" + page.pageId()
+                + "' AND safe_payload ->> 'traceId' = '" + replacementTraceId + "'"))
+                .isEqualTo(1);
+    }
+
     private CmsPageService.CreateCommand create(CmsFixture tenant, String slug) {
         return new CmsPageService.CreateCommand(tenant.siteId(), slug, "Welcome", "1.0.0", digest('a'),
                 tenant.themeVersionId(), seo());
@@ -362,13 +408,19 @@ class CmsPageIntegrationTests {
 
     private HttpResponse<String> archive(UUID organizationId, UUID subjectId, UUID pageId, long expectedDraftVersion)
             throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+        return archive(organizationId, subjectId, pageId, expectedDraftVersion, null);
+    }
+
+    private HttpResponse<String> archive(
+            UUID organizationId, UUID subjectId, UUID pageId, long expectedDraftVersion, String traceId) throws Exception {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
                         + "/api/v1/cms/pages/" + pageId + "?expectedDraftVersion=" + expectedDraftVersion))
                 .header("Authorization", "Bearer " + ISSUER.token(subjectId, Instant.now().plusSeconds(60)))
-                .header("X-Nexora-Organization-Id", organizationId.toString())
-                .DELETE()
-                .build();
-        return http.send(request, HttpResponse.BodyHandlers.ofString());
+                .header("X-Nexora-Organization-Id", organizationId.toString());
+        if (traceId != null) {
+            builder.header("X-Trace-Id", traceId);
+        }
+        return http.send(builder.DELETE().build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private void publish(CmsFixture actor, UUID pageId) throws Exception {
@@ -515,6 +567,12 @@ class CmsPageIntegrationTests {
             long lastSequence = management.getStreamInfo(OUTBOX_STREAM).getStreamState().getLastSequence();
             return json.readTree(new String(management.getMessage(OUTBOX_STREAM, lastSequence).getData(), StandardCharsets.UTF_8));
         }
+    }
+
+    private Set<String> fieldNames(JsonNode node) {
+        Set<String> fields = new HashSet<>();
+        node.fieldNames().forEachRemaining(fields::add);
+        return fields;
     }
 
     private record CmsFixture(UUID organizationId, UUID ownerMembershipId, UUID ownerSubjectId,
