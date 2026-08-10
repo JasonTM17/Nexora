@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Nexora Luminous Grid - Planned Concept</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700&amp;family=JetBrains+Mono:wght@500&amp;family=Work+Sans:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-container": "#905300",
+                        "inverse-primary": "#b5c4ff",
+                        "surface-tint": "#1f54d3",
+                        "surface-container-highest": "#e0e3e6",
+                        "on-primary-fixed-variant": "#003cad",
+                        "on-tertiary-fixed-variant": "#6a3c00",
+                        "on-tertiary-container": "#ffd6b3",
+                        "primary": "#003fb3",
+                        "secondary": "#555f72",
+                        "on-secondary-fixed": "#121c2c",
+                        "secondary-fixed-dim": "#bdc7dd",
+                        "secondary-container": "#d6e0f7",
+                        "surface": "#f7f9fc",
+                        "error": "#ba1a1a",
+                        "background": "#f7f9fc",
+                        "on-secondary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "outline": "#747686",
+                        "tertiary-fixed": "#ffdcbe",
+                        "secondary-fixed": "#d9e3fa",
+                        "on-background": "#191c1e",
+                        "on-primary-fixed": "#00164d",
+                        "on-surface-variant": "#434654",
+                        "inverse-surface": "#2d3133",
+                        "surface-container-low": "#f2f4f7",
+                        "outline-variant": "#c3c5d7",
+                        "on-error": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary-container": "#d5dcff",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-container": "#596377",
+                        "surface-bright": "#f7f9fc",
+                        "on-secondary-fixed-variant": "#3d475a",
+                        "surface-dim": "#d8dadd",
+                        "primary-fixed": "#dce1ff",
+                        "on-primary": "#ffffff",
+                        "surface-container": "#eceef1",
+                        "primary-container": "#2457d6",
+                        "on-tertiary-fixed": "#2d1600",
+                        "on-surface": "#191c1e",
+                        "inverse-on-surface": "#eff1f4",
+                        "tertiary": "#6e3e00",
+                        "surface-container-high": "#e6e8eb",
+                        "on-error-container": "#93000a",
+                        "tertiary-fixed-dim": "#ffb872",
+                        "surface-variant": "#e0e3e6",
+                        "primary-fixed-dim": "#b5c4ff",
+                        // Mapped specific brand colors as per prompt instruction within Tailwind constraints:
+                        "brand-graphite": "#182233",
+                        "brand-cobalt": "#2457D6",
+                        "brand-amber": "#C97916",
+                        "brand-slate": "#D6DFEE"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.625rem", // 10px mapped to xl for cards
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-mobile": "16px",
+                        "unit-md": "16px",
+                        "unit-sm": "8px",
+                        "gutter": "20px",
+                        "margin-desktop": "40px",
+                        "grid-columns": "12",
+                        "unit-xs": "4px",
+                        "unit-lg": "24px",
+                        "unit-xl": "48px"
+                    },
+                    "fontFamily": {
+                        "body-sm": ["Work Sans"],
+                        "body-md": ["Work Sans"],
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "body-lg": ["Work Sans"],
+                        "label-mono": ["JetBrains Mono"],
+                        "label-caps": ["Work Sans"]
+                    },
+                    "fontSize": {
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "label-mono": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                        "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+                    },
+                    "boxShadow": {
+                        "tonal": "0px 2px 4px rgba(24, 34, 51, 0.08)"
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #F7F9FC;
+            color: #182233;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-surface text-brand-graphite font-body-md min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<header class="bg-surface border-b border-brand-slate sticky top-0 z-50">
+<div class="flex justify-between items-center w-full px-margin-desktop max-w-[1440px] mx-auto h-20">
+<!-- Brand Logo -->
+<div class="flex items-center gap-unit-lg">
+<span class="font-headline-md text-headline-md font-bold text-primary">Nexora</span>
+<!-- Navigation Links -->
+<nav class="hidden md:flex gap-unit-lg items-center ml-unit-xl">
+<a class="text-primary border-b-2 border-primary pb-1 font-label-caps text-label-caps" href="#">Public</a>
+<a class="text-on-surface-variant font-label-caps text-label-caps hover:text-primary transition-colors" href="#">Studio</a>
+<a class="text-on-surface-variant font-label-caps text-label-caps hover:text-primary transition-colors" href="#">Documentation</a>
+</nav>
+</div>
+<!-- Trailing Actions -->
+<div class="flex items-center gap-unit-md">
+<a class="text-on-surface-variant font-label-caps text-label-caps hover:text-primary transition-colors" href="#">Sign in</a>
+<a class="bg-primary-container text-on-primary border border-primary-container px-4 py-2 rounded-DEFAULT font-label-caps text-label-caps hover:bg-on-primary-fixed-variant transition-colors" href="#">View planned patterns</a>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-grow w-full max-w-[1440px] mx-auto px-margin-desktop py-unit-xl grid grid-cols-12 gap-gutter">
+<!-- Hero Section -->
+<section class="col-span-12 grid grid-cols-12 gap-gutter mb-unit-xl">
+<!-- Hero Copy -->
+<div class="col-span-12 md:col-span-6 flex flex-col justify-center pr-unit-xl">
+<h1 class="font-display-lg text-display-lg text-brand-graphite mb-unit-md">A clearer grid for trustworthy experiences.</h1>
+<p class="font-body-lg text-body-lg text-secondary mb-unit-lg">Deploy modular publishing patterns that enforce provenance at the foundational level. The Nexora framework isolates layout from data, ensuring a transparent pipeline for content assembly.</p>
+<div class="flex items-center gap-unit-md">
+<button class="bg-primary-container text-on-primary px-6 py-3 rounded-DEFAULT font-label-caps text-label-caps hover:bg-on-primary-fixed-variant transition-colors">Browse planned building blocks</button>
+<a class="text-primary font-label-caps text-label-caps hover:underline flex items-center gap-unit-xs" href="#">
+                        Read provenance notes
+                        <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</a>
+</div>
+</div>
+<!-- Hero Visual (Modular Preview) -->
+<div class="col-span-12 md:col-span-6 grid grid-cols-2 gap-unit-md">
+<!-- Workspace -->
+<div class="bg-surface-container-lowest border border-brand-slate rounded-xl p-unit-md hover:shadow-tonal transition-shadow relative overflow-hidden group">
+<div class="absolute top-0 left-0 bottom-0 w-1 bg-brand-amber"></div>
+<div class="flex justify-between items-start mb-unit-md ml-unit-xs">
+<span class="material-symbols-outlined text-secondary">grid_view</span>
+<span class="bg-[#EDF2F7] text-brand-graphite px-2 py-1 rounded font-label-mono text-[10px] uppercase">fixture</span>
+</div>
+<h3 class="font-headline-md text-headline-md-mobile mb-unit-xs ml-unit-xs">Workspace</h3>
+<div class="h-24 bg-surface-container rounded border border-dashed border-outline-variant mt-unit-sm ml-unit-xs flex items-center justify-center">
+<span class="font-label-mono text-label-mono text-secondary">struct_view</span>
+</div>
+</div>
+<!-- Collection -->
+<div class="bg-surface-container-lowest border border-brand-slate rounded-xl p-unit-md hover:shadow-tonal transition-shadow relative overflow-hidden group">
+<div class="absolute top-0 left-0 bottom-0 w-1 bg-brand-amber"></div>
+<div class="flex justify-between items-start mb-unit-md ml-unit-xs">
+<span class="material-symbols-outlined text-secondary">collections_bookmark</span>
+<span class="bg-[#EDF2F7] text-brand-graphite px-2 py-1 rounded font-label-mono text-[10px] uppercase">PLANNED CONCEPT</span>
+</div>
+<h3 class="font-headline-md text-headline-md-mobile mb-unit-xs ml-unit-xs">Collection</h3>
+<div class="space-y-unit-sm mt-unit-sm ml-unit-xs">
+<div class="h-8 bg-surface-container rounded border border-outline-variant w-full"></div>
+<div class="h-8 bg-surface-container rounded border border-outline-variant w-3/4"></div>
+</div>
+</div>
+<!-- Review -->
+<div class="bg-surface-container-lowest border border-brand-slate rounded-xl p-unit-md hover:shadow-tonal transition-shadow relative overflow-hidden group">
+<div class="absolute top-0 left-0 bottom-0 w-1 bg-brand-amber"></div>
+<div class="flex justify-between items-start mb-unit-md ml-unit-xs">
+<span class="material-symbols-outlined text-secondary">fact_check</span>
+<span class="bg-[#EDF2F7] text-brand-graphite px-2 py-1 rounded font-label-mono text-[10px] uppercase">not live</span>
+</div>
+<h3 class="font-headline-md text-headline-md-mobile mb-unit-xs ml-unit-xs">Review</h3>
+<ul class="mt-unit-sm ml-unit-xs space-y-2 border-l border-outline-variant pl-3">
+<li class="font-label-mono text-label-mono text-secondary relative before:absolute before:-left-4 before:top-1.5 before:w-2 before:h-2 before:bg-surface-tint before:rounded-full">check_node_1</li>
+<li class="font-label-mono text-label-mono text-secondary relative before:absolute before:-left-4 before:top-1.5 before:w-2 before:h-2 before:bg-outline-variant before:rounded-full">check_node_2</li>
+</ul>
+</div>
+<!-- Source Note -->
+<div class="bg-surface-container-lowest border border-brand-slate rounded-xl p-unit-md hover:shadow-tonal transition-shadow relative overflow-hidden group">
+<div class="absolute top-0 left-0 bottom-0 w-1 bg-brand-amber"></div>
+<div class="flex justify-between items-start mb-unit-md ml-unit-xs">
+<span class="material-symbols-outlined text-secondary">source_notes</span>
+<span class="bg-[#EDF2F7] text-brand-graphite px-2 py-1 rounded font-label-mono text-[10px] uppercase">fixture</span>
+</div>
+<h3 class="font-headline-md text-headline-md-mobile mb-unit-xs ml-unit-xs">Source note</h3>
+<div class="mt-unit-sm ml-unit-xs font-label-mono text-[10px] text-secondary bg-surface-container p-2 rounded">
+<code>{ "provenance": "verified", "timestamp": "none" }</code>
+</div>
+</div>
+</div>
+</section>
+<!-- Architecture Band -->
+<section class="col-span-12 grid grid-cols-12 gap-gutter mb-unit-xl">
+<!-- Card 1: Tenant Boundary -->
+<div class="col-span-12 md:col-span-4 bg-surface-container-lowest border border-brand-slate rounded-xl p-unit-lg hover:shadow-tonal transition-shadow relative overflow-hidden">
+<div class="absolute top-0 left-0 bottom-0 w-1 bg-brand-amber"></div>
+<div class="ml-unit-sm flex flex-col h-full">
+<div class="flex justify-between items-start mb-unit-md">
+<span class="material-symbols-outlined text-primary">domain</span>
+<span class="bg-[#EDF2F7] text-brand-graphite px-2 py-1 rounded font-label-mono text-[10px] uppercase">PLANNED CONCEPT</span>
+</div>
+<h3 class="font-headline-lg text-headline-lg-mobile mb-unit-sm text-brand-graphite">Tenant boundary</h3>
+<p class="font-body-sm text-body-sm text-secondary flex-grow">Isolates data streams at the infrastructural level, ensuring strict contextual separation between operational nodes.</p>
+</div>
+</div>
+<!-- Card 2: Content Assembly -->
+<div class="col-span-12 md:col-span-5 bg-surface-container-lowest border border-brand-slate rounded-xl p-unit-lg hover:shadow-tonal transition-shadow relative overflow-hidden">
+<div class="absolute top-0 left-0 bottom-0 w-1 bg-brand-amber"></div>
+<div class="ml-unit-sm flex flex-col h-full">
+<div class="flex justify-between items-start mb-unit-md">
+<span class="material-symbols-outlined text-primary">dynamic_feed</span>
+<span class="bg-[#EDF2F7] text-brand-graphite px-2 py-1 rounded font-label-mono text-[10px] uppercase">fixture</span>
+</div>
+<h3 class="font-headline-lg text-headline-lg-mobile mb-unit-sm text-brand-graphite">Content assembly</h3>
+<p class="font-body-sm text-body-sm text-secondary flex-grow">Compiles verified fragments into cohesive layouts using deterministic templates that refuse unauthenticated payloads.</p>
+<div class="mt-unit-md grid grid-cols-3 gap-2">
+<div class="h-1 bg-primary rounded"></div>
+<div class="h-1 bg-outline-variant rounded"></div>
+<div class="h-1 bg-primary rounded"></div>
+</div>
+</div>
+</div>
+<!-- Card 3: Traceable Handoff -->
+<div class="col-span-12 md:col-span-3 bg-surface-container-lowest border border-brand-slate rounded-xl p-unit-lg hover:shadow-tonal transition-shadow relative overflow-hidden">
+<div class="absolute top-0 left-0 bottom-0 w-1 bg-brand-amber"></div>
+<div class="ml-unit-sm flex flex-col h-full">
+<div class="flex justify-between items-start mb-unit-md">
+<span class="material-symbols-outlined text-primary">route</span>
+<span class="bg-[#EDF2F7] text-brand-graphite px-2 py-1 rounded font-label-mono text-[10px] uppercase">not live</span>
+</div>
+<h3 class="font-headline-lg text-headline-lg-mobile mb-unit-sm text-brand-graphite">Traceable handoff</h3>
+<p class="font-body-sm text-body-sm text-secondary flex-grow">Every state transition logs a cryptographic marker, preserving the chain of intent.</p>
+</div>
+</div>
+</section>
+<!-- Provenance Panel -->
+<section class="col-span-12 border border-brand-cobalt rounded-xl p-unit-xl bg-surface-container-lowest relative">
+<div class="absolute top-4 right-4 bg-[#EDF2F7] text-brand-graphite px-3 py-1 rounded font-label-mono text-label-mono uppercase flex items-center gap-2 border-l-2 border-brand-amber">
+                Concept only — no live data
+            </div>
+<h2 class="font-headline-lg text-headline-lg mb-unit-lg text-brand-graphite max-w-2xl">Source-aware by design</h2>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-unit-lg">
+<!-- Step 1 -->
+<div class="border border-brand-slate p-unit-md rounded-xl relative overflow-hidden">
+<div class="absolute top-0 left-0 bottom-0 w-1 bg-brand-amber"></div>
+<div class="ml-unit-sm">
+<div class="w-8 h-8 rounded-full border border-brand-slate flex items-center justify-center font-label-mono text-label-mono mb-unit-md text-secondary">01</div>
+<h4 class="font-headline-md text-headline-md-mobile mb-unit-xs">Known source</h4>
+<div class="h-[1px] w-full bg-brand-slate my-unit-sm"></div>
+<p class="font-label-mono text-label-mono text-secondary uppercase">Ingest_Node_A</p>
+</div>
+</div>
+<!-- Step 2 -->
+<div class="border border-brand-slate p-unit-md rounded-xl relative overflow-hidden">
+<div class="absolute top-0 left-0 bottom-0 w-1 bg-brand-amber"></div>
+<div class="ml-unit-sm">
+<div class="w-8 h-8 rounded-full border border-brand-slate flex items-center justify-center font-label-mono text-label-mono mb-unit-md text-secondary">02</div>
+<h4 class="font-headline-md text-headline-md-mobile mb-unit-xs">Review context</h4>
+<div class="h-[1px] w-full bg-brand-slate my-unit-sm"></div>
+<p class="font-label-mono text-label-mono text-secondary uppercase">Validation_Gate</p>
+</div>
+</div>
+<!-- Step 3 -->
+<div class="border border-brand-slate p-unit-md rounded-xl relative overflow-hidden">
+<div class="absolute top-0 left-0 bottom-0 w-1 bg-brand-amber"></div>
+<div class="ml-unit-sm">
+<div class="w-8 h-8 rounded-full border border-brand-slate flex items-center justify-center font-label-mono text-label-mono mb-unit-md text-secondary">03</div>
+<h4 class="font-headline-md text-headline-md-mobile mb-unit-xs">Planned output</h4>
+<div class="h-[1px] w-full bg-brand-slate my-unit-sm"></div>
+<p class="font-label-mono text-label-mono text-secondary uppercase">Render_Target_0</p>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container border-t border-outline-variant w-full mt-auto">
+<div class="w-full py-unit-xl px-margin-desktop max-w-[1440px] mx-auto flex flex-col md:flex-row justify-between items-center gap-unit-md">
+<span class="text-body-lg font-headline-md font-bold text-on-surface">Planned-status notice © Nexora Luminous Grid</span>
+<div class="flex gap-unit-md">
+<a class="font-label-mono text-label-mono text-secondary hover:text-primary transition-colors" href="#">Accessibility</a>
+<a class="font-label-mono text-label-mono text-secondary hover:text-primary transition-colors" href="#">Privacy Policy</a>
+<a class="font-label-mono text-label-mono text-secondary hover:text-primary transition-colors" href="#">Terms of Service</a>
+<a class="font-label-mono text-label-mono text-secondary hover:text-primary transition-colors" href="#">Contact</a>
+</div>
+</div>
+</footer>
+</body></html>

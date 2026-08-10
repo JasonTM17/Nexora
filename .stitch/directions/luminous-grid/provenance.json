@@ -1,0 +1,45 @@
+{
+  "task": "M1-D01B",
+  "direction": "Luminous Grid",
+  "artifact_status": "planned concept evidence only",
+  "start_revision": "982a5041657c9145156c8b08503c5520fb83101e",
+  "stitch": {
+    "project_id": "3311987604123916756",
+    "project_title": "Nexora M1 D01B Luminous Grid planned direction",
+    "project_visibility": "PRIVATE",
+    "project_type": "PROJECT_DESIGN",
+    "design_system_asset": "assets/c9bb78aa40b74fb3b0f533055e20443a",
+    "screen_id": "6a9a5b3b5cdb44f28720c84e791ff739",
+    "screen_title": "Nexora Luminous Grid - Landing Page",
+    "generation_session_id": null,
+    "generation_session_id_note": "not returned by the generation tool",
+    "device_type": "DESKTOP",
+    "model": "GEMINI_3_PRO",
+    "operations_used": 1,
+    "screenshot_resource": "projects/3311987604123916756/files/5a6c8dd0ec7344aa957165e0b6263f22",
+    "html_resource": "projects/3311987604123916756/files/0c127e52bba1410c83c5281b57d64086"
+  },
+  "screen_metadata": {
+    "dimensions_px": "2560x2642",
+    "html_export": "downloaded from the Stitch screen resource",
+    "screen_capture": "downloaded from the Stitch screen resource"
+  },
+  "local_capture": {
+    "file": "assets/designs/luminous-grid/public-home-concept.png",
+    "dimensions_px": "496x512",
+    "sha256": "6B5B31E9BEBC17AF9923AB5072ADA1C84FD76E431FFE18A9F63075A007699E40"
+  },
+  "capture_boundary": {
+    "observed": "The local HTML file is the returned Stitch screen export (SHA-256 C0E06D7DDC459683B7E89A76BFC5D2BB0ACAEF958668FDEF3D8AC5762D52A2E9). It is retained only as quarantined design evidence and is not product source or a canonical design system.",
+    "missing_exports": [],
+    "handling": "No product code, provider configuration, canonical .stitch/DESIGN.md, live-data representation, deployment artifact, or release claim was created."
+  },
+  "generated_feedback": {
+    "description": "A high-fidelity desktop planned landing-page concept with a strict 12-column modular grid, cobalt structural anchors, restrained amber provenance markers, labelled fixture regions, and a declared responsive collapse.",
+    "suggestions_not_run": [
+      "Generate the mobile version responsive collapse",
+      "Design the Studio workspace concept screen",
+      "Adjust the cobalt grid lines to be more prominent"
+    ]
+  }
+}
