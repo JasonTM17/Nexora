@@ -49,8 +49,9 @@ export function AccountAccess() {
   const statusHeading = useRef<HTMLHeadingElement>(null);
   const realtimeHandle = useRef<{ close(): void } | null>(null);
 
-  const load = useCallback(async () => {
-    setState("loading"); setProblem(null);
+  const load = useCallback(async (options?: { showLoading?: boolean }) => {
+    if (options?.showLoading !== false) setState("loading");
+    setProblem(null);
     try {
       const context = await readJson<AccessContextResponse>("/api/bff/access-context");
       setAccess(context);
@@ -77,7 +78,7 @@ export function AccountAccess() {
         if (cancelled) return;
         realtimeHandle.current = subscribeToRealtimeDescriptor(descriptor, {
           markState: (next) => setRealtimeState(next),
-          refetchDurableState: () => { void load(); },
+          refetchDurableState: () => { void load({ showLoading: false }); },
         });
         setRealtimeState("SUBSCRIBED");
       })

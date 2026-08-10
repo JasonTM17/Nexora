@@ -71,6 +71,13 @@ describe("Realtime subscription lifecycle", () => {
     expect(client.removeChannel).toHaveBeenCalledWith(channel);
   });
 
+  it("refetches durable account data without tearing down the realtime channel", () => {
+    const account = app("app/account/account-access.tsx");
+
+    expect(account).toContain("options?.showLoading !== false");
+    expect(account).toContain("refetchDurableState: () => { void load({ showLoading: false }); }");
+  });
+
   it("bounds reconnect attempts and stops after the contract sequence", () => {
     expect(nextRealtimeReconnectDelayMs(0, descriptor)).toBe(1000);
     expect(nextRealtimeReconnectDelayMs(3, descriptor)).toBe(10000);
