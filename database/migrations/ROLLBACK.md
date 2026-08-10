@@ -59,7 +59,7 @@ rollback, provider configuration, and deployment remain outside M2-DB01.
 
 ## M3-DB01 transactional outbox and private Realtime notes
 
-`V014` through `V018` are append-only once applied. Do not remove the outbox table, helper
+`V014` through `V019` are append-only once applied. Do not remove the outbox table, helper
 functions, safe-payload check, idempotency contract, claim/lease semantics, or
 the scoped `realtime.messages` policy DDL by editing an applied migration in
 place. In particular, do not reintroduce browser direct writes, fall back to a
@@ -78,6 +78,14 @@ ad-hoc repair.
 V017's projection synchronizers are trigger-only hardened definer functions.
 Do not replace them with a runtime `SELECT` grant or direct function execution
 as a shortcut for their UPSERT reads.
+
+`V019` is the sole runtime descriptor-epoch route. Do not replace it with a
+runtime `SELECT` grant, an API-role grant, a caller-selected subject, or a
+browser-callable helper. Any change to its topic and transaction-context check
+must be a reviewed forward migration and preserve the private epoch-table
+boundary. The function depends on the existing Spring-established runtime
+transaction context; do not expose that runtime LOGIN or treat custom GUCs as
+browser-provided proof of authority.
 
 For a shared database, use a new reviewed forward migration only after the
 required dependency and rollback assessment. Preserve the outbox receipt and

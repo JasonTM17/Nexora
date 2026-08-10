@@ -177,9 +177,21 @@ Realtime route to its exact descriptor event version. The policy now rejects a
 numerically valid but unsupported event version; a version bump must be an
 explicit reviewed contract and forward-migration change.
 
+`V019__realtime_descriptor_epoch_lookup.sql` exposes no epoch table read. It
+grants only `nexora_runtime` a hardened, scalar lookup. It accepts only a
+server-derived topic, binds itself to the revalidated transaction-local
+subject/organization/membership context, repeats route ownership, then returns
+that current subject's epoch. M3-T03 uses this narrow function to sign a
+descriptor; `authenticated` and browser/Data API roles cannot call it or
+enumerate epochs. The transaction-local tuple is the existing Spring-to-DB
+server trust boundary, not a new browser/API authority mechanism: a party able
+to execute arbitrary SQL as `nexora_runtime` could already forge that tuple
+against every runtime RLS policy. V019 therefore accepts only the four frozen
+route shapes and never accepts caller-selected subject identity.
+
 The M3 proof script creates a disposable local stand-in for `auth.uid()`,
 `auth.jwt()`, `realtime.topic()`, and `realtime.messages`, applies `V001`
-through `V018`, reruns the M2 tenant/CMS fixtures, then executes the actual
+through `V019`, reruns the M2 tenant/CMS fixtures, then executes the actual
 private-channel RLS expression plus the outbox fixture. The stand-in is torn
 down with the Compose project; it is policy-conformance evidence, not hosted
 Supabase proof.

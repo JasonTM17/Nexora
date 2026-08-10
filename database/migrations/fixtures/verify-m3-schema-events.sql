@@ -42,6 +42,19 @@ BEGIN
   IF NOT has_function_privilege('authenticated', 'nexora.realtime_current_channel_authorized(text)', 'EXECUTE') THEN
     RAISE EXCEPTION 'authenticated cannot execute the current-topic Realtime policy helper';
   END IF;
+  IF to_regprocedure('nexora.current_realtime_descriptor_epoch(text, uuid)') IS NOT NULL
+     OR has_function_privilege('authenticated', 'nexora.current_realtime_descriptor_epoch(text)', 'EXECUTE')
+     OR NOT has_function_privilege('nexora_runtime', 'nexora.current_realtime_descriptor_epoch(text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'descriptor epoch lookup must be runtime-only, never browser-callable';
+  END IF;
+  IF EXISTS (
+    SELECT 1
+    FROM pg_roles AS role
+    WHERE role.rolname IN ('anon', 'service_role')
+      AND has_function_privilege(role.rolname, 'nexora.current_realtime_descriptor_epoch(text)', 'EXECUTE')
+  ) THEN
+    RAISE EXCEPTION 'Data API roles can call the private descriptor epoch lookup';
+  END IF;
 
   IF has_function_privilege('nexora_runtime', 'nexora.bump_realtime_authorization_epoch()', 'EXECUTE')
      OR has_function_privilege('nexora_runtime', 'nexora.sync_realtime_presence_resource()', 'EXECUTE') THEN
@@ -67,7 +80,8 @@ BEGIN
         'record_outbox_event', 'claim_outbox_events',
         'publish_claimed_outbox_event', 'fail_claimed_outbox_event',
         'dead_letter_failed_outbox_event',
-        'realtime_private_channel_authorized', 'realtime_current_channel_authorized'
+        'realtime_private_channel_authorized', 'realtime_current_channel_authorized',
+        'current_realtime_descriptor_epoch'
       )
       AND NOT procedure.prosecdef
   ) THEN
@@ -636,6 +650,109 @@ BEGIN
   IF (SELECT count(*) FROM realtime.messages) <> 1 THEN
     RAISE EXCEPTION 'fresh authorization epoch did not restore the private descriptor';
   END IF;
+END
+$$;
+COMMIT;
+
+-- The server adapter receives exactly one epoch only after the existing
+-- ownership predicate accepts its server-derived topic and trusted tenant
+-- context. It cannot select the private projection directly or choose a
+-- different subject in the same tenant.
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000007', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000007', true);
+DO $$
+BEGIN
+  PERFORM set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000010', true);
+  IF nexora.current_realtime_descriptor_epoch(
+      'tenant:10000000-0000-4000-8000-000000000001:publication') IS NOT NULL THEN
+    RAISE EXCEPTION 'a forged same-tenant subject received another membership epoch';
+  END IF;
+
+  PERFORM set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000007', true);
+  IF nexora.current_realtime_descriptor_epoch(
+      'tenant:10000000-0000-4000-8000-000000000001:publication') IS DISTINCT FROM 1 THEN
+    RAISE EXCEPTION 'authorized descriptor issuer did not receive the exact current epoch';
+  END IF;
+  IF nexora.current_realtime_descriptor_epoch(
+      'tenant:10000000-0000-4000-8000-000000000001:workflow') IS DISTINCT FROM 1 THEN
+    RAISE EXCEPTION 'authorized workflow descriptor issuer did not receive the exact current epoch';
+  END IF;
+  IF nexora.current_realtime_descriptor_epoch(
+      'resource:50000000-0000-4000-8000-000000000010:job-progress') IS DISTINCT FROM 1 THEN
+    RAISE EXCEPTION 'authorized job descriptor issuer did not receive the exact current epoch';
+  END IF;
+  IF nexora.current_realtime_descriptor_epoch(
+      'resource:70000000-0000-4000-8000-000000000001:presence') IS DISTINCT FROM 1 THEN
+    RAISE EXCEPTION 'authorized presence descriptor issuer did not receive the exact current epoch';
+  END IF;
+  IF nexora.current_realtime_descriptor_epoch(
+      'tenant:10000000-0000-4000-8000-000000000002:publication') IS NOT NULL THEN
+    RAISE EXCEPTION 'cross-tenant descriptor issuer received an epoch';
+  END IF;
+  IF nexora.current_realtime_descriptor_epoch(
+      'resource:70000000-0000-4000-8000-000000000001:publication') IS NOT NULL THEN
+    RAISE EXCEPTION 'unsupported resource topic received a descriptor epoch';
+  END IF;
+  PERFORM set_config('nexora.organization_id', '', true);
+  IF nexora.current_realtime_descriptor_epoch(
+      'tenant:10000000-0000-4000-8000-000000000001:publication') IS NOT NULL THEN
+    RAISE EXCEPTION 'missing organization context received a descriptor epoch';
+  END IF;
+  PERFORM set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+  PERFORM set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000010', true);
+  IF nexora.current_realtime_descriptor_epoch(
+      'tenant:10000000-0000-4000-8000-000000000001:publication') IS NOT NULL THEN
+    RAISE EXCEPTION 'mismatched membership context received a descriptor epoch';
+  END IF;
+  PERFORM set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000007', true);
+  PERFORM set_config('nexora.subject_id', '', true);
+  IF nexora.current_realtime_descriptor_epoch(
+      'tenant:10000000-0000-4000-8000-000000000001:publication') IS NOT NULL THEN
+    RAISE EXCEPTION 'missing subject context received a descriptor epoch';
+  END IF;
+  BEGIN
+    PERFORM authorization_epoch
+    FROM nexora.realtime_authorization_epochs
+    WHERE subject_id = '20000000-0000-4000-8000-000000000007';
+    RAISE EXCEPTION 'runtime selected a private descriptor epoch directly';
+  EXCEPTION
+    WHEN insufficient_privilege THEN NULL;
+  END;
+END
+$$;
+COMMIT;
+
+-- Browser and Data API roles cannot invoke the server-only scalar even when
+-- they know a valid private topic.
+BEGIN;
+SET LOCAL ROLE authenticated;
+DO $$
+BEGIN
+  BEGIN
+    PERFORM nexora.current_realtime_descriptor_epoch(
+      'tenant:10000000-0000-4000-8000-000000000001:publication');
+    RAISE EXCEPTION 'authenticated invoked the server-only descriptor epoch lookup';
+  EXCEPTION
+    WHEN insufficient_privilege THEN NULL;
+  END;
+END
+$$;
+COMMIT;
+
+BEGIN;
+SET LOCAL ROLE service_role;
+DO $$
+BEGIN
+  BEGIN
+    PERFORM nexora.current_realtime_descriptor_epoch(
+      'tenant:10000000-0000-4000-8000-000000000001:publication');
+    RAISE EXCEPTION 'service role invoked the server-only descriptor epoch lookup';
+  EXCEPTION
+    WHEN insufficient_privilege THEN NULL;
+  END;
 END
 $$;
 COMMIT;
