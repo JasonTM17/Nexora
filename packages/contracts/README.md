@@ -15,9 +15,12 @@ organization authorization. The generated client API exposes a bearer
 access-token input, but no provider-credential or arbitrary-header input.
 
 Problem `details` are limited to short printable validation messages or codes.
-The generated client rejects the entire problem envelope when a detail key or
-value looks like authorization, credential, provider/source, stack/exception,
-secret or opaque-token material; it does not retain or echo the unsafe value.
+Detail keys are normalized from camelCase and `.`, `_`, `-` separators into
+lowercase segments. The generated client rejects the entire problem envelope
+when any key segment or value looks like authorization, credential,
+provider/source, stack/exception, secret or opaque-token material; it does not
+retain or echo the unsafe value. Benign validation keys such as `field` and
+`message` remain valid.
 
 From the repository root:
 

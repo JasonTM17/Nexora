@@ -40,7 +40,7 @@ test("surfaces only a valid safe problem envelope", async () => {
   const problem = {
     code: "validation_failed",
     message: "Request validation failed.",
-    details: { message: "must not be blank" },
+    details: { field: "must not be blank", message: "invalid value" },
     traceId: "trace-validation-1",
   };
   const client = new PlatformApiClient({
@@ -108,6 +108,31 @@ test("rejects sensitive-looking detail keys without exposing their values", asyn
       return true;
     },
   );
+});
+
+test("rejects forbidden normalized detail-key segments", async () => {
+  for (const [index, unsafeKey] of ["credential_value", "stack_trace_line", "provider.response", "CredentialValue"].entries()) {
+    const traceId = `trace-segment-${index}`;
+    const client = new PlatformApiClient({
+      baseUrl: "https://nexora.test",
+      fetch: async () => new Response(JSON.stringify({
+        code: "validation_failed",
+        message: "Request validation failed.",
+        details: { [unsafeKey]: "invalid value" },
+        traceId,
+      }), { status: 400, headers: { "Content-Type": "application/json", "X-Trace-Id": traceId } }),
+    });
+
+    await assert.rejects(
+      client.getPlatform(),
+      (error) => {
+        assert.ok(error instanceof NexoraApiError, unsafeKey);
+        assert.equal(error.problem, null, unsafeKey);
+        assert.equal(error.traceId, traceId, unsafeKey);
+        return true;
+      },
+    );
+  }
 });
 
 test("rejects a bearer credential hidden behind a benign detail key", async () => {

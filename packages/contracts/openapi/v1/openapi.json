@@ -244,9 +244,25 @@
             "description": "Bounded field-level details safe for the caller.",
             "maxProperties": 50,
             "propertyNames": {
+              "x-nexora-normalization": "Split camelCase and the '.', '_', '-' separators into lowercase segments before applying forbidden-key policy.",
+              "x-nexora-forbidden-segments": [
+                "authorization",
+                "bearer",
+                "cookie",
+                "credential",
+                "credentials",
+                "exception",
+                "password",
+                "prompt",
+                "provider",
+                "secret",
+                "source",
+                "stack",
+                "token"
+              ],
               "allOf": [
                 {
-                  "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+                  "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
                 },
                 {
                   "not": {
@@ -270,6 +286,11 @@
                       "stack_trace",
                       "token"
                     ]
+                  }
+                },
+                {
+                  "not": {
+                    "pattern": "(?:^|[._-])(?:[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Bb][Ee][Aa][Rr][Ee][Rr]|[Cc][Oo][Oo][Kk][Ii][Ee]|[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll][Ss]?|[Ee][Xx][Cc][Ee][Pp][Tt][Ii][Oo][Nn]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Pp][Rr][Oo][Mm][Pp][Tt]|[Pp][Rr][Oo][Vv][Ii][Dd][Ee][Rr]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Ss][Oo][Uu][Rr][Cc][Ee]|[Ss][Tt][Aa][Cc][Kk]|[Tt][Oo][Kk][Ee][Nn])(?:[._-]|$)"
                   }
                 }
               ]

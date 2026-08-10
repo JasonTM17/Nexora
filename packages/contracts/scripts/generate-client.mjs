@@ -93,6 +93,10 @@ export function renderClient(spec) {
   const detailPropertyRules = spec.components?.schemas?.ApiProblem?.properties?.details?.propertyNames?.allOf ?? [];
   const forbiddenDetailKeys = detailPropertyRules.find((rule) => Array.isArray(rule.not?.enum))?.not.enum;
   if (!forbiddenDetailKeys) throw new Error("ApiProblem details must define forbidden property names");
+  const forbiddenDetailSegments = spec.components?.schemas?.ApiProblem?.properties?.details?.propertyNames?.["x-nexora-forbidden-segments"];
+  if (!Array.isArray(forbiddenDetailSegments) || forbiddenDetailSegments.length === 0) {
+    throw new Error("ApiProblem details must define forbidden normalized key segments");
+  }
   const detailValueSchema = spec.components?.schemas?.ApiProblem?.properties?.details?.additionalProperties;
   const detailValueMaxLength = detailValueSchema?.maxLength;
   const safeDetailValuePattern = detailValueSchema?.pattern;
@@ -147,8 +151,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 const FORBIDDEN_DETAIL_KEYS = new Set(${JSON.stringify(forbiddenDetailKeys)});
+const FORBIDDEN_DETAIL_KEY_SEGMENTS = new Set(${JSON.stringify(forbiddenDetailSegments)});
 const SAFE_DETAIL_VALUE_PATTERN = new RegExp(${JSON.stringify(safeDetailValuePattern)});
 const FORBIDDEN_DETAIL_VALUE_PATTERN = new RegExp(${JSON.stringify(forbiddenDetailValuePattern)});
+
+function isSafeDetailKey(key: string): boolean {
+  if (!/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(key)) return false;
+  const segments = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+    .toLowerCase()
+    .split(/[._-]+/)
+    .filter(Boolean);
+  return !FORBIDDEN_DETAIL_KEYS.has(segments.join("_"))
+    && !segments.some((segment) => FORBIDDEN_DETAIL_KEY_SEGMENTS.has(segment));
+}
 
 function asProblem(value: unknown): ApiProblem | null {
   if (!isRecord(value) || typeof value.code !== "string" || typeof value.message !== "string") return null;
@@ -159,8 +176,7 @@ function asProblem(value: unknown): ApiProblem | null {
   if (!/^[A-Za-z0-9._-]{1,128}$/.test(value.traceId)) return null;
   const details = Object.entries(value.details);
   if (details.length > 50 || !details.every(([key, detail]) =>
-    /^[a-z][a-z0-9_.-]{0,63}$/.test(key)
-      && !FORBIDDEN_DETAIL_KEYS.has(key)
+    isSafeDetailKey(key)
       && typeof detail === "string"
       && detail.length <= ${detailValueMaxLength}
       && SAFE_DETAIL_VALUE_PATTERN.test(detail)

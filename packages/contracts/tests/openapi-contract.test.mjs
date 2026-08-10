@@ -55,6 +55,20 @@ test("freezes the safe error, authentication, authorization, and trace contracts
   for (const forbidden of ["stack", "exception", "credential", "password", "token", "provider_response"]) {
     assert.ok(forbiddenDetailKeys.includes(forbidden), `details must reject ${forbidden}`);
   }
+  const propertyNames = problem.properties.details.propertyNames;
+  const forbiddenSegments = propertyNames["x-nexora-forbidden-segments"];
+  for (const segment of ["credential", "stack", "provider"]) {
+    assert.ok(forbiddenSegments.includes(segment), `details must reject ${segment} segments`);
+  }
+  const forbiddenSegmentPattern = new RegExp(propertyNames.allOf[2].not.pattern);
+  for (const unsafeKey of ["credential_value", "stack_trace_line", "provider.response"]) {
+    assert.match(unsafeKey, forbiddenSegmentPattern, `details must reject ${unsafeKey}`);
+  }
+  const allowedKeyPattern = new RegExp(propertyNames.allOf[0].pattern);
+  for (const safeKey of ["field", "message"]) {
+    assert.match(safeKey, allowedKeyPattern, `details must allow ${safeKey}`);
+    assert.doesNotMatch(safeKey, forbiddenSegmentPattern);
+  }
   const detailValue = problem.properties.details.additionalProperties;
   assert.equal(detailValue.minLength, 1);
   assert.equal(detailValue.maxLength, 256);

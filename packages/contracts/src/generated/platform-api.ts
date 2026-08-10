@@ -48,8 +48,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 const FORBIDDEN_DETAIL_KEYS = new Set(["api_key","access_token","authorization","client_secret","cookie","credential","credentials","exception","exception_message","password","private_key","provider_response","refresh_token","request_source","secret","stack","stack_trace","token"]);
+const FORBIDDEN_DETAIL_KEY_SEGMENTS = new Set(["authorization","bearer","cookie","credential","credentials","exception","password","prompt","provider","secret","source","stack","token"]);
 const SAFE_DETAIL_VALUE_PATTERN = new RegExp("^[ -~]{1,256}$");
 const FORBIDDEN_DETAIL_VALUE_PATTERN = new RegExp("(?:[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Bb][Ee][Aa][Rr][Ee][Rr]|[Tt][Oo][Kk][Ee][Nn]|[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Aa][Pp][Ii][ _-]?[Kk][Ee][Yy]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][ _-]?[Kk][Ee][Yy]|[Cc][Ll][Ii][Ee][Nn][Tt][ _-]?[Ss][Ee][Cc][Rr][Ee][Tt]|[Cc][Oo][Oo][Kk][Ii][Ee]|[Ss][Tt][Aa][Cc][Kk](?:[ _-]?[Tt][Rr][Aa][Cc][Ee])?|[Ee][Xx][Cc][Ee][Pp][Tt][Ii][Oo][Nn]|[Pp][Rr][Oo][Vv][Ii][Dd][Ee][Rr]|[Ss][Oo][Uu][Rr][Cc][Ee]|[Pp][Rr][Oo][Mm][Pp][Tt]|eyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}|[A-Za-z0-9_-]{32,})");
+
+function isSafeDetailKey(key: string): boolean {
+  if (!/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(key)) return false;
+  const segments = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+    .toLowerCase()
+    .split(/[._-]+/)
+    .filter(Boolean);
+  return !FORBIDDEN_DETAIL_KEYS.has(segments.join("_"))
+    && !segments.some((segment) => FORBIDDEN_DETAIL_KEY_SEGMENTS.has(segment));
+}
 
 function asProblem(value: unknown): ApiProblem | null {
   if (!isRecord(value) || typeof value.code !== "string" || typeof value.message !== "string") return null;
@@ -60,8 +73,7 @@ function asProblem(value: unknown): ApiProblem | null {
   if (!/^[A-Za-z0-9._-]{1,128}$/.test(value.traceId)) return null;
   const details = Object.entries(value.details);
   if (details.length > 50 || !details.every(([key, detail]) =>
-    /^[a-z][a-z0-9_.-]{0,63}$/.test(key)
-      && !FORBIDDEN_DETAIL_KEYS.has(key)
+    isSafeDetailKey(key)
       && typeof detail === "string"
       && detail.length <= 256
       && SAFE_DETAIL_VALUE_PATTERN.test(detail)
