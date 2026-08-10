@@ -6,9 +6,21 @@ import type { AccessContextResponse, UpdateProfileRequest, UserProfile } from ".
 import { AppShell, PageGrid } from "../../../../packages/ui-core/src/app-shell";
 import { ActionButton } from "../../../../packages/ui-core/src/action-button";
 import { StatusLabel } from "../../../../packages/ui-core/src/status-label";
+import {
+  requestRealtimeDescriptor,
+  subscribeToRealtimeDescriptor,
+  type RealtimeLifecycleState,
+} from "../lib/realtime-subscription";
 
 type Problem = { code: string; message: string; traceId?: string | null };
 type AccessState = "loading" | "ready" | "empty" | "selection" | "denied" | "session-expired" | "error" | "profile-conflict";
+type RealtimeState =
+  | RealtimeLifecycleState
+  | "REALTIME_AUTH_REFRESH_REQUIRED"
+  | "REALTIME_DEGRADED_REFETCH_REQUIRED"
+  | "REALTIME_STALE_DESCRIPTOR"
+  | "idle"
+  | "connecting";
 
 const stateCopy: Record<Exclude<AccessState, "ready" | "selection">, { title: string; body: string }> = {
   loading: { title: "Checking your access", body: "Nexora is confirming your current session and organization membership." },
@@ -33,7 +45,9 @@ export function AccountAccess() {
   const [problem, setProblem] = useState<Problem | null>(null);
   const [selected, setSelected] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const [realtimeState, setRealtimeState] = useState<RealtimeState>("idle");
   const statusHeading = useRef<HTMLHeadingElement>(null);
+  const realtimeHandle = useRef<{ close(): void } | null>(null);
 
   const load = useCallback(async () => {
     setState("loading"); setProblem(null);
@@ -49,6 +63,39 @@ export function AccountAccess() {
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { statusHeading.current?.focus(); }, [state, problem]);
+  useEffect(() => {
+    realtimeHandle.current?.close();
+    realtimeHandle.current = null;
+    if (state !== "ready" || !access || !selected) {
+      setRealtimeState("idle");
+      return;
+    }
+    let cancelled = false;
+    setRealtimeState("connecting");
+    void requestRealtimeDescriptor({ organizationId: selected, eventType: "PUBLICATION_INVALIDATED" })
+      .then((descriptor) => {
+        if (cancelled) return;
+        realtimeHandle.current = subscribeToRealtimeDescriptor(descriptor, {
+          markState: (next) => setRealtimeState(next),
+          refetchDurableState: () => { void load(); },
+        });
+        setRealtimeState("SUBSCRIBED");
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        const next = error && typeof error === "object" ? error as Problem : { code: "REQUEST_FAILED", message: "We could not complete that request." };
+        if (next.code === "REALTIME_AUTH_REFRESH_REQUIRED" || next.code === "REALTIME_DEGRADED_REFETCH_REQUIRED" || next.code === "REALTIME_STALE_DESCRIPTOR") {
+          setRealtimeState(next.code);
+          return;
+        }
+        setRealtimeState("idle");
+      });
+    return () => {
+      cancelled = true;
+      realtimeHandle.current?.close();
+      realtimeHandle.current = null;
+    };
+  }, [access, load, selected, state]);
 
   function handleProblem(error: unknown) {
     const next = (error && typeof error === "object" ? error : {}) as Problem;
@@ -82,6 +129,7 @@ export function AccountAccess() {
     {state === "empty" && <section className="nx-access-card" aria-labelledby="onboarding-title"><StatusLabel kind="planned" /><h2 id="onboarding-title">Start onboarding</h2><p>Ask an organization owner for an invitation. There is no browser-only organization creation flow.</p><Link className="nx-action-button nx-action-button--secondary" href="/">Return to public home</Link></section>}
     {state === "selection" && access && <section className="nx-access-card" aria-labelledby="org-title"><h2 id="org-title">Active memberships</h2><fieldset className="nx-org-options"><legend className="nx-visually-hidden">Organization</legend>{access.memberships.map((membership) => <label className="nx-org-option" key={membership.membershipId}><input type="radio" name="organization" value={membership.organizationId} checked={selected === membership.organizationId} onChange={(event) => setSelected(event.target.value)} /><span><strong>Organization {membership.organizationId.slice(0, 8)}</strong><small>{membership.role} · membership version {membership.membershipVersion}</small></span></label>)}</fieldset><ActionButton loading={saving} disabled={!selected} onClick={() => void switchOrganization()}>Continue</ActionButton></section>}
     {state === "ready" && <div className="nx-account-grid"><section className="nx-access-card" aria-labelledby="membership-title"><StatusLabel kind="fixture" /><h2 id="membership-title">Organization access</h2><p>Current membership: <strong>{access?.memberships.find((item) => item.organizationId === selected)?.role ?? "confirmed"}</strong></p><p className="nx-provenance">Every domain request revalidates membership freshness server-side.</p></section>{profile && <form className="nx-access-card nx-profile-form" onSubmit={(event) => void saveProfile(event)} aria-labelledby="profile-title"><StatusLabel kind="fixture" /><h2 id="profile-title">Profile</h2><label htmlFor="displayName">Display name<input id="displayName" name="displayName" defaultValue={profile.displayName} maxLength={120} required /></label><label htmlFor="locale">Locale<input id="locale" name="locale" defaultValue={profile.locale} pattern="[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})?" required /></label><label><input type="checkbox" name="reducedMotion" defaultChecked={profile.reducedMotion} /> Reduce motion</label><label><input type="checkbox" name="highContrast" defaultChecked={profile.highContrast} /> High contrast</label><p className="nx-field-help">Version {profile.version}; updates use optimistic concurrency.</p><ActionButton loading={saving} type="submit">Save profile</ActionButton></form>}</div>}
+    {state === "ready" && <p className="nx-field-help">Realtime connection: {realtimeState.toLowerCase()}</p>}
     {(state === "denied" || state === "session-expired" || state === "error" || state === "profile-conflict") && <section className="nx-access-card nx-error-card" aria-live="assertive"><StatusLabel kind={state === "denied" ? "denied" : "error"} /><p>{problem?.message ?? copy?.body}</p>{state === "profile-conflict" && <ActionButton tone="secondary" onClick={() => void load()}>Reload profile</ActionButton>}{problem?.traceId && <p className="nx-field-help">Reference: {problem.traceId}</p>}<div className="nx-hero-actions">{state !== "profile-conflict" && <ActionButton tone="secondary" onClick={() => void load()}>Retry</ActionButton>}{state === "session-expired" && <Link className="nx-action-button nx-action-button--primary" href="/auth/callback">Sign in again</Link>}</div></section>}
   </main></PageGrid></AppShell>;
 }
