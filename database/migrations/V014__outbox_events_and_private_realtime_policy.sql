@@ -308,12 +308,13 @@ BEGIN
        OR NEW.claim_expires_at <= clock_timestamp() THEN
       RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'OUTBOX_RECLAIM_REJECTED';
     END IF;
-  ELSIF OLD.state = 'CLAIMED' AND NEW.state IN ('PUBLISHED', 'FAILED', 'DEAD_LETTER') THEN
+  ELSIF OLD.state = 'CLAIMED' AND NEW.state IN ('PUBLISHED', 'FAILED') THEN
     IF NEW.attempt_count <> OLD.attempt_count THEN
       RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'OUTBOX_TERMINAL_REJECTED';
     END IF;
   ELSIF OLD.state = 'FAILED' AND NEW.state = 'DEAD_LETTER' THEN
-    IF NEW.attempt_count <> OLD.attempt_count
+    IF OLD.attempt_count < 5
+       OR NEW.attempt_count <> OLD.attempt_count
        OR NEW.claim_owner IS NOT NULL
        OR NEW.claim_expires_at IS NOT NULL
        OR NEW.failed_at IS NULL
@@ -438,6 +439,25 @@ BEGIN
 END
 $function$;
 
+CREATE FUNCTION nexora.outbox_retry_backoff(in_event_id uuid, in_attempt_count integer)
+RETURNS interval
+LANGUAGE sql
+IMMUTABLE
+STRICT
+SECURITY INVOKER
+SET search_path = pg_catalog, nexora
+AS $function$
+  SELECT CASE
+    WHEN in_attempt_count <= 1 THEN interval '1 second'
+    WHEN in_attempt_count = 2 THEN interval '2 seconds'
+    WHEN in_attempt_count = 3 THEN interval '4 seconds'
+    ELSE interval '8 seconds'
+  END + (
+    (get_byte(decode(substr(md5(in_event_id::text || ':' || in_attempt_count::text), 1, 2), 'hex'), 0) % 250)::text
+    || ' milliseconds'
+  )::interval
+$function$;
+
 CREATE FUNCTION nexora.claim_outbox_events(
   in_claim_owner text,
   in_claim_lease interval,
@@ -457,17 +477,26 @@ BEGIN
   END IF;
 
   UPDATE nexora.outbox_events
-  SET state = 'DEAD_LETTER',
+  SET state = 'FAILED',
       claim_owner = NULL,
       claim_expires_at = NULL,
       failed_at = clock_timestamp(),
-      dead_letter_at = clock_timestamp(),
+      dead_letter_at = NULL,
       last_error_code = 'CLAIM_LEASE_EXHAUSTED',
-      retain_until = clock_timestamp() + interval '90 days',
+      retain_until = NULL,
       updated_at = transaction_timestamp()
   WHERE state = 'CLAIMED'
     AND claim_expires_at <= clock_timestamp()
     AND attempt_count >= 5;
+
+  UPDATE nexora.outbox_events
+  SET state = 'DEAD_LETTER',
+      dead_letter_at = clock_timestamp(),
+      retain_until = clock_timestamp() + interval '90 days',
+      updated_at = transaction_timestamp()
+  WHERE state = 'FAILED'
+    AND attempt_count >= 5
+    AND dead_letter_at IS NULL;
 
   RETURN QUERY
   WITH claim_candidates AS (
@@ -524,9 +553,7 @@ $function$;
 CREATE FUNCTION nexora.fail_claimed_outbox_event(
   in_event_id uuid,
   in_claim_owner text,
-  in_error_code text,
-  in_force_dead_letter boolean DEFAULT false,
-  in_retry_backoff interval DEFAULT interval '5 minutes'
+  in_error_code text
 )
 RETURNS nexora.outbox_events
 LANGUAGE plpgsql
@@ -536,26 +563,58 @@ AS $function$
 DECLARE
   updated_row nexora.outbox_events;
 BEGIN
-  IF in_error_code !~ '^[A-Z][A-Z0-9_]{1,63}$'
-     OR in_retry_backoff < interval '1 second'
-     OR in_retry_backoff > interval '24 hours' THEN
+  IF in_error_code !~ '^[A-Z][A-Z0-9_]{1,63}$' THEN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'OUTBOX_TERMINAL_FAILURE';
   END IF;
 
   UPDATE nexora.outbox_events
-  SET state = CASE WHEN in_force_dead_letter OR attempt_count >= 5 THEN 'DEAD_LETTER'::nexora.outbox_state ELSE 'FAILED'::nexora.outbox_state END,
+  SET state = 'FAILED',
       claim_owner = NULL,
       claim_expires_at = NULL,
       failed_at = clock_timestamp(),
-      dead_letter_at = CASE WHEN in_force_dead_letter OR attempt_count >= 5 THEN clock_timestamp() ELSE NULL END,
+      dead_letter_at = NULL,
       last_error_code = in_error_code,
-      available_at = CASE WHEN in_force_dead_letter OR attempt_count >= 5 THEN available_at ELSE clock_timestamp() + in_retry_backoff END,
-      retain_until = CASE WHEN in_force_dead_letter OR attempt_count >= 5 THEN clock_timestamp() + interval '90 days' ELSE NULL END,
+      available_at = CASE
+        WHEN attempt_count >= 5 THEN available_at
+        ELSE clock_timestamp() + nexora.outbox_retry_backoff(id, attempt_count)
+      END,
+      retain_until = NULL,
       updated_at = transaction_timestamp()
   WHERE id = in_event_id
     AND state = 'CLAIMED'
     AND claim_owner = in_claim_owner
     AND claim_expires_at > clock_timestamp()
+  RETURNING * INTO updated_row;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'OUTBOX_TERMINAL_FAILURE';
+  END IF;
+  RETURN updated_row;
+END
+$function$;
+
+CREATE FUNCTION nexora.dead_letter_failed_outbox_event(in_event_id uuid, in_error_code text)
+RETURNS nexora.outbox_events
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, nexora
+AS $function$
+DECLARE
+  updated_row nexora.outbox_events;
+BEGIN
+  IF in_error_code !~ '^[A-Z][A-Z0-9_]{1,63}$' THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'OUTBOX_TERMINAL_FAILURE';
+  END IF;
+
+  UPDATE nexora.outbox_events
+  SET state = 'DEAD_LETTER',
+      dead_letter_at = clock_timestamp(),
+      last_error_code = in_error_code,
+      retain_until = clock_timestamp() + interval '90 days',
+      updated_at = transaction_timestamp()
+  WHERE id = in_event_id
+    AND state = 'FAILED'
+    AND attempt_count >= 5
   RETURNING * INTO updated_row;
 
   IF NOT FOUND THEN
@@ -620,8 +679,8 @@ DECLARE
   current_topic text;
   current_subject uuid;
 BEGIN
-  current_topic := NULLIF(current_setting('realtime.topic', true), '');
-  current_subject := NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid;
+  current_topic := realtime.topic();
+  current_subject := auth.uid();
 
   IF current_topic IS NULL
      OR current_subject IS NULL
@@ -640,10 +699,12 @@ REVOKE ALL ON TABLE nexora.outbox_events FROM PUBLIC;
 REVOKE ALL ON FUNCTION nexora.outbox_safe_payload_is_allowed(jsonb) FROM PUBLIC;
 REVOKE ALL ON FUNCTION nexora.outbox_topic_is_valid(text, uuid, uuid, nexora.outbox_event_type) FROM PUBLIC;
 REVOKE ALL ON FUNCTION nexora.guard_outbox_event_mutation() FROM PUBLIC;
+REVOKE ALL ON FUNCTION nexora.outbox_retry_backoff(uuid, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION nexora.record_outbox_event(uuid, uuid, uuid, uuid, text, uuid, nexora.outbox_event_type, bigint, text, text, text, text, text, jsonb, timestamptz) FROM PUBLIC;
 REVOKE ALL ON FUNCTION nexora.claim_outbox_events(text, interval, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION nexora.publish_claimed_outbox_event(uuid, text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION nexora.fail_claimed_outbox_event(uuid, text, text, boolean, interval) FROM PUBLIC;
+REVOKE ALL ON FUNCTION nexora.fail_claimed_outbox_event(uuid, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION nexora.dead_letter_failed_outbox_event(uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION nexora.realtime_private_channel_authorized(text, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION nexora.realtime_current_channel_authorized(text) FROM PUBLIC;
 
@@ -652,7 +713,8 @@ GRANT EXECUTE ON FUNCTION nexora.outbox_safe_payload_is_allowed(jsonb) TO nexora
 GRANT EXECUTE ON FUNCTION nexora.record_outbox_event(uuid, uuid, uuid, uuid, text, uuid, nexora.outbox_event_type, bigint, text, text, text, text, text, jsonb, timestamptz) TO nexora_runtime;
 GRANT EXECUTE ON FUNCTION nexora.claim_outbox_events(text, interval, integer) TO nexora_runtime;
 GRANT EXECUTE ON FUNCTION nexora.publish_claimed_outbox_event(uuid, text) TO nexora_runtime;
-GRANT EXECUTE ON FUNCTION nexora.fail_claimed_outbox_event(uuid, text, text, boolean, interval) TO nexora_runtime;
+GRANT EXECUTE ON FUNCTION nexora.fail_claimed_outbox_event(uuid, text, text) TO nexora_runtime;
+GRANT EXECUTE ON FUNCTION nexora.dead_letter_failed_outbox_event(uuid, text) TO nexora_runtime;
 GRANT EXECUTE ON FUNCTION nexora.realtime_private_channel_authorized(text, uuid) TO nexora_runtime;
 GRANT EXECUTE ON FUNCTION nexora.realtime_current_channel_authorized(text) TO nexora_runtime;
 

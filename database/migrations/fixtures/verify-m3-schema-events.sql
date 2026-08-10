@@ -50,6 +50,7 @@ BEGIN
       AND procedure.proname IN (
         'record_outbox_event', 'claim_outbox_events',
         'publish_claimed_outbox_event', 'fail_claimed_outbox_event',
+        'dead_letter_failed_outbox_event',
         'realtime_private_channel_authorized', 'realtime_current_channel_authorized'
       )
       AND NOT procedure.prosecdef
@@ -86,6 +87,9 @@ DECLARE
   published nexora.outbox_events%ROWTYPE;
   failed nexora.outbox_events%ROWTYPE;
   dead_letter nexora.outbox_events%ROWTYPE;
+  attempt integer;
+  retry_floor interval;
+  retry_ceiling interval;
 BEGIN
   IF NOT nexora.outbox_safe_payload_is_allowed(
     '{
@@ -333,10 +337,70 @@ BEGIN
   END IF;
 
   failed := nexora.fail_claimed_outbox_event(
-    claimed.id, 'publisher-job', 'BROKER_UNAVAILABLE', false, interval '1 second'
+    claimed.id, 'publisher-job', 'BROKER_UNAVAILABLE'
   );
-  IF failed.state <> 'FAILED' OR failed.last_error_code <> 'BROKER_UNAVAILABLE' THEN
+  IF failed.state <> 'FAILED'
+     OR failed.last_error_code <> 'BROKER_UNAVAILABLE'
+     OR failed.available_at <= clock_timestamp() + interval '500 milliseconds'
+     OR failed.available_at > clock_timestamp() + interval '1500 milliseconds' THEN
     RAISE EXCEPTION 'retryable failure was not operator-visible';
+  END IF;
+
+  BEGIN
+    PERFORM nexora.dead_letter_failed_outbox_event(failed.id, 'EARLY_DEAD_LETTER');
+    RAISE EXCEPTION 'pre-max-attempt FAILED row reached DEAD_LETTER';
+  EXCEPTION WHEN object_not_in_prerequisite_state THEN
+    NULL;
+  END;
+
+  FOR attempt IN 2..5 LOOP
+    PERFORM pg_sleep(CASE attempt
+      WHEN 2 THEN 1.5
+      WHEN 3 THEN 2.5
+      WHEN 4 THEN 4.5
+      ELSE 8.5
+    END);
+
+    SELECT * INTO claimed
+    FROM nexora.claim_outbox_events('publisher-job-' || attempt::text, interval '15 minutes', 1)
+    LIMIT 1;
+    IF claimed.id IS DISTINCT FROM job_id OR claimed.attempt_count <> attempt THEN
+      RAISE EXCEPTION 'retry attempt % did not re-enter bounded delivery', attempt;
+    END IF;
+
+    failed := nexora.fail_claimed_outbox_event(
+      claimed.id, 'publisher-job-' || attempt::text, 'BROKER_UNAVAILABLE'
+    );
+    IF attempt < 5 THEN
+      retry_floor := CASE attempt
+        WHEN 2 THEN interval '1500 milliseconds'
+        WHEN 3 THEN interval '3500 milliseconds'
+        ELSE interval '7500 milliseconds'
+      END;
+      retry_ceiling := CASE attempt
+        WHEN 2 THEN interval '2750 milliseconds'
+        WHEN 3 THEN interval '4750 milliseconds'
+        ELSE interval '8750 milliseconds'
+      END;
+    END IF;
+    IF failed.state <> 'FAILED'
+       OR failed.last_error_code <> 'BROKER_UNAVAILABLE'
+       OR failed.attempt_count <> attempt
+       OR (attempt < 5 AND (
+         failed.available_at <= clock_timestamp() + retry_floor
+         OR failed.available_at > clock_timestamp() + retry_ceiling
+       )) THEN
+      RAISE EXCEPTION 'attempt % did not retain FAILED evidence', attempt;
+    END IF;
+  END LOOP;
+
+  dead_letter := nexora.dead_letter_failed_outbox_event(job_id, 'MAX_ATTEMPTS_EXHAUSTED');
+  IF dead_letter.state <> 'DEAD_LETTER'
+     OR dead_letter.attempt_count <> 5
+     OR dead_letter.dead_letter_at IS NULL
+     OR dead_letter.last_error_code <> 'MAX_ATTEMPTS_EXHAUSTED'
+     OR dead_letter.retain_until <= dead_letter.dead_letter_at THEN
+    RAISE EXCEPTION 'runtime FAILED to DEAD_LETTER evidence was not retained';
   END IF;
 END
 $$;
@@ -345,25 +409,7 @@ COMMIT;
 BEGIN;
 SET LOCAL ROLE nexora_migrator;
 DO $$
-DECLARE
-  dead_letter nexora.outbox_events%ROWTYPE;
 BEGIN
-  UPDATE nexora.outbox_events
-     SET state = 'DEAD_LETTER',
-         dead_letter_at = transaction_timestamp(),
-         retain_until = transaction_timestamp() + interval '90 days',
-         updated_at = transaction_timestamp()
-   WHERE id = '50000000-0000-4000-8000-000000000002'
-     AND state = 'FAILED'
-   RETURNING * INTO dead_letter;
-
-  IF NOT FOUND
-     OR dead_letter.state <> 'DEAD_LETTER'
-     OR dead_letter.dead_letter_at IS NULL
-     OR dead_letter.retain_until <= dead_letter.dead_letter_at THEN
-    RAISE EXCEPTION 'FAILED to DEAD_LETTER transition evidence was not retained';
-  END IF;
-
   IF (SELECT count(*) FROM nexora.outbox_events) <> 2
      OR (SELECT count(*) FROM nexora.outbox_events WHERE state = 'PUBLISHED') <> 1
      OR (SELECT count(*) FROM nexora.outbox_events WHERE state = 'DEAD_LETTER') <> 1 THEN

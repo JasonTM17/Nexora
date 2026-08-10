@@ -84,6 +84,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
     CREATE ROLE service_role NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nexora_migrator') THEN
+    CREATE ROLE nexora_migrator NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+  END IF;
 END
 $$;
 
@@ -117,6 +120,8 @@ ALTER TABLE realtime.messages FORCE ROW LEVEL SECURITY;
 REVOKE ALL ON SCHEMA auth, realtime FROM PUBLIC;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA auth, realtime FROM PUBLIC;
 REVOKE ALL ON TABLE realtime.messages FROM PUBLIC;
+GRANT USAGE ON SCHEMA auth, realtime TO nexora_migrator;
+GRANT EXECUTE ON FUNCTION auth.uid(), realtime.topic() TO nexora_migrator;
 GRANT USAGE ON SCHEMA auth, realtime TO authenticated;
 GRANT EXECUTE ON FUNCTION auth.uid(), realtime.topic() TO authenticated;
 GRANT SELECT, INSERT ON realtime.messages TO authenticated;
