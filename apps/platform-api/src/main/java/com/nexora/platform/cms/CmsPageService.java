@@ -3,6 +3,7 @@ package com.nexora.platform.cms;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.nexora.platform.auth.DomainAccessException;
 import com.nexora.platform.authorization.PermissionEvaluator;
+import com.nexora.platform.events.outbox.CmsWorkflowOutboxRecorder;
 import com.nexora.platform.tenant.TenantContext;
 import com.nexora.platform.tenant.TenantContextService;
 import java.sql.ResultSet;
@@ -26,10 +27,15 @@ import org.springframework.stereotype.Service;
 public class CmsPageService {
     private final TenantContextService tenantContexts;
     private final PermissionEvaluator permissions;
+    private final CmsWorkflowOutboxRecorder outbox;
 
-    public CmsPageService(TenantContextService tenantContexts, PermissionEvaluator permissions) {
+    public CmsPageService(
+            TenantContextService tenantContexts,
+            PermissionEvaluator permissions,
+            CmsWorkflowOutboxRecorder outbox) {
         this.tenantContexts = tenantContexts;
         this.permissions = permissions;
+        this.outbox = outbox;
     }
 
     public PageList list(TenantContext actor, String cursor, int limit) {
@@ -150,6 +156,7 @@ public class CmsPageService {
                 throw versionConflict();
             }
             PageView archived = find(jdbc, pageId);
+            outbox.recordArchivedPage(jdbc, authoritative, archived.pageId(), archived.draftVersion());
             audit(jdbc, authoritative, archived.siteId(), pageId, "WORKFLOW", traceId);
             return new ArchiveResult(archived.pageId(), archived.state(), archived.updatedAt());
         });

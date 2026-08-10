@@ -204,6 +204,14 @@ class CmsPageIntegrationTests {
                 + "' AND operation = 'WORKFLOW'")).isEqualTo(1);
         assertThat(count("SELECT count(*) FROM nexora.cms_audit_events WHERE page_id = '" + page.pageId()
                 + "' AND operation = 'PAGE_UPDATE'")).isZero();
+        assertThat(count("SELECT count(*) FROM nexora.outbox_events WHERE organization_id = '" + tenant.organizationId()
+                + "' AND resource_id = '" + page.pageId() + "' AND event_type = 'WORKFLOW_TRANSITIONED'"
+                + " AND state = 'PENDING' AND attempt_count = 0")).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM nexora.outbox_events WHERE resource_id = '" + page.pageId()
+                + "' AND topic = 'tenant:" + tenant.organizationId() + ":workflow'"
+                + " AND safe_payload ->> 'resourceType' = 'page'"
+                + " AND safe_payload -> 'safeDisplay' ->> 'status' = 'ARCHIVED'"))
+                .isEqualTo(1);
     }
 
     private CmsPageService.CreateCommand create(CmsFixture tenant, String slug) {
@@ -292,7 +300,7 @@ class CmsPageIntegrationTests {
         try {
             migrationDirectory = Files.createTempDirectory("nexora-cms-flyway-");
             Path source = Path.of("..", "..", "database", "migrations").toAbsolutePath().normalize();
-            for (int version = 1; version <= 13; version++) {
+            for (int version = 1; version <= 14; version++) {
                 String prefix = "V%03d__".formatted(version);
                 try (Stream<Path> candidates = Files.list(source)) {
                     Path migration = candidates.filter(path -> path.getFileName().toString().startsWith(prefix))
