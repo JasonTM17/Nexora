@@ -50,11 +50,15 @@ unchanged.
 The M3 event contract freezes the versioned event envelope, private topic
 vocabulary, outbox state semantics, and safe payload allowlist. Topics follow
 the server-derived `scope:tenant-or-resource-id:purpose` rule, where the
-identifier alone never grants access. Payloads may carry only allowlisted IDs,
-versions, job state, and safe display metadata; no bodies, prompts, tokens,
-secrets, raw provider output, or unowned tenant data. This contract is a
-vocabulary only; M3-DB01 owns the migration DDL and M3-T02/T03/T04/T05 own the
-runtime implementations and consumers.
+identifier alone never grants access, and the event-type routing matrix ties
+each published type to one allowed scope/purpose pair. Payloads carry only
+allowlisted IDs, versions, job state, and fixed-shape safe display metadata;
+safeDisplay is a bounded object, not a free-form bag. No bodies, prompts,
+tokens, secrets, raw provider output, unowned tenant data, or nested unsafe
+display content may appear. Outbox rows move through a bounded claim/failure/
+dead-letter lifecycle with explicit lease and retry semantics. This contract is
+a vocabulary only; M3-DB01 owns the migration DDL and M3-T02/T03/T04/T05 own
+the runtime implementations and consumers.
 
 Problem `details` are limited to short printable validation messages or codes.
 Detail keys are normalized from camelCase and `.`, `_`, `-` separators into

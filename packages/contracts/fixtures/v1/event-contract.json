@@ -13,6 +13,53 @@
       "canonicalHost": "beta.example.test"
     }
   ],
+  "subjects": [
+    {
+      "subjectId": "90000000-0000-4000-8000-000000000001",
+      "organizationId": "10000000-0000-4000-8000-000000000001",
+      "currentMembershipId": "91000000-0000-4000-8000-000000000001",
+      "currentMembershipStatus": "ACTIVE",
+      "currentMembershipRole": "OWNER"
+    },
+    {
+      "subjectId": "90000000-0000-4000-8000-000000000002",
+      "organizationId": "10000000-0000-4000-8000-000000000002",
+      "currentMembershipId": "91000000-0000-4000-8000-000000000002",
+      "currentMembershipStatus": "ACTIVE",
+      "currentMembershipRole": "EDITOR"
+    }
+  ],
+  "ownershipMatrix": [
+    {
+      "subjectId": "90000000-0000-4000-8000-000000000001",
+      "organizationId": "10000000-0000-4000-8000-000000000001",
+      "resourceId": "30000000-0000-4000-8000-000000000001",
+      "canPublish": true,
+      "canConsume": true
+    },
+    {
+      "subjectId": "90000000-0000-4000-8000-000000000001",
+      "organizationId": "10000000-0000-4000-8000-000000000002",
+      "resourceId": "30000000-0000-4000-8000-000000000002",
+      "canPublish": false,
+      "canConsume": false
+    },
+    {
+      "subjectId": "90000000-0000-4000-8000-000000000002",
+      "organizationId": "10000000-0000-4000-8000-000000000001",
+      "resourceId": "30000000-0000-4000-8000-000000000001",
+      "canPublish": false,
+      "canConsume": false
+    }
+  ],
+  "routingMatrix": [
+    { "eventType": "PUBLICATION_INVALIDATED", "scope": "tenant", "purpose": "publication" },
+    { "eventType": "WORKFLOW_TRANSITIONED", "scope": "tenant", "purpose": "workflow" },
+    { "eventType": "JOB_PROGRESS_CHANGED", "scope": "resource", "purpose": "job-progress" },
+    { "eventType": "NOTIFICATION_ENQUEUED", "scope": "tenant", "purpose": "notification" },
+    { "eventType": "PRESENCE_CHANGED", "scope": "resource", "purpose": "presence" },
+    { "eventType": "OUTBOX_RECORDED", "scope": "tenant", "purpose": "outbox" }
+  ],
   "events": [
     {
       "eventId": "70000000-0000-4000-8000-000000000001",
@@ -43,7 +90,9 @@
         "schemaVersion": "1.0.0",
         "safeDisplay": {
           "label": "Alpha publication invalidated",
-          "status": "queued"
+          "status": "queued",
+          "hint": "Awaiting durable publication",
+          "variant": "warning"
         }
       }
     },
@@ -76,13 +125,37 @@
         "schemaVersion": "1.0.0",
         "safeDisplay": {
           "label": "Alpha job progress",
-          "status": "running"
+          "status": "running",
+          "state": "RUNNING",
+          "progressText": "45%"
         }
       }
     }
   ],
   "outbox": {
     "states": ["PENDING", "CLAIMED", "PUBLISHED", "FAILED", "DEAD_LETTER"],
+    "transitions": {
+      "PENDING": ["CLAIMED"],
+      "CLAIMED": ["PUBLISHED", "FAILED"],
+      "FAILED": ["CLAIMED", "DEAD_LETTER"],
+      "PUBLISHED": [],
+      "DEAD_LETTER": []
+    },
+    "lease": {
+      "claim": "bounded row lease owned by one publisher at a time",
+      "expiry": "lease expiry makes the row reclaimable",
+      "reclaim": "expired or failed claims may be retried until bounded attempts are exhausted"
+    },
+    "attempts": {
+      "bounded": true,
+      "maxAttempts": 5,
+      "backoff": "bounded exponential backoff with jitter",
+      "deadLetterAfter": "maxAttempts"
+    },
+    "terminalSemantics": {
+      "PUBLISHED": "terminal success",
+      "DEAD_LETTER": "terminal failure with operator-visible record"
+    },
     "sameTransactionRule": "Domain change and outbox record commit together or not at all.",
     "duplicateRule": "A duplicate publish attempt never creates a second logical effect.",
     "failureRule": "A terminal failure remains visible and does not become silent loss."
@@ -91,11 +164,39 @@
     "sameRequest": "same-terminal-receipt",
     "differentRequest": "IDEMPOTENCY_KEY_REUSED",
     "negativeCases": [
-      "A guessed tenant topic for another organization never grants access.",
-      "A payload with a body, prompt, token, secret or providerPayload is rejected.",
-      "A payload with unowned subject data or cross-tenant resource IDs is rejected.",
-      "A reused idempotency key with a different fingerprint fails closed.",
-      "A terminal outbox failure remains visible instead of being hidden."
+      {
+        "name": "crossTenantGuessDenied",
+        "subjectId": "90000000-0000-4000-8000-000000000001",
+        "organizationId": "10000000-0000-4000-8000-000000000002",
+        "resourceId": "30000000-0000-4000-8000-000000000002",
+        "result": "DENIED"
+      },
+      {
+        "name": "unsafeSafeDisplayRejected",
+        "safeDisplay": {
+          "label": "Alpha publication invalidated",
+          "body": "secret"
+        },
+        "result": "REJECTED"
+      },
+      {
+        "name": "unownedSubjectDenied",
+        "subjectId": "90000000-0000-4000-8000-000000000002",
+        "organizationId": "10000000-0000-4000-8000-000000000001",
+        "resourceId": "30000000-0000-4000-8000-000000000001",
+        "result": "DENIED"
+      },
+      {
+        "name": "reusedKeyDifferentFingerprintDenied",
+        "sameDigest": true,
+        "fingerprintMatches": false,
+        "result": "IDEMPOTENCY_KEY_REUSED"
+      },
+      {
+        "name": "terminalOutboxFailureVisible",
+        "outboxState": "DEAD_LETTER",
+        "result": "VISIBLE"
+      }
     ]
   }
 }

@@ -43,11 +43,56 @@
     "PRESENCE_CHANGED",
     "OUTBOX_RECORDED"
   ],
+  "eventRouting": {
+    "matrix": [
+      {
+        "eventType": "PUBLICATION_INVALIDATED",
+        "scope": "tenant",
+        "purpose": "publication",
+        "ownership": "current ACTIVE membership for the tenant"
+      },
+      {
+        "eventType": "WORKFLOW_TRANSITIONED",
+        "scope": "tenant",
+        "purpose": "workflow",
+        "ownership": "current ACTIVE membership for the tenant"
+      },
+      {
+        "eventType": "JOB_PROGRESS_CHANGED",
+        "scope": "resource",
+        "purpose": "job-progress",
+        "ownership": "current ACTIVE membership for the resource owner"
+      },
+      {
+        "eventType": "NOTIFICATION_ENQUEUED",
+        "scope": "tenant",
+        "purpose": "notification",
+        "ownership": "current ACTIVE membership for the tenant"
+      },
+      {
+        "eventType": "PRESENCE_CHANGED",
+        "scope": "resource",
+        "purpose": "presence",
+        "ownership": "current ACTIVE membership for the resource owner"
+      },
+      {
+        "eventType": "OUTBOX_RECORDED",
+        "scope": "tenant",
+        "purpose": "outbox",
+        "ownership": "current ACTIVE membership for the tenant"
+      }
+    ],
+    "rules": [
+      "The server chooses scope, tenant/resource identifier and purpose from current ownership facts and event type.",
+      "Clients may not invent a scope or purpose outside this matrix.",
+      "The identifier alone never grants access or publish rights."
+    ]
+  },
   "topicVocabulary": {
     "pattern": "scope:tenant-or-resource-id:purpose",
     "scopes": ["tenant", "resource", "job"],
     "purposes": ["publication", "workflow", "job-progress", "notification", "presence", "outbox"],
-    "ownership": "The owner id encoded in the topic is derived from current server-authorized tenant or resource identity; guessing it never grants access.",
+    "ownership": "The owner id encoded in the topic is derived from current server-authorized tenant or resource identity and current ACTIVE membership; guessing it never grants access.",
     "examples": [
       "tenant:10000000-0000-4000-8000-000000000001:publication",
       "tenant:10000000-0000-4000-8000-000000000001:workflow",
@@ -57,8 +102,35 @@
       "tenant:10000000-0000-4000-8000-000000000001:outbox"
     ]
   },
+  "ownership": {
+    "subjectRule": "Only the current ACTIVE membership for the authenticated subject may authorize publish or consume rights.",
+    "resourceRule": "A guessed subjectId, membershipId, organizationId or resourceId never grants access by itself.",
+    "crossTenantRule": "Cross-tenant or unowned subject guesses fail closed."
+  },
   "outbox": {
     "states": ["PENDING", "CLAIMED", "PUBLISHED", "FAILED", "DEAD_LETTER"],
+    "transitions": {
+      "PENDING": ["CLAIMED"],
+      "CLAIMED": ["PUBLISHED", "FAILED"],
+      "FAILED": ["CLAIMED", "DEAD_LETTER"],
+      "PUBLISHED": [],
+      "DEAD_LETTER": []
+    },
+    "lease": {
+      "claim": "bounded row lease owned by one publisher at a time",
+      "expiry": "lease expiry makes the row reclaimable",
+      "reclaim": "expired or failed claims may be retried until bounded attempts are exhausted"
+    },
+    "attempts": {
+      "bounded": true,
+      "maxAttempts": 5,
+      "backoff": "bounded exponential backoff with jitter",
+      "deadLetterAfter": "maxAttempts"
+    },
+    "terminalSemantics": {
+      "PUBLISHED": "terminal success",
+      "DEAD_LETTER": "terminal failure with operator-visible record"
+    },
     "rules": [
       "Business row and outbox row are committed in one transaction.",
       "Claims use bounded locking or lease semantics and are idempotent.",
@@ -67,7 +139,7 @@
     ]
   },
   "idempotency": {
-    "requestKey": "A publish or job submission may carry one opaque idempotency key digest scoped to organizationId, topic and operation.",
+    "requestKey": "A publish or job submission carries one opaque idempotency key digest scoped to organizationId, topic and operation.",
     "sameRequest": "A retried request with the same fingerprint reuses the original terminal receipt without creating another outbox row.",
     "differentRequest": "A reused key with a different fingerprint fails closed with IDEMPOTENCY_KEY_REUSED.",
     "retention": "Reuse safety after expiry is a future persistence policy; the contract does not promise it."
@@ -102,7 +174,42 @@
       "pii",
       "email",
       "phone"
-    ]
+    ],
+    "nestedShapes": {
+      "safeDisplay": {
+        "type": "object",
+        "requiredFields": ["label", "status"],
+        "allowedFields": ["label", "status", "hint", "state", "variant", "progressText"],
+        "valueRules": {
+          "label": { "type": "string", "minimumLength": 1, "maximumLength": 80 },
+          "status": { "type": "string", "minimumLength": 1, "maximumLength": 32 },
+          "hint": { "type": "string", "minimumLength": 0, "maximumLength": 120 },
+          "state": { "type": "string", "minimumLength": 1, "maximumLength": 32 },
+          "variant": { "type": "string", "enum": ["neutral", "success", "warning", "danger", "info"] },
+          "progressText": { "type": "string", "minimumLength": 0, "maximumLength": 40 }
+        },
+        "forbiddenFields": [
+          "body",
+          "content",
+          "documentBody",
+          "prompt",
+          "secret",
+          "token",
+          "accessToken",
+          "cookie",
+          "providerPayload",
+          "rawHtml",
+          "pii",
+          "email",
+          "phone"
+        ],
+        "rules": [
+          "No nested objects or arrays.",
+          "All string values are printable and length-bounded.",
+          "Safe display metadata may summarize state only."
+        ]
+      }
+    }
   },
   "errors": [
     "INVALID_EVENT_VERSION",
