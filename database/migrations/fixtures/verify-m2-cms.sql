@@ -33,6 +33,8 @@ INSERT INTO nexora.themes (id, organization_id, slug)
 VALUES ('50000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'default');
 INSERT INTO nexora.theme_versions (id, organization_id, theme_id, version, state, token_digest, token_manifest, actor_id)
 VALUES ('60000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', 1, 'PUBLISHED', 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '{"color":"safe"}'::jsonb, '20000000-0000-4000-8000-000000000001');
+INSERT INTO nexora.theme_versions (id, organization_id, theme_id, version, state, token_digest, token_manifest, actor_id)
+VALUES ('60000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', 2, 'PUBLISHED', 'sha256:abababababababababababababababababababababababababababababababab', '{"color":"safe-v2"}'::jsonb, '20000000-0000-4000-8000-000000000001');
 INSERT INTO nexora.memberships (id, organization_id, subject_id, status, tenant_role)
 VALUES
   ('30000000-0000-4000-8000-000000000008', '10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000008', 'ACTIVE', 'CONTENT_CREATOR'),
@@ -55,6 +57,8 @@ VALUES
 INSERT INTO nexora.pages (id, organization_id, site_id, slug, title, schema_version, content_digest, theme_version_id, seo_title, seo_description, seo_locale, canonical_path)
 VALUES ('70000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', 'about', 'About', '1.0.0', 'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', '60000000-0000-4000-8000-000000000001', 'About', 'About Alpha.', 'en-US', '/about');
 INSERT INTO nexora.page_versions (id, organization_id, site_id, page_id, source_draft_version, publication_operation, schema_version, content_digest, theme_version_id, seo_title, seo_description, seo_locale, canonical_path, seo_snapshot_digest, actor_id, trace_id)
+VALUES ('80000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000002', 1, 'PUBLISH', '1.0.0', 'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', '60000000-0000-4000-8000-000000000001', 'About', 'About Alpha.', 'en-US', '/about', 'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd', '20000000-0000-4000-8000-000000000001', 'cms-fixture-about-1');
+INSERT INTO nexora.page_versions (id, organization_id, site_id, page_id, source_draft_version, publication_operation, schema_version, content_digest, theme_version_id, seo_title, seo_description, seo_locale, canonical_path, seo_snapshot_digest, actor_id, trace_id)
 VALUES ('80000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000001', 2, 'PUBLISH', '1.0.0', 'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', '60000000-0000-4000-8000-000000000001', 'Welcome revision two', 'Welcome revision two.', 'en-US', '/welcome', 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '20000000-0000-4000-8000-000000000001', 'cms-fixture-2');
 INSERT INTO nexora.page_versions (id, organization_id, site_id, page_id, source_draft_version, publication_operation, schema_version, content_digest, theme_version_id, seo_title, seo_description, seo_locale, canonical_path, seo_snapshot_digest, actor_id, trace_id)
 VALUES ('80000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000001', 3, 'PUBLISH', '1.0.0', 'sha256:1111111111111111111111111111111111111111111111111111111111111111', '60000000-0000-4000-8000-000000000001', 'Welcome revision three', 'Welcome revision three.', 'en-US', '/welcome', 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', '20000000-0000-4000-8000-000000000001', 'cms-fixture-3');
@@ -62,7 +66,7 @@ VALUES ('80000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-0000000
 DO $$
 BEGIN
   IF (SELECT count(*) FROM nexora.pages WHERE slug = 'welcome') <> 1
-     OR (SELECT count(*) FROM nexora.page_versions) <> 3
+     OR (SELECT count(*) FROM nexora.page_versions) <> 4
      OR (SELECT count(*) FROM nexora.page_publications) <> 1 THEN
     RAISE EXCEPTION 'same-tenant CMS rows were not visible to authorized owner';
   END IF;
@@ -72,12 +76,11 @@ DO $$
 BEGIN
   BEGIN
     UPDATE nexora.pages
-    SET published_version_id = '80000000-0000-4000-8000-000000000001'
+    SET published_version_id = '80000000-0000-4000-8000-000000000001',
+        draft_version = draft_version + 1
     WHERE id = '70000000-0000-4000-8000-000000000002';
-    SET CONSTRAINTS ALL IMMEDIATE;
-    RAISE EXCEPTION 'same-tenant cross-page published version unexpectedly succeeded';
-  EXCEPTION WHEN foreign_key_violation THEN
-    SET CONSTRAINTS ALL DEFERRED;
+    RAISE EXCEPTION 'DRAFT page published-version pointer mutation unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 
   BEGIN
@@ -96,8 +99,8 @@ BEGIN
 END $$;
 COMMIT;
 
--- CONTENT_CREATOR may make a state-stable draft edit but cannot use page.update
--- to archive. EDITOR retains ordinary state-stable edit access.
+-- CONTENT_CREATOR may make a state-stable DRAFT edit, but may not change any
+-- PUBLISHED payload, SEO, theme, pointer, or lifecycle state through page.update.
 BEGIN;
 SET LOCAL ROLE nexora_runtime;
 SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000008', true);
@@ -105,32 +108,61 @@ SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-00000000000
 SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000008', true);
 DO $$
 BEGIN
-  BEGIN
-    UPDATE nexora.pages SET state = 'ARCHIVED'
-    WHERE id = '70000000-0000-4000-8000-000000000001';
-    RAISE EXCEPTION 'CONTENT_CREATOR archive unexpectedly succeeded';
-  EXCEPTION WHEN insufficient_privilege THEN NULL;
-  END;
-END $$;
-COMMIT;
+  UPDATE nexora.pages SET title = 'PUBLISHED title mutation'
+  WHERE id = '70000000-0000-4000-8000-000000000001';
+  IF FOUND THEN
+    RAISE EXCEPTION 'CONTENT_CREATOR PUBLISHED title mutation unexpectedly succeeded';
+  END IF;
 
-BEGIN;
-SET LOCAL ROLE nexora_runtime;
-SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000009', true);
-SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
-SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000009', true);
-UPDATE nexora.pages SET title = 'Welcome editorial'
-WHERE id = '70000000-0000-4000-8000-000000000001';
-DO $$
-BEGIN
+  UPDATE nexora.pages SET seo_title = 'PUBLISHED SEO mutation'
+  WHERE id = '70000000-0000-4000-8000-000000000001';
+  IF FOUND THEN
+    RAISE EXCEPTION 'CONTENT_CREATOR PUBLISHED SEO mutation unexpectedly succeeded';
+  END IF;
+
+  UPDATE nexora.pages SET theme_version_id = '60000000-0000-4000-8000-000000000002'
+  WHERE id = '70000000-0000-4000-8000-000000000001';
+  IF FOUND THEN
+    RAISE EXCEPTION 'CONTENT_CREATOR PUBLISHED theme mutation unexpectedly succeeded';
+  END IF;
+
+  UPDATE nexora.pages SET published_version_id = '80000000-0000-4000-8000-000000000002'
+  WHERE id = '70000000-0000-4000-8000-000000000001';
+  IF FOUND THEN
+    RAISE EXCEPTION 'CONTENT_CREATOR PUBLISHED pointer mutation unexpectedly succeeded';
+  END IF;
+
+  UPDATE nexora.pages SET state = 'ARCHIVED'
+  WHERE id = '70000000-0000-4000-8000-000000000001';
+  IF FOUND THEN
+    RAISE EXCEPTION 'CONTENT_CREATOR archive unexpectedly succeeded';
+  END IF;
+
+  UPDATE nexora.pages
+  SET title = 'About draft revised', draft_version = draft_version + 1
+  WHERE id = '70000000-0000-4000-8000-000000000002';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'CONTENT_CREATOR DRAFT update unexpectedly failed';
+  END IF;
+
   IF NOT EXISTS (
     SELECT 1 FROM nexora.pages
-    WHERE id = '70000000-0000-4000-8000-000000000001'
-      AND title = 'Welcome editorial'
-      AND state = 'PUBLISHED'
+    WHERE id = '70000000-0000-4000-8000-000000000002'
+      AND title = 'About draft revised'
+      AND state = 'DRAFT'
+      AND draft_version = 2
   ) THEN
-    RAISE EXCEPTION 'EDITOR state-stable draft update unexpectedly failed';
+    RAISE EXCEPTION 'CONTENT_CREATOR DRAFT update did not preserve exact draft semantics';
   END IF;
+
+  BEGIN
+    UPDATE nexora.pages
+    SET published_version_id = '80000000-0000-4000-8000-000000000004',
+        draft_version = draft_version + 1
+    WHERE id = '70000000-0000-4000-8000-000000000002';
+    RAISE EXCEPTION 'CONTENT_CREATOR DRAFT published pointer mutation unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
 END $$;
 COMMIT;
 
@@ -159,7 +191,7 @@ BEGIN
     SELECT 1 FROM nexora.pages
     WHERE id = '70000000-0000-4000-8000-000000000001'
       AND state = 'ARCHIVED'
-      AND title = 'Welcome editorial'
+      AND title = 'Welcome'
       AND version = prior_version + 1
   ) THEN
     RAISE EXCEPTION 'REVIEWER PUBLISHED to ARCHIVED workflow transition failed or changed payload';

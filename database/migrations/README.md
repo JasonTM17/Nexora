@@ -129,11 +129,13 @@ matching permission, publication-related operations require `page.publish`,
 and the audit actor must match the transaction subject. No API role is granted
 schema or table access.
 
-`V012` retains the normal `page.update` draft-edit path and adds a separate,
-forced-RLS `page.publish` path for server workflow transitions. Its SECURITY
-INVOKER trigger permits only the frozen C02 state graph and automatic row
-version/timestamp changes; content, SEO, theme, site, slug, title, publication
-pointer, and draft version remain immutable during that transition.
+`V012` adds the forced-RLS `page.publish` path for server workflow transitions.
+`V013` narrows the older `page.update` policy to state-stable `DRAFT` rows only
+and replaces the guard function accordingly. Its SECURITY INVOKER guard permits
+only the frozen C02 state graph and automatic row version/timestamp changes;
+content, SEO, theme, site, slug, title, publication pointer, and draft version
+remain immutable during a transition. A normal draft edit must advance the
+draft version exactly once and cannot install a published-version pointer.
 
 Run the complete disposable PostgreSQL 17.5 proof from the repository root:
 
