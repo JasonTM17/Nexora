@@ -8,12 +8,14 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
+import java.util.List;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -32,6 +34,14 @@ public class MembershipManagementController {
             TenantContextService tenantContexts, MembershipManagementService memberships) {
         this.tenantContexts = tenantContexts;
         this.memberships = memberships;
+    }
+
+    @GetMapping
+    List<MembershipManagementService.MembershipView> list(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestHeader(ORGANIZATION_HEADER) UUID organizationId) {
+        TenantContext actor = tenantContexts.resolve(IdentityPrincipal.from(jwt).subjectId(), organizationId);
+        return memberships.list(actor);
     }
 
     @PatchMapping(path = "/{membershipId}", consumes = MediaType.APPLICATION_JSON_VALUE)

@@ -22,6 +22,7 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -371,7 +372,7 @@ class IdentityTenancyIntegrationTests {
                     "SELECT current_setting('nexora.target_membership_mutation', true)", String.class)).isEmpty();
             assertThat(jdbc.queryForObject(
                     "SELECT count(*) FROM nexora.memberships WHERE id = ? AND version = 2",
-                    Integer.class, target)).isZero();
+                    Integer.class, target)).isEqualTo(1);
             return null;
         });
         assertPooledSettingsAreEmpty();
@@ -395,6 +396,48 @@ class IdentityTenancyIntegrationTests {
         assertThat(json.readTree(allowed.body()).path("role").asText()).isEqualTo("REVIEWER");
         assertThat(invalidStatus.statusCode()).isEqualTo(400);
         assertThat(json.readTree(invalidStatus.body()).path("code").asText()).isEqualTo("VALIDATION_FAILED");
+        assertPooledSettingsAreEmpty();
+    }
+
+    @Test
+    void membershipDirectoryRequiresCurrentManagerAuthorityAndDoesNotLeakTenants() throws Exception {
+        UUID ownerSubject = UUID.randomUUID();
+        OrganizationFixture alpha = seedOrganization(ownerSubject);
+        OrganizationFixture beta = seedOrganization(UUID.randomUUID());
+        UUID alphaUser = seedMembership(alpha, UUID.randomUUID(), "USER", "ACTIVE");
+        UUID editorSubject = UUID.randomUUID();
+        seedMembership(alpha, editorSubject, "EDITOR", "ACTIVE");
+        UUID managerSubject = UUID.randomUUID();
+        UUID manager = seedMembership(alpha, managerSubject, "ADMIN", "ACTIVE");
+        String ownerToken = ISSUER.token(ownerSubject, Instant.now().plusSeconds(120));
+        String editorToken = ISSUER.token(editorSubject, Instant.now().plusSeconds(120));
+        String managerToken = ISSUER.token(managerSubject, Instant.now().plusSeconds(120));
+
+        HttpResponse<String> allowed = getMemberships(ownerToken, alpha.organizationId());
+        HttpResponse<String> editorDenied = getMemberships(editorToken, alpha.organizationId());
+        HttpResponse<String> crossTenant = getMemberships(ownerToken, beta.organizationId());
+        changeMembershipRole(alpha, manager, "USER");
+        HttpResponse<String> demotedDenied = getMemberships(managerToken, alpha.organizationId());
+        removeMembership(alpha, alphaUser);
+        HttpResponse<String> removedTargetAbsent = getMemberships(ownerToken, alpha.organizationId());
+        removeMembership(alpha, manager);
+        HttpResponse<String> removedActorDenied = getMemberships(managerToken, alpha.organizationId());
+
+        assertThat(allowed.statusCode()).isEqualTo(200);
+        JsonNode rows = json.readTree(allowed.body());
+        assertThat(rows).hasSize(4);
+        assertThat(rows.toString()).contains(alphaUser.toString()).doesNotContain(beta.organizationId().toString());
+        assertThat(rows.get(0).size()).isEqualTo(6);
+        for (String field : List.of("membershipId", "organizationId", "subjectId", "status", "role", "version")) {
+            assertThat(rows.get(0).has(field)).isTrue();
+        }
+        assertThat(editorDenied.statusCode()).isEqualTo(403);
+        assertThat(crossTenant.statusCode()).isEqualTo(403);
+        assertThat(demotedDenied.statusCode()).isEqualTo(403);
+        assertThat(removedTargetAbsent.statusCode()).isEqualTo(200);
+        assertThat(json.readTree(removedTargetAbsent.body()).toString())
+                .contains(alphaUser.toString()).contains("\"status\":\"REMOVED\"");
+        assertThat(removedActorDenied.statusCode()).isEqualTo(403);
         assertPooledSettingsAreEmpty();
     }
 
@@ -461,6 +504,10 @@ class IdentityTenancyIntegrationTests {
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
+    private HttpResponse<String> getMemberships(String token, UUID organizationId) throws Exception {
+        return get("/api/v1/authorization/memberships", token, organizationId);
+    }
+
     private static void prepareRuntimeRole() {
         try (Connection connection = DriverManager.getConnection(
                 DATABASE.getJdbcUrl(), DATABASE.getUsername(), DATABASE.getPassword());
@@ -480,7 +527,7 @@ class IdentityTenancyIntegrationTests {
         try {
             migrationDirectory = Files.createTempDirectory("nexora-m2-flyway-");
             Path source = Path.of("..", "..", "database", "migrations").toAbsolutePath().normalize();
-            for (int version = 1; version <= 5; version++) {
+            for (int version = 1; version <= 6; version++) {
                 String prefix = "V%03d__".formatted(version);
                 try (Stream<Path> candidates = Files.list(source)) {
                     Path migration = candidates
