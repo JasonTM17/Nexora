@@ -27,13 +27,13 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_policy
     WHERE polrelid = 'realtime.messages'::regclass
-      AND polname = 'realtime_messages_select_private_channels'
-  ) OR NOT EXISTS (
+      AND polname = 'realtime_messages_select_scoped_private_channels'
+  ) OR EXISTS (
     SELECT 1 FROM pg_policy
     WHERE polrelid = 'realtime.messages'::regclass
       AND polname = 'realtime_messages_insert_private_channels'
   ) THEN
-    RAISE EXCEPTION 'provider-style private Realtime policies are missing';
+    RAISE EXCEPTION 'scoped read-only Realtime policy is missing or browser INSERT remains enabled';
   END IF;
 
   IF has_function_privilege('authenticated', 'nexora.realtime_private_channel_authorized(text, uuid)', 'EXECUTE') THEN
@@ -41,6 +41,22 @@ BEGIN
   END IF;
   IF NOT has_function_privilege('authenticated', 'nexora.realtime_current_channel_authorized(text)', 'EXECUTE') THEN
     RAISE EXCEPTION 'authenticated cannot execute the current-topic Realtime policy helper';
+  END IF;
+
+  IF has_function_privilege('nexora_runtime', 'nexora.bump_realtime_authorization_epoch()', 'EXECUTE')
+     OR has_function_privilege('nexora_runtime', 'nexora.sync_realtime_presence_resource()', 'EXECUTE') THEN
+    RAISE EXCEPTION 'runtime can invoke a private Realtime projection synchronizer directly';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_class relation
+    JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+    WHERE namespace.nspname = 'nexora'
+      AND relation.relname = 'realtime_authorization_epochs'
+      AND relation.relrowsecurity
+      AND relation.relforcerowsecurity
+  ) OR has_table_privilege('nexora_runtime', 'nexora.realtime_authorization_epochs', 'SELECT') THEN
+    RAISE EXCEPTION 'Realtime authorization epochs must be private forced-RLS state';
   END IF;
 
   IF EXISTS (
@@ -420,67 +436,197 @@ $$;
 COMMIT;
 
 -- Exercise the actual provider-style policy expression against the disposable
--- stand-in. auth.uid() and realtime.topic() are trusted server-side helpers in
+-- stand-in. auth.uid(), auth.jwt(), and realtime.topic() are trusted helpers in
 -- the hosted product; the local stand-in reads test-only transaction settings.
+-- These claims stand in only for a provider-verified, server-issued scoped
+-- Realtime JWT. A normal session token has no descriptor claims and fails.
 BEGIN;
 SET LOCAL ROLE authenticated;
-SELECT set_config('request.jwt.claim.sub', '20000000-0000-4000-8000-000000000007', true);
-SELECT set_config('realtime.topic', 'tenant:10000000-0000-4000-8000-000000000001:publication', true);
-
-INSERT INTO realtime.messages (id, topic, payload)
-VALUES (
-  '60000000-0000-4000-8000-000000000001',
-  'tenant:10000000-0000-4000-8000-000000000001:publication',
-  '{"eventId":"50000000-0000-4000-8000-000000000001"}'::jsonb
+SELECT set_config(
+  'request.jwt.claims',
+  '{"sub":"20000000-0000-4000-8000-000000000007","nexora_realtime_topic":"tenant:10000000-0000-4000-8000-000000000001:publication","nexora_realtime_event_type":"PUBLICATION_INVALIDATED","nexora_realtime_event_version":"1","nexora_realtime_authorization_epoch":"1"}',
+  true
 );
+SELECT set_config('realtime.topic', 'tenant:10000000-0000-4000-8000-000000000001:publication', true);
 
 DO $$
 BEGIN
   IF (SELECT count(*) FROM realtime.messages) <> 1 THEN
-    RAISE EXCEPTION 'authorized private Realtime row was not visible';
+    RAISE EXCEPTION 'valid scoped descriptor did not expose exactly its current topic row';
   END IF;
 
   BEGIN
-    INSERT INTO realtime.messages (id, topic, payload)
+    INSERT INTO realtime.messages (id, topic, extension, payload)
     VALUES (
-      '60000000-0000-4000-8000-000000000002',
-      'tenant:10000000-0000-4000-8000-000000000001:workflow',
-      '{}'::jsonb
+      '60000000-0000-4000-8000-000000000099',
+      'resource:70000000-0000-4000-8000-000000000001:presence',
+      'presence',
+      '{"state":"editing","cursor":42}'::jsonb
     );
-    RAISE EXCEPTION 'private Realtime insert ignored the current topic';
+    RAISE EXCEPTION 'browser direct Presence write unexpectedly succeeded';
   EXCEPTION WHEN insufficient_privilege THEN
     NULL;
   END;
 
-  PERFORM set_config('realtime.topic', 'tenant:10000000-0000-4000-8000-000000000001:workflow', true);
-  INSERT INTO realtime.messages (id, topic, payload)
-  VALUES (
-    '60000000-0000-4000-8000-000000000003',
-    'tenant:10000000-0000-4000-8000-000000000001:workflow',
-    '{}'::jsonb
+  PERFORM set_config(
+    'request.jwt.claims',
+    '{"sub":"20000000-0000-4000-8000-000000000007"}',
+    true
   );
+  IF (SELECT count(*) FROM realtime.messages) <> 0 THEN
+    RAISE EXCEPTION 'ordinary browser session token opened a private channel';
+  END IF;
 
-  PERFORM set_config('realtime.topic', 'tenant:10000000-0000-4000-8000-000000000001:publication', true);
-  IF (SELECT count(*) FROM realtime.messages) <> 1 THEN
-    RAISE EXCEPTION 'authorized topic leaked a different private Realtime row';
+  PERFORM set_config(
+    'request.jwt.claims',
+    '{"sub":"20000000-0000-4000-8000-000000000007","nexora_realtime_topic":"tenant:10000000-0000-4000-8000-000000000001:publication","nexora_realtime_event_type":"WORKFLOW_TRANSITIONED","nexora_realtime_event_version":"1","nexora_realtime_authorization_epoch":"1"}',
+    true
+  );
+  IF (SELECT count(*) FROM realtime.messages) <> 0 THEN
+    RAISE EXCEPTION 'descriptor event route did not bind to the private topic';
+  END IF;
+
+  PERFORM set_config(
+    'request.jwt.claims',
+    '{"sub":"20000000-0000-4000-8000-000000000007","nexora_realtime_topic":"tenant:10000000-0000-4000-8000-000000000002:publication","nexora_realtime_event_type":"PUBLICATION_INVALIDATED","nexora_realtime_event_version":"1","nexora_realtime_authorization_epoch":"1"}',
+    true
+  );
+  IF (SELECT count(*) FROM realtime.messages) <> 0 THEN
+    RAISE EXCEPTION 'descriptor topic mismatch exposed a private channel';
   END IF;
 
   PERFORM set_config('realtime.topic', 'tenant:10000000-0000-4000-8000-000000000002:publication', true);
   IF (SELECT count(*) FROM realtime.messages) <> 0 THEN
     RAISE EXCEPTION 'guessed cross-tenant topic exposed a private Realtime row';
   END IF;
+END
+$$;
+COMMIT;
 
-  BEGIN
-    INSERT INTO realtime.messages (id, topic, payload)
-    VALUES (
-      '60000000-0000-4000-8000-000000000004',
-      'tenant:10000000-0000-4000-8000-000000000002:publication',
-      '{}'::jsonb
-    );
-    RAISE EXCEPTION 'cross-tenant private Realtime insert unexpectedly succeeded';
-  EXCEPTION WHEN insufficient_privilege THEN
-    NULL;
-  END;
+-- The resource job route binds both the descriptor and its durable subject.
+-- A different active member in the same tenant cannot consume that job event.
+BEGIN;
+SET LOCAL ROLE authenticated;
+SELECT set_config('realtime.topic', 'resource:50000000-0000-4000-8000-000000000010:job-progress', true);
+SELECT set_config(
+  'request.jwt.claims',
+  '{"sub":"20000000-0000-4000-8000-000000000007","nexora_realtime_topic":"resource:50000000-0000-4000-8000-000000000010:job-progress","nexora_realtime_event_type":"JOB_PROGRESS_CHANGED","nexora_realtime_event_version":"1","nexora_realtime_authorization_epoch":"1"}',
+  true
+);
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM realtime.messages) <> 1 THEN
+    RAISE EXCEPTION 'resource owner descriptor did not expose its job-progress row';
+  END IF;
+
+  PERFORM set_config(
+    'request.jwt.claims',
+    '{"sub":"20000000-0000-4000-8000-000000000002","nexora_realtime_topic":"resource:50000000-0000-4000-8000-000000000010:job-progress","nexora_realtime_event_type":"JOB_PROGRESS_CHANGED","nexora_realtime_event_version":"1","nexora_realtime_authorization_epoch":"1"}',
+    true
+  );
+  IF (SELECT count(*) FROM realtime.messages) <> 0 THEN
+    RAISE EXCEPTION 'same-tenant non-owner consumed a resource job event';
+  END IF;
+END
+$$;
+COMMIT;
+
+-- Presence is readable only with a descriptor but has no browser INSERT path.
+BEGIN;
+SET LOCAL ROLE authenticated;
+SELECT set_config('realtime.topic', 'resource:70000000-0000-4000-8000-000000000001:presence', true);
+SELECT set_config(
+  'request.jwt.claims',
+  '{"sub":"20000000-0000-4000-8000-000000000007","nexora_realtime_topic":"resource:70000000-0000-4000-8000-000000000001:presence","nexora_realtime_event_type":"PRESENCE_CHANGED","nexora_realtime_event_version":"1","nexora_realtime_authorization_epoch":"1"}',
+  true
+);
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM realtime.messages) <> 1 THEN
+    RAISE EXCEPTION 'valid presence descriptor did not expose the page resource row';
+  END IF;
+
+  PERFORM set_config(
+    'request.jwt.claims',
+    '{"sub":"20000000-0000-4000-8000-000000000003","nexora_realtime_topic":"resource:70000000-0000-4000-8000-000000000001:presence","nexora_realtime_event_type":"PRESENCE_CHANGED","nexora_realtime_event_version":"1","nexora_realtime_authorization_epoch":"1"}',
+    true
+  );
+  IF (SELECT count(*) FROM realtime.messages) <> 0 THEN
+    RAISE EXCEPTION 'cross-tenant descriptor consumed a page Presence row';
+  END IF;
+END
+$$;
+COMMIT;
+
+-- A fresh membership update bumps the epoch through the runtime trigger. The
+-- formerly valid descriptor then fails, while the new epoch succeeds.
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000001', true);
+INSERT INTO nexora.memberships (id, organization_id, subject_id, status, tenant_role)
+VALUES (
+  '30000000-0000-4000-8000-000000000010',
+  '10000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000010',
+  'ACTIVE',
+  'USER'
+);
+COMMIT;
+
+BEGIN;
+SET LOCAL ROLE authenticated;
+SELECT set_config('realtime.topic', 'resource:70000000-0000-4000-8000-000000000001:presence', true);
+SELECT set_config(
+  'request.jwt.claims',
+  '{"sub":"20000000-0000-4000-8000-000000000010","nexora_realtime_topic":"resource:70000000-0000-4000-8000-000000000001:presence","nexora_realtime_event_type":"PRESENCE_CHANGED","nexora_realtime_event_version":"1","nexora_realtime_authorization_epoch":"1"}',
+  true
+);
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM realtime.messages) <> 1 THEN
+    RAISE EXCEPTION 'initial descriptor epoch was not accepted';
+  END IF;
+END
+$$;
+COMMIT;
+
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.target_membership_id', '30000000-0000-4000-8000-000000000010', true);
+SELECT set_config('nexora.target_membership_version', '1', true);
+SELECT set_config('nexora.target_membership_mutation', 'true', true);
+UPDATE nexora.memberships
+SET tenant_role = 'CONTENT_CREATOR'
+WHERE id = '30000000-0000-4000-8000-000000000010';
+COMMIT;
+
+BEGIN;
+SET LOCAL ROLE authenticated;
+SELECT set_config('realtime.topic', 'resource:70000000-0000-4000-8000-000000000001:presence', true);
+SELECT set_config(
+  'request.jwt.claims',
+  '{"sub":"20000000-0000-4000-8000-000000000010","nexora_realtime_topic":"resource:70000000-0000-4000-8000-000000000001:presence","nexora_realtime_event_type":"PRESENCE_CHANGED","nexora_realtime_event_version":"1","nexora_realtime_authorization_epoch":"1"}',
+  true
+);
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM realtime.messages) <> 0 THEN
+    RAISE EXCEPTION 'stale authorization epoch still opened a private channel';
+  END IF;
+
+  PERFORM set_config(
+    'request.jwt.claims',
+    '{"sub":"20000000-0000-4000-8000-000000000010","nexora_realtime_topic":"resource:70000000-0000-4000-8000-000000000001:presence","nexora_realtime_event_type":"PRESENCE_CHANGED","nexora_realtime_event_version":"1","nexora_realtime_authorization_epoch":"2"}',
+    true
+  );
+  IF (SELECT count(*) FROM realtime.messages) <> 1 THEN
+    RAISE EXCEPTION 'fresh authorization epoch did not restore the private descriptor';
+  END IF;
 END
 $$;
 COMMIT;

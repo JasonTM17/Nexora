@@ -59,8 +59,8 @@ try {
 
     $migrationFiles = Get-ChildItem -LiteralPath $migrationDirectory -File -Filter 'V*__*.sql' |
         Sort-Object Name
-    if ($migrationFiles.Count -ne 14) {
-        throw "Expected exactly fourteen ordered migrations through draft M3-DB01; found $($migrationFiles.Count)"
+    if ($migrationFiles.Count -ne 17) {
+        throw "Expected exactly seventeen ordered migrations through scoped M3-DB01; found $($migrationFiles.Count)"
     }
 
     $env:NEXORA_POSTGRES_PORT = $PostgresPort
@@ -93,12 +93,20 @@ $$;
 CREATE SCHEMA auth;
 CREATE SCHEMA realtime;
 
+CREATE FUNCTION auth.jwt()
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT COALESCE(NULLIF(current_setting('request.jwt.claims', true), '')::jsonb, '{}'::jsonb)
+$$;
+
 CREATE FUNCTION auth.uid()
 RETURNS uuid
 LANGUAGE sql
 STABLE
 AS $$
-  SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid
+  SELECT NULLIF(auth.jwt() ->> 'sub', '')::uuid
 $$;
 
 CREATE FUNCTION realtime.topic()
@@ -112,8 +120,18 @@ $$;
 CREATE TABLE realtime.messages (
   id uuid PRIMARY KEY,
   topic text NOT NULL,
+  extension text NOT NULL CHECK (extension IN ('broadcast', 'presence')),
   payload jsonb NOT NULL DEFAULT '{}'::jsonb
 );
+
+-- Preload rows before RLS is enabled. They simulate distinct private channel
+-- rows only; no migration owns this disposable provider stand-in.
+INSERT INTO realtime.messages (id, topic, extension, payload) VALUES
+  ('60000000-0000-4000-8000-000000000001', 'tenant:10000000-0000-4000-8000-000000000001:publication', 'broadcast', '{"eventId":"50000000-0000-4000-8000-000000000001"}'::jsonb),
+  ('60000000-0000-4000-8000-000000000002', 'tenant:10000000-0000-4000-8000-000000000001:workflow', 'broadcast', '{"eventId":"50000000-0000-4000-8000-000000000002"}'::jsonb),
+  ('60000000-0000-4000-8000-000000000003', 'tenant:10000000-0000-4000-8000-000000000002:publication', 'broadcast', '{"eventId":"50000000-0000-4000-8000-000000000003"}'::jsonb),
+  ('60000000-0000-4000-8000-000000000004', 'resource:70000000-0000-4000-8000-000000000001:presence', 'presence', '{"state":"viewing"}'::jsonb),
+  ('60000000-0000-4000-8000-000000000005', 'resource:50000000-0000-4000-8000-000000000010:job-progress', 'broadcast', '{"eventId":"50000000-0000-4000-8000-000000000002"}'::jsonb);
 ALTER TABLE realtime.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE realtime.messages FORCE ROW LEVEL SECURITY;
 
@@ -121,16 +139,26 @@ REVOKE ALL ON SCHEMA auth, realtime FROM PUBLIC;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA auth, realtime FROM PUBLIC;
 REVOKE ALL ON TABLE realtime.messages FROM PUBLIC;
 GRANT USAGE ON SCHEMA auth, realtime TO nexora_migrator;
-GRANT EXECUTE ON FUNCTION auth.uid(), realtime.topic() TO nexora_migrator;
+GRANT EXECUTE ON FUNCTION auth.jwt(), auth.uid(), realtime.topic() TO nexora_migrator;
 GRANT USAGE ON SCHEMA auth, realtime TO authenticated;
-GRANT EXECUTE ON FUNCTION auth.uid(), realtime.topic() TO authenticated;
+GRANT EXECUTE ON FUNCTION auth.jwt(), auth.uid(), realtime.topic() TO authenticated;
 GRANT SELECT, INSERT ON realtime.messages TO authenticated;
 '@
 
-    $m3Migration = $migrationFiles | Where-Object Name -EQ 'V014__outbox_events_and_private_realtime_policy.sql'
-    $preM3Migrations = $migrationFiles | Where-Object Name -NE 'V014__outbox_events_and_private_realtime_policy.sql'
-    if (@($m3Migration).Count -ne 1) {
-        throw 'Expected exactly one V014 M3-DB01 migration.'
+    $m3Migrations = @($migrationFiles | Where-Object Name -in @(
+        'V014__outbox_events_and_private_realtime_policy.sql',
+        'V015__scoped_realtime_channel_authorization.sql',
+        'V016__realtime_presence_resource_projection.sql',
+        'V017__realtime_projection_trigger_privileges.sql'
+    ))
+    $preM3Migrations = @($migrationFiles | Where-Object Name -notin @(
+        'V014__outbox_events_and_private_realtime_policy.sql',
+        'V015__scoped_realtime_channel_authorization.sql',
+        'V016__realtime_presence_resource_projection.sql',
+        'V017__realtime_projection_trigger_privileges.sql'
+    ))
+    if ($m3Migrations.Count -ne 4) {
+        throw 'Expected ordered V014 through V017 M3-DB01 migrations.'
     }
 
     foreach ($migration in $preM3Migrations) {
@@ -145,8 +173,10 @@ GRANT SELECT, INSERT ON realtime.messages TO authenticated;
     Write-Output 'Running M2 CMS/immutable-history/RLS fixture'
     Invoke-PsqlText (Get-Content -LiteralPath $cmsFixture -Raw)
 
-    Write-Output "Applying $($m3Migration.Name)"
-    Invoke-PsqlText (Get-Content -LiteralPath $m3Migration.FullName -Raw)
+    foreach ($migration in $m3Migrations) {
+        Write-Output "Applying $($migration.Name)"
+        Invoke-PsqlText (Get-Content -LiteralPath $migration.FullName -Raw)
+    }
     Write-Output 'Running M3 outbox/private-Realtime fixture'
     Invoke-PsqlText (Get-Content -LiteralPath $m3Fixture -Raw)
 
