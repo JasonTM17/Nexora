@@ -198,6 +198,120 @@ test("projects the M2 identity, tenant-selection, authorization mutation, and pr
     ["membershipId", "organizationId", "subjectId", "status", "role", "version"]);
 });
 
+test("projects bounded CMS drafting, workflow, publication, theme, and SEO contracts", () => {
+  const expected = {
+    "/api/v1/cms/pages": ["listCmsPages", "createCmsPage"],
+    "/api/v1/cms/pages/{pageId}": ["getCmsPage", "updateCmsPage", "archiveCmsPage"],
+    "/api/v1/cms/pages/{pageId}/workflow-transitions": ["transitionCmsPageWorkflow"],
+    "/api/v1/cms/pages/{pageId}/publication": ["publishCmsPage"],
+    "/api/v1/cms/themes/{themeVersionId}": ["getCmsThemeVersion"],
+  };
+
+  for (const [path, operationIds] of Object.entries(expected)) {
+    const pathItem = spec.paths[path];
+    assert.ok(pathItem, `${path} must be projected from the CMS authority`);
+    assert.deepEqual(Object.values(pathItem).map((operation) => operation.operationId), operationIds);
+    for (const operation of Object.values(pathItem)) {
+      assert.equal(operation.security, undefined, `${operation.operationId} must inherit bearer protection`);
+      assert.equal(operation.responses["401"]?.$ref, "#/components/responses/AuthenticationRequired");
+      assert.equal(operation.responses["403"]?.$ref, "#/components/responses/PermissionDenied");
+    }
+  }
+
+  const pageId = resolve(spec.components.parameters.PageId);
+  assert.deepEqual(
+    { name: pageId.name, in: pageId.in, required: pageId.required, schema: pageId.schema.$ref },
+    { name: "pageId", in: "path", required: true, schema: "#/components/schemas/PageId" },
+  );
+  const organizationHeader = resolve(spec.components.parameters.RequiredOrganizationHeader);
+  assert.deepEqual(
+    { name: organizationHeader.name, in: organizationHeader.in, required: organizationHeader.required, schema: organizationHeader.schema.$ref },
+    { name: "X-Nexora-Organization-Id", in: "header", required: true, schema: "#/components/schemas/OrganizationId" },
+  );
+
+  const publish = spec.paths["/api/v1/cms/pages/{pageId}/publication"].post;
+  assert.equal(publish.parameters[2].name, "Idempotency-Key");
+  assert.equal(publish.parameters[2].required, true);
+  assert.deepEqual(Object.keys(publish.responses), ["200", "201", "400", "401", "403", "409", "422", "500"]);
+  assert.equal(publish.responses["422"].$ref, "#/components/responses/PublicationValidationFailed");
+  assert.equal(
+    publish.requestBody.content["application/json"].schema.$ref,
+    "#/components/schemas/PublicationRequest",
+  );
+
+  const pageSummary = spec.components.schemas.PageSummary;
+  assert.ok(pageSummary.required.includes("title"));
+  assert.equal(pageSummary.additionalProperties, false);
+  const pageDetail = spec.components.schemas.PageDetail;
+  assert.equal(pageDetail.type, "object");
+  assert.equal(pageDetail.additionalProperties, false);
+  assert.equal(pageDetail.allOf, undefined);
+  for (const required of ["pageId", "siteId", "slug", "title", "state", "draftVersion", "updatedAt", "schemaVersion", "contentDigest", "themeVersionId", "seo"]) {
+    assert.ok(pageDetail.required.includes(required), `PageDetail must accept its ${required} response field`);
+    assert.ok(Object.hasOwn(pageDetail.properties, required), `PageDetail must define its ${required} response field`);
+  }
+  assert.equal(pageDetail.properties.contentDigest.pattern, "^sha256:[a-f0-9]{64}$");
+  assert.equal(Object.hasOwn(pageDetail.properties, "content"), false);
+
+  const listPages = spec.paths["/api/v1/cms/pages"].get;
+  assert.deepEqual(listPages.parameters.slice(1).map((parameter) => ({
+    name: parameter.name,
+    in: parameter.in,
+    required: parameter.required,
+    type: parameter.schema.type,
+  })), [
+    { name: "cursor", in: "query", required: false, type: "string" },
+    { name: "limit", in: "query", required: false, type: "integer" },
+  ]);
+  const generated = renderClient(spec);
+  assert.match(generated, /export type PageListResponse = \{[\s\S]*?"nextCursor": string \| null;/);
+  assert.match(generated, /export interface ListCmsPagesQuery[\s\S]*?"cursor"\?: string;[\s\S]*?"limit"\?: number;/);
+  assert.match(generated, /async listCmsPages\(headers: ListCmsPagesHeaders, query: ListCmsPagesQuery = \{\}/);
+  assert.match(generated, /queryParameters\.set\("cursor", String\(query\["cursor"\]\)\)/);
+  assert.match(generated, /queryParameters\.set\("limit", String\(query\["limit"\]\)\)/);
+
+  const seo = spec.components.schemas.SeoSnapshot;
+  assert.equal(seo.additionalProperties, false);
+  assert.ok(seo.required.includes("canonicalPath"));
+  assert.equal(seo.properties.canonicalPath.pattern, "^/[a-z0-9]+(?:[/-][a-z0-9]+)*$");
+  assert.equal(Object.hasOwn(seo.properties, "html"), false);
+
+  const workflow = spec.components.schemas.WorkflowTransitionRequest;
+  assert.deepEqual(spec.components.schemas.WorkflowAction.enum, ["SUBMIT_FOR_REVIEW", "APPROVE", "REJECT"]);
+  assert.deepEqual(workflow.allOf[0].then.required, ["reason"]);
+  const publication = spec.components.schemas.PublicationRequest;
+  assert.deepEqual(publication.properties.operation.enum, ["PUBLISH", "ROLLBACK"]);
+  assert.deepEqual(publication.allOf[0].then.required, ["rollbackSourceVersionId"]);
+  assert.deepEqual(publication.allOf[0].else, { not: { required: ["rollbackSourceVersionId"] } });
+  assert.deepEqual(spec.components.schemas.ThemeVersion.properties.status.enum, ["DRAFT", "PUBLISHED", "ARCHIVED"]);
+  assert.doesNotMatch(generated, /export type WorkflowTransitionRequest = unknown/);
+  assert.match(generated, /export type WorkflowTransitionRequest = \([\s\S]*?"action": "REJECT"[\s\S]*?"reason": string;[\s\S]*?Exclude<WorkflowAction, "REJECT">/);
+  assert.doesNotMatch(generated, /export type PublicationRequest = unknown/);
+  assert.match(generated, /export type PublicationRequest = \([\s\S]*?"operation": "ROLLBACK"[\s\S]*?"rollbackSourceVersionId": PageVersionId;[\s\S]*?"rollbackSourceVersionId"\?: never;/);
+  assert.match(generated, /export interface ArchiveCmsPageQuery[\s\S]*?"expectedDraftVersion": number;/);
+  assert.match(generated, /async archiveCmsPage\(path: ArchiveCmsPagePath, headers: ArchiveCmsPageHeaders, query: ArchiveCmsPageQuery/);
+});
+
+test("keeps publication request variants mutually exclusive in the source schema", () => {
+  const schema = spec.components.schemas.PublicationRequest;
+  const [conditional] = schema.allOf;
+  const allowedProperties = new Set(Object.keys(schema.properties));
+  const required = new Set(schema.required);
+  const validates = (candidate) => {
+    if (Object.keys(candidate).some((key) => !allowedProperties.has(key))) return false;
+    if (![...required].every((key) => Object.hasOwn(candidate, key))) return false;
+    if (!schema.properties.operation.enum.includes(candidate.operation)) return false;
+    const rollback = candidate.operation === conditional.if.properties.operation.const;
+    if (rollback) return conditional.then.required.every((key) => Object.hasOwn(candidate, key));
+    return !(conditional.else.not.required ?? []).some((key) => Object.hasOwn(candidate, key));
+  };
+
+  assert.equal(validates({ operation: "PUBLISH", expectedDraftVersion: 3 }), true);
+  assert.equal(validates({ operation: "ROLLBACK", expectedDraftVersion: 3, rollbackSourceVersionId: "60000000-0000-4000-8000-000000000001" }), true);
+  assert.equal(validates({ operation: "PUBLISH", expectedDraftVersion: 3, rollbackSourceVersionId: "60000000-0000-4000-8000-000000000001" }), false);
+  assert.equal(validates({ operation: "ROLLBACK", expectedDraftVersion: 3 }), false);
+});
+
 test("generates bearer handling when an operation inherits the protected default", () => {
   const protectedSpec = structuredClone(spec);
   const operation = protectedSpec.paths["/api/v1/platform"].get;

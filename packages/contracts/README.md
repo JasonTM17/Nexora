@@ -25,6 +25,17 @@ authority from current tenant state. Role/status input never grants authority,
 and the client exposes no arbitrary-header input. Profile updates also carry
 `expectedVersion` for optimistic conflict handling; profile fields never
 authorize tenant access.
+
+The protected CMS projection freezes page drafting, immutable-version publication
+or rollback receipts, workflow transitions, typed theme snapshots, and typed SEO
+metadata. Every CMS request carries the reviewed organization-selection header;
+the server must still derive fresh acting authority. Publication additionally
+requires a bounded `Idempotency-Key`: identical same-scope retries reuse the
+receipt, while a changed request fingerprint under the same key fails. Content
+is represented only by a schema version and digest—never arbitrary executable
+markup, provider data, or a client-provided audit record. These are contract
+shapes only; CMS persistence, rendering, workflow execution, and public delivery
+remain downstream implementation and evidence work.
 Safe problem codes may use the established lowercase validation form or the
 uppercase identity/domain form, while the envelope and detail-value guards stay
 unchanged.
