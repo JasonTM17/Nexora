@@ -1,0 +1,50 @@
+{
+  "task": "M1-D01C",
+  "direction": "Warm Intelligence",
+  "artifact_status": "planned concept evidence only",
+  "start_revision": "2df7203aa3711ff0813044f18efaf5906ccac85b",
+  "stitch": {
+    "project_id": "3311987604123916756",
+    "project_title": "Nexora M1 D01B Luminous Grid planned direction",
+    "project_visibility": "PRIVATE",
+    "project_use_note": "The create-project endpoint rejected four valid creation payloads. One existing private Nexora Stitch project was therefore used as the bounded generation container; its title is not re-attributed as M1-D01C ownership.",
+    "project_type": "PROJECT_DESIGN",
+    "design_system_asset": "assets/352aabff49234bf0863ea60593d188c0",
+    "screen_id": "938ac00b782a4bf59412c4f8ca82b038",
+    "screen_title": "Nexora Warm Intelligence - Landing Page",
+    "generation_session_id": "3128080782513127868",
+    "device_type": "DESKTOP",
+    "model": "GEMINI_3_PRO",
+    "operations_used": 1,
+    "screenshot_resource": "projects/3311987604123916756/files/288b97ced75e4d68971b6d27e1fd8561",
+    "html_resource": "projects/3311987604123916756/files/410b31912b6240b9a3bf1a45f40dbc22"
+  },
+  "screen_metadata": {
+    "dimensions_px": "2560x4720",
+    "html_export": "downloaded from the Stitch screen resource",
+    "screen_capture": "downloaded from the Stitch screen resource",
+    "mobile_rendered": false,
+    "mobile_note": "The 375px collapse is specified in the prompt and described by Stitch feedback; it was not generated or rendered."
+  },
+  "local_capture": {
+    "file": "assets/designs/warm-intelligence/public-home-concept.png",
+    "dimensions_px": "278x512",
+    "sha256": "0B42D2991400C8025159D0C5529DF0D460F653EDCB4923676FCE3D2176CF2F0E"
+  },
+  "capture_boundary": {
+    "html_file": ".stitch/directions/warm-intelligence/public-home-concept.html",
+    "html_sha256": "D55E24F9848ED7A01A102A775B2435478644B14BB872CCE99D0E946EB71BCCE6",
+    "observed": "The returned HTML export references Google-hosted fonts and cdn.tailwindcss.com and includes an inline Tailwind configuration script. One whitespace-only line was normalized for the repository diff check; it is otherwise retained only as quarantined design evidence, not product source or a canonical design system.",
+    "generated_claim_limitation": "The export contains the unverified phrase Tenant Isolation Verified. This packet does not adopt it as a live or operational claim; all design evidence remains planned/concept/not-live only.",
+    "missing_exports": [],
+    "handling": "No product code, provider configuration, canonical .stitch/DESIGN.md, live-data representation, deployment artifact, or release claim was created."
+  },
+  "generated_feedback": {
+    "description": "A high-fidelity desktop planned landing-page concept with a calm editorial reading experience, paper-and-stone palette, layered knowledge folio, and visible planned/fixture/not-live labels.",
+    "suggestions_not_run": [
+      "Create the 375px mobile version",
+      "Design the Studio workspace concept",
+      "Adjust the typography for more contrast"
+    ]
+  }
+}

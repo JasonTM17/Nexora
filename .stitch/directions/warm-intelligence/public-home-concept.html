@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Nexora Warm Intelligence</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;family=Playfair+Display:wght@600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-low": "#f8f3ea",
+                        "surface-dim": "#ded9d1",
+                        "tertiary-fixed": "#e1e3dc",
+                        "inverse-primary": "#a9cfbd",
+                        "outline": "#717974",
+                        "on-primary-fixed-variant": "#2a4d40",
+                        "on-tertiary-container": "#acaea7",
+                        "secondary-container": "#ff9476",
+                        "surface-container-highest": "#e7e2d9",
+                        "tertiary-container": "#3f423d",
+                        "tertiary-fixed-dim": "#c5c7c0",
+                        "on-surface": "#1d1c16",
+                        "primary-fixed": "#c4ebd9",
+                        "on-primary-container": "#90b6a5",
+                        "on-secondary": "#ffffff",
+                        "background": "#fef9f0",
+                        "on-secondary-fixed-variant": "#7b2e18",
+                        "secondary": "#9a452d",
+                        "on-primary-fixed": "#002117",
+                        "secondary-fixed-dim": "#ffb5a0",
+                        "error-container": "#ffdad6",
+                        "on-background": "#1d1c16",
+                        "on-primary": "#ffffff",
+                        "surface-container": "#f2ede4",
+                        "surface-variant": "#e7e2d9",
+                        "surface-bright": "#fef9f0",
+                        "secondary-fixed": "#ffdbd1",
+                        "primary": "#0d3126",
+                        "primary-fixed-dim": "#a9cfbd",
+                        "error": "#ba1a1a",
+                        "inverse-surface": "#32302b",
+                        "surface-container-lowest": "#ffffff",
+                        "outline-variant": "#c1c8c3",
+                        "on-secondary-fixed": "#3b0900",
+                        "on-error-container": "#93000a",
+                        "inverse-on-surface": "#f5f0e7",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-fixed": "#191c18",
+                        "tertiary": "#292c27",
+                        "on-error": "#ffffff",
+                        "surface-tint": "#426557",
+                        "surface-container-high": "#ece8df",
+                        "on-secondary-container": "#772b15",
+                        "primary-container": "#25483b",
+                        "on-tertiary-fixed-variant": "#454842",
+                        "surface": "#fef9f0",
+                        "on-surface-variant": "#414844",
+                        // Literal translations from prompt instructions missing from config
+                        "brand-canvas": "#F6F1E8",
+                        "brand-stone": "#E8E0D4",
+                        "brand-ink": "#2D302B",
+                        "brand-forest": "#25483B",
+                        "brand-sand": "#D8CBBB",
+                        "brand-terracotta": "#B85C42"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px",
+                        "card": "14px"
+                    },
+                    "spacing": {
+                        "stack-lg": "48px",
+                        "margin-mobile": "16px",
+                        "container-padding": "32px",
+                        "stack-sm": "12px",
+                        "unit": "8px",
+                        "stack-md": "24px",
+                        "gutter": "24px"
+                    },
+                    "fontFamily": {
+                        "display-md": ["Playfair Display"],
+                        "headline-lg-mobile": ["Playfair Display"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "display-lg": ["Playfair Display"],
+                        "headline-lg": ["Playfair Display"]
+                    },
+                    "fontSize": {
+                        "display-md": ["36px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "1.3", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "label-caps": ["12px", { "lineHeight": "1.0", "letterSpacing": "0.08em", "fontWeight": "600" }],
+                        "body-sm": ["14px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "display-lg": ["48px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-lg": ["28px", { "lineHeight": "1.3", "fontWeight": "600" }]
+                    },
+                    "boxShadow": {
+                        "ambient": "0 4px 12px rgba(45, 48, 43, 0.04)"
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #F6F1E8; /* brand-canvas */
+            color: #2D302B; /* brand-ink */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Subtle layer animations for the hero graphic */
+        @keyframes floatLayer {
+            0% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-4px) rotate(0.5deg); }
+            100% { transform: translateY(0px) rotate(0deg); }
+        }
+        .layer-anim-1 { animation: floatLayer 6s ease-in-out infinite; }
+        .layer-anim-2 { animation: floatLayer 8s ease-in-out infinite 1s; }
+        .layer-anim-3 { animation: floatLayer 7s ease-in-out infinite 2s; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-body-md text-brand-ink selection:bg-brand-sand selection:text-brand-ink">
+<!-- TopNavBar -->
+<nav class="bg-brand-canvas full-width top-0 border-b border-brand-sand flex justify-between items-center w-full px-margin-mobile md:px-container-padding max-w-[1200px] mx-auto h-20 sticky z-50">
+<div class="font-display-md text-display-md font-bold text-brand-ink tracking-tight">Nexora</div>
+<div class="hidden md:flex gap-gutter items-center">
+<!-- Public is active -->
+<a class="text-brand-ink font-bold border-b-2 border-brand-forest pb-1 font-body-sm text-body-sm transition-opacity hover:opacity-80" href="#">Public</a>
+<a class="text-brand-ink/70 hover:text-brand-ink transition-colors font-body-sm text-body-sm" href="#">Studio</a>
+<a class="text-brand-ink/70 hover:text-brand-ink transition-colors font-body-sm text-body-sm" href="#">Documentation</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="font-body-sm text-body-sm text-brand-ink/70 hover:text-brand-ink transition-colors">Sign in</button>
+<button class="font-body-sm text-body-sm bg-brand-forest text-brand-canvas px-4 py-2 rounded-card hover:bg-brand-forest/90 transition-colors">Explore planned patterns</button>
+</div>
+</nav>
+<!-- Main Content -->
+<main class="flex-grow max-w-[1200px] mx-auto w-full px-margin-mobile md:px-container-padding">
+<!-- Hero Section -->
+<section class="py-stack-lg md:py-[96px] grid md:grid-cols-12 gap-gutter items-center min-h-[819px]">
+<!-- Hero Text -->
+<div class="md:col-span-6 flex flex-col gap-stack-md z-10">
+<div class="inline-flex items-center gap-2 bg-brand-stone border border-brand-sand rounded-[8px] px-3 py-1 w-fit">
+<span class="material-symbols-outlined text-[16px] text-brand-terracotta" style="font-variation-settings: 'FILL' 1;">eco</span>
+<span class="font-label-caps text-label-caps text-brand-ink uppercase tracking-wider">PLANNED CONCEPT</span>
+</div>
+<h1 class="font-display-lg text-display-lg text-brand-ink leading-tight max-w-[90%]">
+                    Give every idea a kinder place to become clear.
+                </h1>
+<p class="font-body-lg text-body-lg text-brand-ink/80 max-w-lg leading-relaxed">
+                    Deploy a planned home for source-aware publishing. Nexora helps you nurture concepts with clear provenance and strict tenant boundaries, ensuring every thought remains connected to its human origin.
+                </p>
+<div class="flex flex-col sm:flex-row gap-4 pt-stack-sm">
+<button class="bg-brand-forest text-brand-canvas font-body-sm text-body-sm px-6 py-3 rounded-card hover:bg-brand-forest/90 transition-all focus:ring-2 focus:ring-brand-forest focus:ring-offset-2 focus:ring-offset-brand-canvas">
+                        Read the planned approach
+                    </button>
+<button class="border border-brand-sand text-brand-ink font-body-sm text-body-sm px-6 py-3 rounded-card hover:bg-brand-stone transition-all">
+                        How tenant boundaries work
+                    </button>
+</div>
+</div>
+<!-- Hero Graphic (Knowledge Folio) -->
+<div class="md:col-span-6 relative h-[500px] flex items-center justify-center">
+<div class="relative w-full max-w-[400px] h-full flex items-center justify-center">
+<!-- Layer 3 (Bottom) -->
+<div class="absolute w-[85%] h-[320px] bg-brand-stone border border-brand-sand rounded-card shadow-ambient p-stack-md transform rotate-[-6deg] translate-x-[-20px] translate-y-[20px] layer-anim-3 opacity-60">
+<div class="flex justify-between items-start border-b border-brand-sand pb-2 mb-4">
+<span class="font-label-caps text-label-caps text-brand-ink/60 uppercase">Tenant Boundary Alpha</span>
+<span class="material-symbols-outlined text-brand-ink/40">lock</span>
+</div>
+<div class="space-y-4">
+<div class="h-2 w-3/4 bg-brand-sand/50 rounded-full"></div>
+<div class="h-2 w-1/2 bg-brand-sand/50 rounded-full"></div>
+<div class="h-2 w-full bg-brand-sand/50 rounded-full"></div>
+</div>
+</div>
+<!-- Layer 2 (Middle) -->
+<div class="absolute w-[90%] h-[340px] bg-[#EFE9DF] border border-brand-sand rounded-card shadow-ambient p-stack-md transform rotate-[-2deg] translate-x-[10px] translate-y-[10px] layer-anim-2 opacity-90">
+<div class="flex justify-between items-start border-b border-brand-sand pb-2 mb-4">
+<span class="font-label-caps text-label-caps text-brand-ink/70 uppercase">Version 1.0</span>
+<span class="material-symbols-outlined text-brand-ink/50">history</span>
+</div>
+<div class="space-y-4">
+<div class="h-3 w-5/6 bg-brand-sand/70 rounded-full"></div>
+<div class="h-2 w-full bg-brand-sand/50 rounded-full"></div>
+<div class="h-2 w-2/3 bg-brand-sand/50 rounded-full"></div>
+<div class="h-2 w-4/5 bg-brand-sand/50 rounded-full"></div>
+</div>
+</div>
+<!-- Layer 1 (Top) -->
+<div class="absolute w-full h-[360px] bg-brand-canvas border border-brand-sand rounded-card shadow-ambient p-stack-md transform rotate-[2deg] layer-anim-1 z-10 flex flex-col">
+<div class="flex justify-between items-center border-b border-brand-sand pb-stack-sm mb-stack-sm">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-brand-forest">description</span>
+<h3 class="font-body-md font-bold text-brand-ink">Source Note A</h3>
+</div>
+<div class="bg-brand-stone px-2 py-1 rounded-[4px] border border-brand-sand">
+<span class="font-label-caps text-[10px] text-brand-ink/60">FIXTURE — NOT LIVE</span>
+</div>
+</div>
+<div class="flex-grow space-y-4 mt-2">
+<h4 class="font-display-md text-[20px] leading-tight text-brand-ink">The architecture of empathy in systemic design</h4>
+<p class="font-body-sm text-body-sm text-brand-ink/70 leading-relaxed">
+                                To build systems that do not exhaust their inhabitants, we must construct boundaries that feel like walls of paper, not concrete. They should breathe.
+                            </p>
+</div>
+<div class="mt-auto pt-stack-sm border-t border-brand-sand/50 flex justify-between items-center text-brand-ink/50">
+<span class="font-label-caps text-[10px]">PROVENANCE: HUMAN</span>
+<span class="material-symbols-outlined text-[16px]">verified_user</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Spacer Divider -->
+<div class="w-full h-px bg-brand-sand/50 my-stack-lg"></div>
+<!-- Guidance Section -->
+<section class="py-stack-lg flex flex-col gap-stack-lg">
+<div class="text-center max-w-2xl mx-auto flex flex-col items-center gap-4">
+<h2 class="font-display-lg text-headline-lg text-brand-ink">The Empathetic Path</h2>
+<p class="font-body-md text-brand-ink/70">A methodology for nurturing concepts before they are exposed to the urgency of production.</p>
+</div>
+<div class="grid md:grid-cols-3 gap-gutter">
+<!-- Step 1 -->
+<div class="bg-brand-stone border border-brand-sand rounded-card p-stack-md flex flex-col gap-4 shadow-ambient group hover:shadow-md transition-shadow">
+<div class="w-10 h-10 rounded-full border border-brand-sand bg-brand-canvas flex items-center justify-center text-brand-forest mb-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">edit_document</span>
+</div>
+<div class="flex items-center gap-2">
+<h3 class="font-display-md text-[20px] font-bold text-brand-ink">Bring the note</h3>
+</div>
+<p class="font-body-sm text-brand-ink/80 leading-relaxed">
+                        Begin with the raw intent. Draft initial thoughts in a quiet, unobserved space designed for reflection rather than immediate collaboration.
+                    </p>
+<div class="mt-auto pt-4 flex gap-2">
+<span class="inline-block bg-brand-canvas border border-brand-sand px-2 py-1 rounded-[4px] font-label-caps text-[10px] text-brand-ink/60">PLANNED CONCEPT</span>
+</div>
+</div>
+<!-- Step 2 -->
+<div class="bg-brand-stone border border-brand-sand rounded-card p-stack-md flex flex-col gap-4 shadow-ambient group hover:shadow-md transition-shadow">
+<div class="w-10 h-10 rounded-full border border-brand-sand bg-brand-canvas flex items-center justify-center text-brand-forest mb-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">account_tree</span>
+</div>
+<div class="flex items-center gap-2">
+<h3 class="font-display-md text-[20px] font-bold text-brand-ink">Keep its context</h3>
+</div>
+<p class="font-body-sm text-brand-ink/80 leading-relaxed">
+                        Surround ideas with their history. Every modification is logged not just as a change, but as an evolution of human intent, maintaining provenance.
+                    </p>
+<div class="mt-auto pt-4 flex gap-2">
+<span class="inline-block bg-brand-canvas border border-brand-sand px-2 py-1 rounded-[4px] font-label-caps text-[10px] text-brand-ink/60">NOT LIVE</span>
+</div>
+</div>
+<!-- Step 3 -->
+<div class="bg-brand-stone border border-brand-sand rounded-card p-stack-md flex flex-col gap-4 shadow-ambient group hover:shadow-md transition-shadow">
+<div class="w-10 h-10 rounded-full border border-brand-sand bg-brand-canvas flex items-center justify-center text-brand-forest mb-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">handshake</span>
+</div>
+<div class="flex items-center gap-2">
+<h3 class="font-display-md text-[20px] font-bold text-brand-ink">Share with care</h3>
+</div>
+<p class="font-body-sm text-brand-ink/80 leading-relaxed">
+                        Distribute across boundaries with trust. When a concept matures, it crosses tenant boundaries securely, retaining its identity and context intact.
+                    </p>
+<div class="mt-auto pt-4 flex gap-2">
+<span class="inline-block bg-brand-canvas border border-brand-sand px-2 py-1 rounded-[4px] font-label-caps text-[10px] text-brand-ink/60">PLANNED CONCEPT</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Spacer Divider -->
+<div class="w-full h-px bg-brand-sand/50 my-stack-lg"></div>
+<!-- Trust Panel -->
+<section class="py-stack-lg mb-stack-lg">
+<div class="bg-brand-stone border border-brand-sand rounded-card p-stack-lg md:p-[64px] shadow-ambient relative overflow-hidden">
+<!-- Decorative subtle texture/shape in background -->
+<div class="absolute right-0 top-0 w-64 h-64 bg-brand-sand/20 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
+<div class="relative z-10 grid md:grid-cols-2 gap-stack-lg items-center">
+<div class="flex flex-col gap-4">
+<div class="flex gap-2 mb-2 flex-wrap">
+<span class="inline-block bg-brand-canvas border border-brand-sand px-2 py-1 rounded-[4px] font-label-caps text-[10px] text-brand-ink/60">CONCEPT ONLY</span>
+<span class="inline-block bg-brand-canvas border border-brand-sand px-2 py-1 rounded-[4px] font-label-caps text-[10px] text-brand-ink/60">NO CONNECTED SOURCES</span>
+<span class="inline-block bg-brand-terracotta/20 border border-brand-terracotta/30 px-2 py-1 rounded-[4px] font-label-caps text-[10px] text-brand-terracotta">NOT LIVE</span>
+</div>
+<h2 class="font-display-lg text-headline-lg text-brand-ink leading-tight">Context stays with its people.</h2>
+<p class="font-body-md text-brand-ink/80 leading-relaxed">
+                            True intellectual safety requires structural guarantees. Nexora is designing planned tenant-separated workspaces that ensure source provenance and mandatory human review. We believe software should hold boundaries, so human minds don't have to.
+                        </p>
+</div>
+<div class="bg-brand-canvas border border-brand-sand rounded-[8px] p-stack-md flex flex-col gap-3">
+<div class="flex justify-between items-center border-b border-brand-sand pb-2">
+<span class="font-body-sm font-bold text-brand-ink">Provenance Audit</span>
+<span class="material-symbols-outlined text-brand-ink/50 text-[18px]">policy</span>
+</div>
+<div class="flex items-start gap-3 py-2 border-b border-brand-sand/50">
+<span class="material-symbols-outlined text-brand-forest mt-0.5" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<div>
+<p class="font-body-sm font-bold text-brand-ink">Tenant Isolation Verified</p>
+<p class="font-body-sm text-[12px] text-brand-ink/60">Data remains within designated organizational boundaries.</p>
+</div>
+</div>
+<div class="flex items-start gap-3 py-2 border-b border-brand-sand/50">
+<span class="material-symbols-outlined text-brand-forest mt-0.5" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<div>
+<p class="font-body-sm font-bold text-brand-ink">Human Origin Traced</p>
+<p class="font-body-sm text-[12px] text-brand-ink/60">All concepts map back to initial human-authored inputs.</p>
+</div>
+</div>
+<div class="flex items-start gap-3 py-2">
+<span class="material-symbols-outlined text-brand-sand mt-0.5">pending</span>
+<div>
+<p class="font-body-sm font-bold text-brand-ink/60">External Distribution</p>
+<p class="font-body-sm text-[12px] text-brand-ink/40">Awaiting explicit manual approval to cross boundary.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-brand-stone full-width border-t border-brand-sand flex flex-col md:flex-row justify-between items-center w-full py-stack-lg px-margin-mobile md:px-container-padding max-w-[1200px] mx-auto mt-auto">
+<div class="font-display-md text-[24px] text-brand-forest mb-4 md:mb-0">Nexora</div>
+<div class="flex flex-wrap justify-center gap-gutter mb-4 md:mb-0">
+<a class="font-body-sm text-body-sm text-brand-ink/70 hover:text-brand-ink transition-colors focus:ring-2 focus:ring-brand-forest rounded-sm px-1" href="#">Accessibility</a>
+<a class="font-body-sm text-body-sm text-brand-ink/70 hover:text-brand-ink transition-colors focus:ring-2 focus:ring-brand-forest rounded-sm px-1" href="#">Privacy Policy</a>
+<a class="font-body-sm text-body-sm text-brand-ink/70 hover:text-brand-ink transition-colors focus:ring-2 focus:ring-brand-forest rounded-sm px-1" href="#">Terms</a>
+<a class="font-body-sm text-body-sm text-brand-ink/70 hover:text-brand-ink transition-colors focus:ring-2 focus:ring-brand-forest rounded-sm px-1" href="#">Contact</a>
+</div>
+<div class="font-body-sm text-[12px] text-brand-ink/60">
+            © Nexora. Concept only. Planned-status notice.
+        </div>
+</footer>
+</body></html>
