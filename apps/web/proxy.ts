@@ -34,5 +34,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/studio/:path*", "/ai/:path*", "/builder/:path*"],
+  matcher: ["/studio/:path*", "/ai/:path*", "/builder/:path*", "/account/:path*", "/auth/callback", "/api/bff/:path*"],
 };
