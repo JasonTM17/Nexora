@@ -60,6 +60,13 @@ dead-letter lifecycle with explicit lease and retry semantics. This contract is
 a vocabulary only; M3-DB01 owns the migration DDL and M3-T02/T03/T04/T05 own
 the runtime implementations and consumers.
 
+The companion [Realtime channel contract](./realtime/v1/channel-contract.json)
+freezes the private-only, server-issued subscription descriptors consumed by
+M3-T03. Its `tenant`/`resource` wire topics are the integrated M3 event-routing
+matrix; legacy `org/page/job` shapes are logical server references, never
+browser-constructed Realtime topics. It also specifies bounded reconnect,
+token/membership invalidation, durable refetch and minimal presence behavior.
+
 Problem `details` are limited to short printable validation messages or codes.
 Detail keys are normalized from camelCase and `.`, `_`, `-` separators into
 lowercase segments. The generated client rejects the entire problem envelope

@@ -1,0 +1,116 @@
+{
+  "contractVersion": "1.0.0",
+  "task": "M3-T01",
+  "status": "frozen-channel-contract-amendment",
+  "authority": {
+    "eventContract": "../../domain/v1/event-contract.json",
+    "wireTopicDecision": "The M3-T01 tenant/resource event-routing matrix is canonical for Realtime wire topics. Legacy org/page/job forms are server-side logical references, never browser-constructed Realtime topics.",
+    "authorization": "A subscription descriptor is issued only by an authenticated server after it rechecks the current ACTIVE membership and any resource ownership. A topic string is never authority.",
+    "durableTruth": "Realtime is advisory delivery only. PostgreSQL-backed authorized reads are the durable source of truth."
+  },
+  "privateChannel": {
+    "required": true,
+    "clientConfig": { "private": true },
+    "publicChannelAllowed": false,
+    "descriptor": {
+      "issuer": "same-origin server boundary",
+      "browserInputsAllowed": [],
+      "requiredFields": ["topic", "eventType", "eventVersion", "authorizationEpoch"],
+      "rules": [
+        "The browser receives a descriptor after authorization; it must not concatenate tenant, resource, page, job or subject identifiers into a topic.",
+        "A descriptor becomes unusable after its authorizationEpoch changes, the membership is no longer ACTIVE, or the session cannot be refreshed."
+      ]
+    }
+  },
+  "wireTopics": {
+    "pattern": "scope:tenant-or-resource-id:purpose",
+    "activeScopes": ["tenant", "resource"],
+    "logicalReferenceExamples": [
+      "org:{orgId}:page:{pageId}",
+      "org:{orgId}:job:{jobId}"
+    ],
+    "rules": [
+      "Logical references may be used by server routing code only; they are not Realtime topics.",
+      "The M3-T01 event-contract job namespace has no active Realtime route in v0.1 and must not be subscribed to by a browser."
+    ]
+  },
+  "channels": [
+    {
+      "eventType": "PUBLICATION_INVALIDATED",
+      "topicTemplate": "tenant:{organizationId}:publication",
+      "delivery": "broadcast",
+      "direction": "server-to-client",
+      "owner": "current ACTIVE membership for organizationId",
+      "onEvent": "refetch authorized durable publication/page state"
+    },
+    {
+      "eventType": "WORKFLOW_TRANSITIONED",
+      "topicTemplate": "tenant:{organizationId}:workflow",
+      "delivery": "broadcast",
+      "direction": "server-to-client",
+      "owner": "current ACTIVE membership for organizationId",
+      "onEvent": "refetch authorized durable workflow/page state"
+    },
+    {
+      "eventType": "JOB_PROGRESS_CHANGED",
+      "topicTemplate": "resource:{resourceId}:job-progress",
+      "delivery": "broadcast",
+      "direction": "server-to-client",
+      "owner": "current ACTIVE membership for the resource owner",
+      "onEvent": "refetch authorized durable job state"
+    },
+    {
+      "eventType": "PRESENCE_CHANGED",
+      "topicTemplate": "resource:{resourceId}:presence",
+      "delivery": "presence",
+      "direction": "client-presence and server-to-client",
+      "owner": "current ACTIVE membership for the resource owner",
+      "presencePayload": {
+        "allowedFields": ["state"],
+        "stateValues": ["viewing", "editing"],
+        "forbiddenFields": ["cursor", "keystroke", "body", "content", "token", "secret", "email", "phone"]
+      },
+      "onEvent": "render ephemeral collaborator state only; never derive durable content or correctness"
+    }
+  ],
+  "excludedEventTypes": [
+    {
+      "eventType": "NOTIFICATION_ENQUEUED",
+      "reason": "Notification delivery is owned by the later M5 notification task."
+    },
+    {
+      "eventType": "OUTBOX_RECORDED",
+      "reason": "Outbox state is internal durable-worker evidence, not a browser subscription."
+    }
+  ],
+  "lifecycle": {
+    "onSubscribe": "Immediately refetch the authorized durable projection; a successful join never proves the projection is current.",
+    "onDuplicateOrOutOfOrder": "Coalesce to one authorized durable refetch. Do not mutate browser truth from advisory event ordering.",
+    "reconnectBackoffMs": [1000, 2000, 5000, 10000],
+    "maximumAutomaticReconnectAttempts": 4,
+    "afterReconnectExhausted": "Enter DEGRADED_REFETCH_REQUIRED and stop automatic retries until a new server-issued descriptor is obtained.",
+    "onTokenRefresh": "Refresh the private-channel token before rejoin. On refresh failure, close the channel and enter AUTH_REFRESH_REQUIRED.",
+    "onMembershipRemovalOrExpiry": "Close the channel, discard the descriptor, refetch only through the same-origin authorization boundary, and do not retry with the stale descriptor.",
+    "onTransportOutage": "Expose delivery degradation and preserve durable state; recovery starts with a fresh authorized refetch."
+  },
+  "safety": {
+    "safePayloadSource": "The M3-T01 event envelope safePayload allowlist remains authoritative for broadcasts.",
+    "rateControl": "Presence updates represent slow state changes only. Cursor and per-keystroke updates are forbidden.",
+    "prohibitions": [
+      "No public channel.",
+      "No implicit Data API authority.",
+      "No browser-originated broadcast for publication, workflow, job progress or outbox state.",
+      "No Realtime-only business state."
+    ]
+  },
+  "errors": [
+    "REALTIME_DESCRIPTOR_DENIED",
+    "REALTIME_AUTH_REFRESH_REQUIRED",
+    "REALTIME_DEGRADED_REFETCH_REQUIRED",
+    "REALTIME_STALE_DESCRIPTOR"
+  ],
+  "limitations": [
+    "This contract defines no migration, provider configuration, hosted Supabase project, browser hook, server adapter or live Realtime evidence.",
+    "M3-DB01 alone owns realtime.messages policy DDL; M3-T03 only consumes that policy through adapters and conformance tests."
+  ]
+}
