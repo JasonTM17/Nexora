@@ -13,9 +13,7 @@ spring:
     user: ${NEXORA_MIGRATION_DATABASE_USERNAME}
     password: ${NEXORA_MIGRATION_DATABASE_PASSWORD}
     locations: filesystem:${NEXORA_MIGRATIONS_LOCATION}
-    # The migration authority directory also contains a fixture-only SQL file;
-    # Flyway applies only its ordered VNNN__description.sql migrations.
-    validate-migration-naming: false
+    validate-migration-naming: true
     clean-disabled: true
 
 management:

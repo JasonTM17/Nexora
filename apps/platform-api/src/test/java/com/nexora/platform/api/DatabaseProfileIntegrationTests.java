@@ -6,11 +6,14 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.Comparator;
+import java.util.stream.Stream;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -32,6 +35,7 @@ class DatabaseProfileIntegrationTests {
             .withUsername("postgres")
             .withPassword("postgres")
             .withInitScript("runtime-login.sql");
+    private static Path testMigrationDirectory;
 
     @LocalServerPort
     private int port;
@@ -43,14 +47,25 @@ class DatabaseProfileIntegrationTests {
     static void databaseProperties(DynamicPropertyRegistry registry) {
         DATABASE.start();
         prepareRuntimeLogin();
+        prepareOrderedMigrationDirectory();
         registry.add("NEXORA_RUNTIME_DATABASE_URL", DATABASE::getJdbcUrl);
         registry.add("NEXORA_RUNTIME_DATABASE_USERNAME", () -> RUNTIME_LOGIN);
         registry.add("NEXORA_RUNTIME_DATABASE_PASSWORD", () -> RUNTIME_PASSWORD);
         registry.add("NEXORA_MIGRATION_DATABASE_URL", DATABASE::getJdbcUrl);
         registry.add("NEXORA_MIGRATION_DATABASE_USERNAME", DATABASE::getUsername);
         registry.add("NEXORA_MIGRATION_DATABASE_PASSWORD", DATABASE::getPassword);
-        registry.add("NEXORA_MIGRATIONS_LOCATION", () -> Path.of("..", "..", "database", "migrations")
-                .toAbsolutePath().normalize().toString());
+        registry.add("NEXORA_MIGRATIONS_LOCATION", () -> testMigrationDirectory.toString());
+    }
+
+    private static void prepareOrderedMigrationDirectory() {
+        Path sourceMigration = Path.of("..", "..", "database", "migrations",
+                "V001__application_schema_security_baseline.sql").toAbsolutePath().normalize();
+        try {
+            testMigrationDirectory = Files.createTempDirectory("nexora-flyway-");
+            Files.copy(sourceMigration, testMigrationDirectory.resolve(sourceMigration.getFileName()));
+        } catch (Exception exception) {
+            throw new IllegalStateException("Unable to prepare the ordered disposable migration directory", exception);
+        }
     }
 
     private static void prepareRuntimeLogin() {
@@ -70,6 +85,19 @@ class DatabaseProfileIntegrationTests {
     @AfterAll
     static void stopDatabase() {
         DATABASE.stop();
+        if (testMigrationDirectory != null) {
+            try (Stream<Path> paths = Files.walk(testMigrationDirectory)) {
+                paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+                    try {
+                        Files.deleteIfExists(path);
+                    } catch (Exception exception) {
+                        throw new IllegalStateException("Unable to remove disposable migration directory", exception);
+                    }
+                });
+            } catch (Exception exception) {
+                throw new IllegalStateException("Unable to remove disposable migration directory", exception);
+            }
+        }
     }
 
     @Test

@@ -48,9 +48,14 @@ $env:NEXORA_RUNTIME_DATABASE_PASSWORD = '<runtime LOGIN credential>'
 $env:NEXORA_MIGRATION_DATABASE_URL = $env:NEXORA_RUNTIME_DATABASE_URL
 $env:NEXORA_MIGRATION_DATABASE_USERNAME = '<approved migrator login>'
 $env:NEXORA_MIGRATION_DATABASE_PASSWORD = '<migrator credential>'
-$env:NEXORA_MIGRATIONS_LOCATION = 'C:/absolute/path/to/Nexora/database/migrations'
+$env:NEXORA_MIGRATIONS_LOCATION = 'C:/absolute/path/to/ordered-flyway-migrations'
 mvn spring-boot:run
 ```
+
+`NEXORA_MIGRATIONS_LOCATION` must contain only ordered
+`VNNN__description.sql` migration files. The repository's disposable
+verification fixture is intentionally outside that runtime scan path; the
+application keeps Flyway filename validation enabled.
 
 In this profile, readiness includes the database check. The integration test
 uses a disposable local PostgreSQL container to prove this configuration only;
