@@ -337,6 +337,18 @@ class IdentityTenancyIntegrationTests {
     }
 
     @Test
+    void lastDesignatedOwnerCannotBeDemotedOrSuspended() throws Exception {
+        OrganizationFixture tenant = seedOrganization(UUID.randomUUID());
+
+        assertThatThrownBy(() -> membershipManagement.assignRole(
+                tenant.ownerContext(), tenant.ownerMembershipId(), 1, "ADMIN"))
+                .isInstanceOf(DomainAccessException.class)
+                .extracting(exception -> ((DomainAccessException) exception).code())
+                .isEqualTo("REJECT_LAST_OWNER_INVARIANT");
+        assertPooledSettingsAreEmpty();
+    }
+
+    @Test
     void membershipMutationHttpBoundaryReturnsAControlledPermissionEnvelope() throws Exception {
         UUID ownerSubject = UUID.randomUUID();
         OrganizationFixture tenant = seedOrganization(ownerSubject);

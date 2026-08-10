@@ -25,12 +25,16 @@ public class MembershipManagementService {
 
     public MembershipView assignRole(
             TenantContext actor, UUID targetMembershipId, long expectedVersion, String targetRole) {
-        return tenantContexts.withFreshTenantTarget(
-                actor, targetMembershipId, expectedVersion, true,
-                (authoritative, jdbc) -> {
-                    permissions.requireAssignment(jdbc, authoritative, targetRole);
-                    return updateRole(jdbc, targetMembershipId, expectedVersion, targetRole);
-                });
+        try {
+            return tenantContexts.withFreshTenantTarget(
+                    actor, targetMembershipId, expectedVersion, true,
+                    (authoritative, jdbc) -> {
+                        permissions.requireAssignment(jdbc, authoritative, targetRole);
+                        return updateRole(jdbc, targetMembershipId, expectedVersion, targetRole);
+                    });
+        } catch (RuntimeException exception) {
+            throw translateCommitFailure(exception);
+        }
     }
 
     public MembershipView changeStatus(
@@ -38,12 +42,17 @@ public class MembershipManagementService {
         if (status == MembershipStatus.ACTIVE) {
             throw denied("Direct activation is not supported by the v1 assignment boundary.");
         }
-        return tenantContexts.withFreshTenantTarget(
-                actor, targetMembershipId, expectedVersion, true,
-                (authoritative, jdbc) -> {
-                    permissions.require(jdbc, authoritative, "user.manage");
-                    return updateStatus(jdbc, targetMembershipId, expectedVersion, status);
-                });
+        try {
+            return tenantContexts.withFreshTenantTarget(
+                    actor, targetMembershipId, expectedVersion, true,
+                    (authoritative, jdbc) -> {
+                        permissions.require(jdbc, authoritative, "user.manage");
+                        permissions.require(jdbc, authoritative, "role.manage");
+                        return updateStatus(jdbc, targetMembershipId, expectedVersion, status);
+                    });
+        } catch (RuntimeException exception) {
+            throw translateCommitFailure(exception);
+        }
     }
 
     private MembershipView updateRole(
@@ -87,12 +96,33 @@ public class MembershipManagementService {
     }
 
     private DomainAccessException translateDatabaseDenial(DataAccessException exception) {
-        String message = exception.getMostSpecificCause().getMessage();
-        if (message != null && message.contains("REJECT_LAST_OWNER_INVARIANT")) {
-            return new DomainAccessException(
-                    HttpStatus.CONFLICT, "REJECT_LAST_OWNER_INVARIANT", "The organization must retain an active owner.");
+        DomainAccessException translated = lastOwnerFailure(exception);
+        if (translated != null) {
+            return translated;
         }
         return denied("The membership mutation was denied.");
+    }
+
+    private RuntimeException translateCommitFailure(RuntimeException exception) {
+        if (exception instanceof DomainAccessException) {
+            return exception;
+        }
+        DomainAccessException translated = lastOwnerFailure(exception);
+        return translated == null ? exception : translated;
+    }
+
+    private DomainAccessException lastOwnerFailure(Throwable exception) {
+        for (Throwable cursor = exception; cursor != null; cursor = cursor.getCause()) {
+            String message = cursor.getMessage();
+            if (message != null && (message.contains("REJECT_LAST_OWNER_INVARIANT")
+                    || message.contains("organizations_active_owner_fk"))) {
+                return new DomainAccessException(
+                        HttpStatus.CONFLICT,
+                        "REJECT_LAST_OWNER_INVARIANT",
+                        "The organization must retain an active owner.");
+            }
+        }
+        return null;
     }
 
     private DomainAccessException versionConflict() {
