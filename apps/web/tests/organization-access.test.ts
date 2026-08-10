@@ -7,12 +7,20 @@ const app = (path: string) => readFileSync(resolve(import.meta.dirname, "..", pa
 describe("organization access UI guardrails", () => {
   it("keeps tokens server-side and requires same-origin CSRF for mutations", () => {
     const bff = app("app/api/bff/_shared.ts");
+    const session = app("app/lib/supabase-session.ts");
+    const callback = app("app/auth/callback/route.ts");
     const profileRoute = app("app/api/bff/profile/route.ts");
     const tenantRoute = app("app/api/bff/tenant-context/route.ts");
-    expect(bff).toContain('const ACCESS_COOKIE = "nexora_access_token"');
     expect(bff).toContain("authenticatedClient");
     expect(bff).toContain("requireSameOrigin");
     expect(bff).toContain("PlatformApiClient");
+    expect(bff).not.toContain("nexora_access_token");
+    expect(session).toContain("createServerClient");
+    expect(session).toContain("supabase.auth.getClaims()");
+    expect(session).toContain("httpOnly: true");
+    expect(session).toContain('sameSite: "lax"');
+    expect(session).toContain('secure: process.env.NODE_ENV === "production"');
+    expect(callback).toContain("exchangeCodeForSession(code)");
     expect(profileRoute).toContain("requireSameOrigin(request)");
     expect(tenantRoute).toContain("requireSameOrigin(request)");
     expect(bff).not.toContain("localStorage");

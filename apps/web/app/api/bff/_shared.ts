@@ -1,8 +1,7 @@
-import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 import { NexoraApiError, PlatformApiClient } from "../../../../../packages/contracts/src/generated/platform-api";
+import { SessionUnavailableError, serverSession } from "../../lib/supabase-session";
 
-const ACCESS_COOKIE = "nexora_access_token";
 const SAFE_MESSAGES: Readonly<Record<string, string>> = {
   AUTHENTICATION_REQUIRED: "Your session has expired. Sign in again to continue.",
   MEMBERSHIP_REQUIRED: "An active organization membership is required.",
@@ -19,11 +18,17 @@ function apiClient(token: string | undefined) {
 }
 
 export async function authenticatedClient() {
-  const token = (await cookies()).get(ACCESS_COOKIE)?.value;
-  return apiClient(token);
+  const session = await serverSession();
+  return { client: apiClient(session.accessToken), applyCookies: session.applyCookies };
 }
 
 export function problemResponse(error: unknown) {
+  if (error instanceof SessionUnavailableError) {
+    return NextResponse.json(
+      { code: "AUTHENTICATION_REQUIRED", message: SAFE_MESSAGES.AUTHENTICATION_REQUIRED, traceId: null },
+      { status: 401, headers: { "Cache-Control": "private, no-store" } },
+    );
+  }
   if (error instanceof NexoraApiError) {
     const requestedCode = error.problem?.code ?? (error.status === 401 ? "AUTHENTICATION_REQUIRED" : "REQUEST_FAILED");
     const code = SAFE_MESSAGES[requestedCode] ? requestedCode : "REQUEST_FAILED";

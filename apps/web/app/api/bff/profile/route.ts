@@ -3,8 +3,9 @@ import { authenticatedClient, problemResponse, requireSameOrigin } from "../_sha
 
 export async function GET() {
   try {
-    const response = await (await authenticatedClient()).getProfile();
-    return NextResponse.json(response.data, { headers: { "Cache-Control": "private, no-store" } });
+    const session = await authenticatedClient();
+    const response = await session.client.getProfile();
+    return session.applyCookies(NextResponse.json(response.data));
   } catch (error) {
     return problemResponse(error);
   }
@@ -15,8 +16,9 @@ export async function PUT(request: NextRequest) {
   if (csrf) return csrf;
   try {
     const body = await request.json();
-    const response = await (await authenticatedClient()).updateProfile(body);
-    return NextResponse.json(response.data, { headers: { "Cache-Control": "private, no-store" } });
+    const session = await authenticatedClient();
+    const response = await session.client.updateProfile(body);
+    return session.applyCookies(NextResponse.json(response.data));
   } catch (error) {
     return problemResponse(error);
   }
