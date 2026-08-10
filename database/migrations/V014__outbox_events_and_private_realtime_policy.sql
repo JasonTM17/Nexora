@@ -130,13 +130,16 @@ SET search_path = pg_catalog, nexora
 AS $function$
 DECLARE
   key text;
+  value jsonb;
+  value_text text;
   safe_display jsonb;
+  forbidden_value_pattern constant text := '(authorization|bearer|token|secret|password|cookie|provider|prompt|private[ _-]?key|access[ _-]?token|api[ _-]?key|pii|email|phone|body|raw|html|document)';
 BEGIN
   IF jsonb_typeof(payload) <> 'object' THEN
     RETURN false;
   END IF;
 
-  FOR key IN SELECT jsonb_object_keys(payload) LOOP
+  FOR key, value IN SELECT * FROM jsonb_each(payload) LOOP
     IF key NOT IN (
       'resourceId', 'resourceType', 'organizationId', 'subjectId', 'actorId',
       'eventVersion', 'jobState', 'progress', 'correlationId', 'traceId',
@@ -144,34 +147,66 @@ BEGIN
     ) THEN
       RETURN false;
     END IF;
-  END LOOP;
 
-  IF payload ? 'progress' AND (
-    jsonb_typeof(payload -> 'progress') <> 'number'
-    OR (payload ->> 'progress')::numeric < 0
-    OR (payload ->> 'progress')::numeric > 100
-  ) THEN
-    RETURN false;
-  END IF;
+    IF key = 'safeDisplay' THEN
+      CONTINUE;
+    ELSIF key = 'progress' THEN
+      IF jsonb_typeof(value) <> 'number'
+         OR (value #>> '{}')::numeric < 0
+         OR (value #>> '{}')::numeric > 100 THEN
+        RETURN false;
+      END IF;
+    ELSIF key = 'eventVersion' THEN
+      IF jsonb_typeof(value) <> 'number'
+         OR (value #>> '{}')::numeric < 1
+         OR (value #>> '{}')::numeric <> trunc((value #>> '{}')::numeric) THEN
+        RETURN false;
+      END IF;
+    ELSE
+      IF jsonb_typeof(value) <> 'string' THEN
+        RETURN false;
+      END IF;
+      value_text := value #>> '{}';
+      IF char_length(value_text) NOT BETWEEN 1 AND 160
+         OR value_text !~ '^[[:print:]]*$'
+         OR value_text ~* forbidden_value_pattern THEN
+        RETURN false;
+      END IF;
+    END IF;
+  END LOOP;
 
   IF payload ? 'safeDisplay' THEN
     safe_display := payload -> 'safeDisplay';
-    IF jsonb_typeof(safe_display) <> 'object' THEN
+    IF jsonb_typeof(safe_display) <> 'object'
+       OR NOT (safe_display ? 'label')
+       OR NOT (safe_display ? 'status') THEN
       RETURN false;
     END IF;
-    FOR key IN SELECT jsonb_object_keys(safe_display) LOOP
-      IF key NOT IN ('label', 'status') THEN
+    FOR key, value IN SELECT * FROM jsonb_each(safe_display) LOOP
+      IF key NOT IN ('label', 'status', 'hint', 'state', 'variant', 'progressText')
+         OR jsonb_typeof(value) <> 'string' THEN
+        RETURN false;
+      END IF;
+      value_text := value #>> '{}';
+      IF value_text !~ '^[[:print:]]*$'
+         OR value_text ~* forbidden_value_pattern THEN
+        RETURN false;
+      END IF;
+
+      IF key = 'label' AND char_length(value_text) NOT BETWEEN 1 AND 80 THEN
+        RETURN false;
+      ELSIF key = 'status' AND char_length(value_text) NOT BETWEEN 1 AND 32 THEN
+        RETURN false;
+      ELSIF key = 'hint' AND char_length(value_text) > 120 THEN
+        RETURN false;
+      ELSIF key = 'state' AND char_length(value_text) NOT BETWEEN 1 AND 32 THEN
+        RETURN false;
+      ELSIF key = 'variant' AND value_text NOT IN ('neutral', 'success', 'warning', 'danger', 'info') THEN
+        RETURN false;
+      ELSIF key = 'progressText' AND char_length(value_text) > 40 THEN
         RETURN false;
       END IF;
     END LOOP;
-    IF EXISTS (
-      SELECT 1
-      FROM jsonb_each_text(safe_display) AS value
-      WHERE char_length(value.value) NOT BETWEEN 1 AND 128
-        OR value.value ~* '(authorization|bearer|token|secret|password|cookie|provider|prompt|private[ _-]?key)'
-    ) THEN
-      RETURN false;
-    END IF;
   END IF;
 
   RETURN true;
@@ -184,7 +219,8 @@ $function$;
 CREATE FUNCTION nexora.outbox_topic_is_valid(
   in_topic text,
   in_organization_id uuid,
-  in_resource_id uuid
+  in_resource_id uuid,
+  in_event_type nexora.outbox_event_type
 )
 RETURNS boolean
 LANGUAGE plpgsql
@@ -206,9 +242,14 @@ BEGIN
   END IF;
 
   owner_id := parts[2]::uuid;
-  RETURN CASE parts[1]
-    WHEN 'tenant' THEN owner_id = in_organization_id
-    ELSE owner_id = in_resource_id
+  RETURN CASE in_event_type
+    WHEN 'PUBLICATION_INVALIDATED' THEN parts[1] = 'tenant' AND parts[3] = 'publication' AND owner_id = in_organization_id
+    WHEN 'WORKFLOW_TRANSITIONED' THEN parts[1] = 'tenant' AND parts[3] = 'workflow' AND owner_id = in_organization_id
+    WHEN 'JOB_PROGRESS_CHANGED' THEN parts[1] = 'resource' AND parts[3] = 'job-progress' AND owner_id = in_resource_id
+    WHEN 'NOTIFICATION_ENQUEUED' THEN parts[1] = 'tenant' AND parts[3] = 'notification' AND owner_id = in_organization_id
+    WHEN 'PRESENCE_CHANGED' THEN parts[1] = 'resource' AND parts[3] = 'presence' AND owner_id = in_resource_id
+    WHEN 'OUTBOX_RECORDED' THEN parts[1] = 'tenant' AND parts[3] = 'outbox' AND owner_id = in_organization_id
+    ELSE false
   END;
 END
 $function$;
@@ -231,7 +272,7 @@ BEGIN
        OR NEW.retain_until IS NOT NULL
        OR NEW.last_error_code IS NOT NULL
        OR NOT nexora.outbox_safe_payload_is_allowed(NEW.safe_payload)
-       OR NOT nexora.outbox_topic_is_valid(NEW.topic, NEW.organization_id, NEW.resource_id) THEN
+       OR NOT nexora.outbox_topic_is_valid(NEW.topic, NEW.organization_id, NEW.resource_id, NEW.event_type) THEN
       RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'OUTBOX_INSERT_REJECTED';
     END IF;
     RETURN NEW;
@@ -269,6 +310,16 @@ BEGIN
     END IF;
   ELSIF OLD.state = 'CLAIMED' AND NEW.state IN ('PUBLISHED', 'FAILED', 'DEAD_LETTER') THEN
     IF NEW.attempt_count <> OLD.attempt_count THEN
+      RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'OUTBOX_TERMINAL_REJECTED';
+    END IF;
+  ELSIF OLD.state = 'FAILED' AND NEW.state = 'DEAD_LETTER' THEN
+    IF NEW.attempt_count <> OLD.attempt_count
+       OR NEW.claim_owner IS NOT NULL
+       OR NEW.claim_expires_at IS NOT NULL
+       OR NEW.failed_at IS NULL
+       OR NEW.dead_letter_at IS NULL
+       OR NEW.retain_until <= NEW.dead_letter_at
+       OR NEW.last_error_code IS NULL THEN
       RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'OUTBOX_TERMINAL_REJECTED';
     END IF;
   ELSE
@@ -333,7 +384,7 @@ BEGIN
   IF in_schema_version <> '1.0.0'
      OR in_event_version <= 0
      OR in_resource_type !~ '^[a-z][a-z0-9_-]{0,63}$'
-     OR NOT nexora.outbox_topic_is_valid(in_topic, in_organization_id, in_resource_id)
+     OR NOT nexora.outbox_topic_is_valid(in_topic, in_organization_id, in_resource_id, in_event_type)
      OR NOT nexora.outbox_safe_payload_is_allowed(in_safe_payload) THEN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'PAYLOAD_REJECTED';
   END IF;
@@ -557,15 +608,44 @@ BEGIN
 END
 $function$;
 
+CREATE FUNCTION nexora.realtime_current_channel_authorized(in_topic text)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+STRICT
+SECURITY DEFINER
+SET search_path = pg_catalog, nexora
+AS $function$
+DECLARE
+  current_topic text;
+  current_subject uuid;
+BEGIN
+  current_topic := NULLIF(current_setting('realtime.topic', true), '');
+  current_subject := NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid;
+
+  IF current_topic IS NULL
+     OR current_subject IS NULL
+     OR in_topic IS DISTINCT FROM current_topic THEN
+    RETURN false;
+  END IF;
+
+  RETURN nexora.realtime_private_channel_authorized(in_topic, current_subject);
+EXCEPTION
+  WHEN invalid_text_representation THEN
+    RETURN false;
+END
+$function$;
+
 REVOKE ALL ON TABLE nexora.outbox_events FROM PUBLIC;
 REVOKE ALL ON FUNCTION nexora.outbox_safe_payload_is_allowed(jsonb) FROM PUBLIC;
-REVOKE ALL ON FUNCTION nexora.outbox_topic_is_valid(text, uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION nexora.outbox_topic_is_valid(text, uuid, uuid, nexora.outbox_event_type) FROM PUBLIC;
 REVOKE ALL ON FUNCTION nexora.guard_outbox_event_mutation() FROM PUBLIC;
 REVOKE ALL ON FUNCTION nexora.record_outbox_event(uuid, uuid, uuid, uuid, text, uuid, nexora.outbox_event_type, bigint, text, text, text, text, text, jsonb, timestamptz) FROM PUBLIC;
 REVOKE ALL ON FUNCTION nexora.claim_outbox_events(text, interval, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION nexora.publish_claimed_outbox_event(uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION nexora.fail_claimed_outbox_event(uuid, text, text, boolean, interval) FROM PUBLIC;
 REVOKE ALL ON FUNCTION nexora.realtime_private_channel_authorized(text, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION nexora.realtime_current_channel_authorized(text) FROM PUBLIC;
 
 GRANT USAGE ON TYPE nexora.outbox_state, nexora.outbox_event_type TO nexora_runtime;
 GRANT EXECUTE ON FUNCTION nexora.outbox_safe_payload_is_allowed(jsonb) TO nexora_runtime;
@@ -574,6 +654,7 @@ GRANT EXECUTE ON FUNCTION nexora.claim_outbox_events(text, interval, integer) TO
 GRANT EXECUTE ON FUNCTION nexora.publish_claimed_outbox_event(uuid, text) TO nexora_runtime;
 GRANT EXECUTE ON FUNCTION nexora.fail_claimed_outbox_event(uuid, text, text, boolean, interval) TO nexora_runtime;
 GRANT EXECUTE ON FUNCTION nexora.realtime_private_channel_authorized(text, uuid) TO nexora_runtime;
+GRANT EXECUTE ON FUNCTION nexora.realtime_current_channel_authorized(text) TO nexora_runtime;
 
 DO $grant_authenticated$
 DECLARE
@@ -586,7 +667,7 @@ BEGIN
   END LOOP;
 
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-    GRANT EXECUTE ON FUNCTION nexora.realtime_private_channel_authorized(text, uuid) TO authenticated;
+    GRANT EXECUTE ON FUNCTION nexora.realtime_current_channel_authorized(text) TO authenticated;
   END IF;
 END
 $grant_authenticated$;
@@ -613,10 +694,8 @@ BEGIN
     ON realtime.messages
     FOR SELECT TO authenticated
     USING (
-      nexora.realtime_private_channel_authorized(
-        (SELECT realtime.topic()),
-        (SELECT auth.uid())
-      )
+      topic = (SELECT realtime.topic())
+      AND nexora.realtime_current_channel_authorized(topic)
     )
   $sql$;
   EXECUTE $sql$
@@ -624,10 +703,8 @@ BEGIN
     ON realtime.messages
     FOR INSERT TO authenticated
     WITH CHECK (
-      nexora.realtime_private_channel_authorized(
-        (SELECT realtime.topic()),
-        (SELECT auth.uid())
-      )
+      topic = (SELECT realtime.topic())
+      AND nexora.realtime_current_channel_authorized(topic)
     )
   $sql$;
 END

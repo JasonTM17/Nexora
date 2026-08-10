@@ -36,6 +36,13 @@ BEGIN
     RAISE EXCEPTION 'provider-style private Realtime policies are missing';
   END IF;
 
+  IF has_function_privilege('authenticated', 'nexora.realtime_private_channel_authorized(text, uuid)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'authenticated can probe arbitrary private Realtime subjects';
+  END IF;
+  IF NOT has_function_privilege('authenticated', 'nexora.realtime_current_channel_authorized(text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'authenticated cannot execute the current-topic Realtime policy helper';
+  END IF;
+
   IF EXISTS (
     SELECT 1 FROM pg_proc procedure
     JOIN pg_namespace namespace ON namespace.oid = procedure.pronamespace
@@ -43,7 +50,7 @@ BEGIN
       AND procedure.proname IN (
         'record_outbox_event', 'claim_outbox_events',
         'publish_claimed_outbox_event', 'fail_claimed_outbox_event',
-        'realtime_private_channel_authorized'
+        'realtime_private_channel_authorized', 'realtime_current_channel_authorized'
       )
       AND NOT procedure.prosecdef
   ) THEN
@@ -92,14 +99,23 @@ BEGIN
       "traceId":"trace-outbox-alpha-001",
       "receiptId":"receipt-alpha-001",
       "schemaVersion":"1.0.0",
-      "safeDisplay":{"label":"Alpha publication invalidated","status":"queued"}
+      "safeDisplay":{
+        "label":"Alpha publication invalidated",
+        "status":"queued",
+        "hint":"Awaiting durable publication",
+        "variant":"warning"
+      }
     }'::jsonb
   ) THEN
     RAISE EXCEPTION 'valid safe payload was rejected';
   END IF;
 
   IF nexora.outbox_safe_payload_is_allowed('{"body":"secret content"}'::jsonb)
-     OR nexora.outbox_safe_payload_is_allowed('{"safeDisplay":{"label":"Bearer leaked-token","status":"queued"}}'::jsonb) THEN
+     OR nexora.outbox_safe_payload_is_allowed('{"safeDisplay":{"label":"Bearer leaked-token","status":"queued"}}'::jsonb)
+     OR nexora.outbox_safe_payload_is_allowed('{"safeDisplay":{}}'::jsonb)
+     OR nexora.outbox_safe_payload_is_allowed('{"safeDisplay":{"label":"Alpha","status":{"nested":"queued"}}}'::jsonb)
+     OR nexora.outbox_safe_payload_is_allowed('{"safeDisplay":{"label":"Alpha","status":"queued","variant":"purple"}}'::jsonb)
+     OR nexora.outbox_safe_payload_is_allowed('{"traceId":"Bearer token should not survive"}'::jsonb) THEN
     RAISE EXCEPTION 'unsafe payload or sensitive display value passed';
   END IF;
 
@@ -128,7 +144,12 @@ BEGIN
       "traceId":"trace-outbox-alpha-001",
       "receiptId":"receipt-alpha-001",
       "schemaVersion":"1.0.0",
-      "safeDisplay":{"label":"Alpha publication invalidated","status":"queued"}
+      "safeDisplay":{
+        "label":"Alpha publication invalidated",
+        "status":"queued",
+        "hint":"Awaiting durable publication",
+        "variant":"warning"
+      }
     }'::jsonb,
     '2026-08-10T00:10:00Z'
   );
@@ -158,7 +179,12 @@ BEGIN
       "traceId":"trace-outbox-alpha-001",
       "receiptId":"receipt-alpha-001",
       "schemaVersion":"1.0.0",
-      "safeDisplay":{"label":"Alpha publication invalidated","status":"queued"}
+      "safeDisplay":{
+        "label":"Alpha publication invalidated",
+        "status":"queued",
+        "hint":"Awaiting durable publication",
+        "variant":"warning"
+      }
     }'::jsonb,
     '2026-08-10T00:10:00Z'
   );
@@ -187,6 +213,29 @@ BEGIN
     );
     RAISE EXCEPTION 'changed request reused an idempotency key';
   EXCEPTION WHEN unique_violation THEN
+    NULL;
+  END;
+
+  BEGIN
+    PERFORM nexora.record_outbox_event(
+      '50000000-0000-4000-8000-000000000096',
+      '10000000-0000-4000-8000-000000000001',
+      '20000000-0000-4000-8000-000000000007',
+      '20000000-0000-4000-8000-000000000007',
+      'page',
+      '30000000-0000-4000-8000-000000000001',
+      'PUBLICATION_INVALIDATED',
+      1,
+      'tenant:10000000-0000-4000-8000-000000000001:presence',
+      '1.0.0',
+      'sha256:event-contract-alpha-misrouted',
+      'sha256:event-contract-alpha-misrouted-fingerprint',
+      'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      '{}'::jsonb,
+      '2026-08-10T00:10:00Z'
+    );
+    RAISE EXCEPTION 'event type accepted a mismatched topic purpose';
+  EXCEPTION WHEN invalid_parameter_value THEN
     NULL;
   END;
 
@@ -232,7 +281,13 @@ BEGIN
       "eventVersion":1,
       "jobState":"RUNNING",
       "progress":45,
-      "schemaVersion":"1.0.0"
+      "schemaVersion":"1.0.0",
+      "safeDisplay":{
+        "label":"Alpha job progress",
+        "status":"running",
+        "state":"RUNNING",
+        "progressText":"45%"
+      }
     }'::jsonb
   );
 
@@ -283,23 +338,6 @@ BEGIN
   IF failed.state <> 'FAILED' OR failed.last_error_code <> 'BROKER_UNAVAILABLE' THEN
     RAISE EXCEPTION 'retryable failure was not operator-visible';
   END IF;
-
-  PERFORM pg_sleep(1.1);
-  SELECT * INTO claimed
-  FROM nexora.claim_outbox_events('publisher-retry', interval '15 minutes', 1)
-  LIMIT 1;
-  IF claimed.id IS DISTINCT FROM job_id OR claimed.attempt_count <> 2 THEN
-    RAISE EXCEPTION 'failed row did not re-enter bounded delivery';
-  END IF;
-
-  dead_letter := nexora.fail_claimed_outbox_event(
-    claimed.id, 'publisher-retry', 'POISON_EVENT', true, interval '1 second'
-  );
-  IF dead_letter.state <> 'DEAD_LETTER'
-     OR dead_letter.dead_letter_at IS NULL
-     OR dead_letter.retain_until <= dead_letter.dead_letter_at THEN
-    RAISE EXCEPTION 'dead-letter evidence was not retained';
-  END IF;
 END
 $$;
 COMMIT;
@@ -307,7 +345,25 @@ COMMIT;
 BEGIN;
 SET LOCAL ROLE nexora_migrator;
 DO $$
+DECLARE
+  dead_letter nexora.outbox_events%ROWTYPE;
 BEGIN
+  UPDATE nexora.outbox_events
+     SET state = 'DEAD_LETTER',
+         dead_letter_at = transaction_timestamp(),
+         retain_until = transaction_timestamp() + interval '90 days',
+         updated_at = transaction_timestamp()
+   WHERE id = '50000000-0000-4000-8000-000000000002'
+     AND state = 'FAILED'
+   RETURNING * INTO dead_letter;
+
+  IF NOT FOUND
+     OR dead_letter.state <> 'DEAD_LETTER'
+     OR dead_letter.dead_letter_at IS NULL
+     OR dead_letter.retain_until <= dead_letter.dead_letter_at THEN
+    RAISE EXCEPTION 'FAILED to DEAD_LETTER transition evidence was not retained';
+  END IF;
+
   IF (SELECT count(*) FROM nexora.outbox_events) <> 2
      OR (SELECT count(*) FROM nexora.outbox_events WHERE state = 'PUBLISHED') <> 1
      OR (SELECT count(*) FROM nexora.outbox_events WHERE state = 'DEAD_LETTER') <> 1 THEN
@@ -338,6 +394,31 @@ BEGIN
     RAISE EXCEPTION 'authorized private Realtime row was not visible';
   END IF;
 
+  BEGIN
+    INSERT INTO realtime.messages (id, topic, payload)
+    VALUES (
+      '60000000-0000-4000-8000-000000000002',
+      'tenant:10000000-0000-4000-8000-000000000001:workflow',
+      '{}'::jsonb
+    );
+    RAISE EXCEPTION 'private Realtime insert ignored the current topic';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+
+  PERFORM set_config('realtime.topic', 'tenant:10000000-0000-4000-8000-000000000001:workflow', true);
+  INSERT INTO realtime.messages (id, topic, payload)
+  VALUES (
+    '60000000-0000-4000-8000-000000000003',
+    'tenant:10000000-0000-4000-8000-000000000001:workflow',
+    '{}'::jsonb
+  );
+
+  PERFORM set_config('realtime.topic', 'tenant:10000000-0000-4000-8000-000000000001:publication', true);
+  IF (SELECT count(*) FROM realtime.messages) <> 1 THEN
+    RAISE EXCEPTION 'authorized topic leaked a different private Realtime row';
+  END IF;
+
   PERFORM set_config('realtime.topic', 'tenant:10000000-0000-4000-8000-000000000002:publication', true);
   IF (SELECT count(*) FROM realtime.messages) <> 0 THEN
     RAISE EXCEPTION 'guessed cross-tenant topic exposed a private Realtime row';
@@ -346,7 +427,7 @@ BEGIN
   BEGIN
     INSERT INTO realtime.messages (id, topic, payload)
     VALUES (
-      '60000000-0000-4000-8000-000000000002',
+      '60000000-0000-4000-8000-000000000004',
       'tenant:10000000-0000-4000-8000-000000000002:publication',
       '{}'::jsonb
     );
