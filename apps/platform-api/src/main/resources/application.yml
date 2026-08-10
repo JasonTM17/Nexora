@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: nexora-platform-api
+  profiles:
+    default: local
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+server:
+  shutdown: graceful
+
+nexora:
+  platform:
+    api-version: v1
+    migration-contract:
+      baseline-version: V001
+      runtime-role: nexora_runtime
+      schemas: [nexora, rag, audit]
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+  info:
+    env:
+      enabled: false
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs

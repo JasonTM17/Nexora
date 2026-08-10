@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    url: ${NEXORA_RUNTIME_DATABASE_URL}
+    username: ${NEXORA_RUNTIME_DATABASE_USERNAME:nexora_runtime}
+    password: ${NEXORA_RUNTIME_DATABASE_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 0
+  flyway:
+    enabled: true
+    url: ${NEXORA_MIGRATION_DATABASE_URL}
+    user: ${NEXORA_MIGRATION_DATABASE_USERNAME}
+    password: ${NEXORA_MIGRATION_DATABASE_PASSWORD}
+    locations: filesystem:${NEXORA_MIGRATIONS_LOCATION}
+    validate-migration-naming: true
+    clean-disabled: true
+
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,db
