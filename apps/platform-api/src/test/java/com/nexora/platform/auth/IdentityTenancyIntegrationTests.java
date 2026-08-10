@@ -336,6 +336,27 @@ class IdentityTenancyIntegrationTests {
         assertPooledSettingsAreEmpty();
     }
 
+    @Test
+    void membershipMutationHttpBoundaryReturnsAControlledPermissionEnvelope() throws Exception {
+        UUID ownerSubject = UUID.randomUUID();
+        OrganizationFixture tenant = seedOrganization(ownerSubject);
+        UUID target = seedMembership(tenant, UUID.randomUUID(), "USER", "ACTIVE");
+        String ownerToken = ISSUER.token(ownerSubject, Instant.now().plusSeconds(120));
+
+        HttpResponse<String> allowed = patchMembership(
+                ownerToken, tenant.organizationId(), target,
+                "{\"expectedVersion\":1,\"role\":\"REVIEWER\"}");
+        HttpResponse<String> invalidStatus = patchMembership(
+                ownerToken, tenant.organizationId(), target,
+                "{\"expectedVersion\":2,\"status\":\"NOT_A_STATUS\"}");
+
+        assertThat(allowed.statusCode()).isEqualTo(200);
+        assertThat(json.readTree(allowed.body()).path("role").asText()).isEqualTo("REVIEWER");
+        assertThat(invalidStatus.statusCode()).isEqualTo(400);
+        assertThat(json.readTree(invalidStatus.body()).path("code").asText()).isEqualTo("VALIDATION_FAILED");
+        assertPooledSettingsAreEmpty();
+    }
+
     private HttpResponse<String> get(String path, String token, UUID organizationId) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
                 .header("Authorization", "Bearer " + token)
@@ -383,6 +404,18 @@ class IdentityTenancyIntegrationTests {
                 .header("Authorization", "Bearer " + token)
                 .header("Content-Type", "application/json")
                 .PUT(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> patchMembership(
+            String token, UUID organizationId, UUID membershipId, String body) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                        + "/api/v1/authorization/memberships/" + membershipId))
+                .header("Authorization", "Bearer " + token)
+                .header("X-Nexora-Organization-Id", organizationId.toString())
+                .header("Content-Type", "application/json")
+                .method("PATCH", HttpRequest.BodyPublishers.ofString(body))
                 .build();
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
