@@ -99,6 +99,8 @@ class CmsPageIntegrationTests {
         registry.add("nexora.outbox.publisher.enabled", () -> "true");
         registry.add("nexora.outbox.publisher.nats-url", CmsPageIntegrationTests::natsUrl);
         registry.add("nexora.outbox.publisher.subject", () -> OUTBOX_SUBJECT);
+        registry.add("nexora.outbox.publisher.initial-delay-millis", () -> "600000");
+        registry.add("nexora.outbox.publisher.poll-delay-millis", () -> "600000");
     }
 
     @AfterAll
