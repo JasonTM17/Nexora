@@ -3,6 +3,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { NexoraApiError, PlatformApiClient } from "../../../../../packages/contracts/src/generated/platform-api";
 
 const ACCESS_COOKIE = "nexora_access_token";
+const SAFE_MESSAGES: Readonly<Record<string, string>> = {
+  AUTHENTICATION_REQUIRED: "Your session has expired. Sign in again to continue.",
+  MEMBERSHIP_REQUIRED: "An active organization membership is required.",
+  PERMISSION_DENIED: "That organization is not available to your current account.",
+  TENANT_SELECTION_REQUIRED: "Choose one active organization to continue.",
+  VERSION_CONFLICT: "This profile changed elsewhere. Reload it before trying again.",
+};
 
 function apiClient(token: string | undefined) {
   return new PlatformApiClient({
@@ -18,10 +25,9 @@ export async function authenticatedClient() {
 
 export function problemResponse(error: unknown) {
   if (error instanceof NexoraApiError) {
-    const code = error.problem?.code ?? (error.status === 401 ? "AUTHENTICATION_REQUIRED" : "REQUEST_FAILED");
-    const message = code === "AUTHENTICATION_REQUIRED"
-      ? "Your session has expired. Sign in again to continue."
-      : error.problem?.message ?? "We could not complete that request.";
+    const requestedCode = error.problem?.code ?? (error.status === 401 ? "AUTHENTICATION_REQUIRED" : "REQUEST_FAILED");
+    const code = SAFE_MESSAGES[requestedCode] ? requestedCode : "REQUEST_FAILED";
+    const message = SAFE_MESSAGES[code] ?? "We could not complete that request.";
     return NextResponse.json({ code, message, traceId: error.traceId }, { status: error.status });
   }
   return NextResponse.json(
