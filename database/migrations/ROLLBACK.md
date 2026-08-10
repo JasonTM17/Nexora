@@ -59,7 +59,7 @@ rollback, provider configuration, and deployment remain outside M2-DB01.
 
 ## M3-DB01 transactional outbox and private Realtime notes
 
-`V014`, `V015`, and `V016` are append-only once applied. Do not remove the outbox table, helper
+`V014` through `V017` are append-only once applied. Do not remove the outbox table, helper
 functions, safe-payload check, idempotency contract, claim/lease semantics, or
 the scoped `realtime.messages` policy DDL by editing an applied migration in
 place. In particular, do not reintroduce browser direct writes, fall back to a
@@ -74,6 +74,10 @@ V016's private page-resource projection is the only reviewed policy-helper
 route to Presence resource identity. Do not query CMS pages through a definer
 helper, disable page forced RLS, or make the projection browser-readable as an
 ad-hoc repair.
+
+V017's projection synchronizers are trigger-only hardened definer functions.
+Do not replace them with a runtime `SELECT` grant or direct function execution
+as a shortcut for their UPSERT reads.
 
 For a shared database, use a new reviewed forward migration only after the
 required dependency and rollback assessment. Preserve the outbox receipt and

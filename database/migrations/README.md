@@ -167,9 +167,14 @@ authorize Presence without bypassing or relaxing the CMS page table's forced
 RLS. The projection contains only resource and organization identifiers, never
 page content; it has no browser or direct runtime read path.
 
+`V017__realtime_projection_trigger_privileges.sql` keeps both private
+projections unreadable by `nexora_runtime` while allowing their trigger-only
+UPSERT paths to run under a fixed-search-path, migrator-owned definer boundary.
+Neither synchronizer is directly executable by application or API roles.
+
 The M3 proof script creates a disposable local stand-in for `auth.uid()`,
 `auth.jwt()`, `realtime.topic()`, and `realtime.messages`, applies `V001`
-through `V016`, reruns the M2 tenant/CMS fixtures, then executes the actual
+through `V017`, reruns the M2 tenant/CMS fixtures, then executes the actual
 private-channel RLS expression plus the outbox fixture. The stand-in is torn
 down with the Compose project; it is policy-conformance evidence, not hosted
 Supabase proof.
