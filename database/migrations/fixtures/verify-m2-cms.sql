@@ -44,6 +44,10 @@ INSERT INTO nexora.workflow_reviews (id, organization_id, page_id, candidate_dra
 VALUES ('a0000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000001', 1, 'SUBMIT_FOR_REVIEW', 'DRAFT', 'IN_REVIEW', '20000000-0000-4000-8000-000000000001', 'cms-fixture-1');
 INSERT INTO nexora.cms_audit_events (id, organization_id, site_id, page_id, version_id, operation, result, actor_id, trace_id, idempotency_key_digest)
 VALUES ('b0000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000001', '80000000-0000-4000-8000-000000000001', 'PUBLISH', 'ACCEPTED', '20000000-0000-4000-8000-000000000001', 'cms-fixture-1', 'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd');
+INSERT INTO nexora.cms_audit_events (id, organization_id, site_id, page_id, operation, result, actor_id, trace_id)
+VALUES
+  ('b0000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000001', 'PAGE_CREATE', 'ACCEPTED', '20000000-0000-4000-8000-000000000001', 'cms-page-create'),
+  ('b0000000-0000-4000-8000-000000000005', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000001', 'PAGE_UPDATE', 'ACCEPTED', '20000000-0000-4000-8000-000000000001', 'cms-page-update');
 
 INSERT INTO nexora.pages (id, organization_id, site_id, slug, title, schema_version, content_digest, theme_version_id, seo_title, seo_description, seo_locale, canonical_path)
 VALUES ('70000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', 'about', 'About', '1.0.0', 'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', '60000000-0000-4000-8000-000000000001', 'About', 'About Alpha.', 'en-US', '/about');
@@ -89,6 +93,44 @@ BEGIN
 END $$;
 COMMIT;
 
+-- REVIEWER retains publication audit but cannot forge PAGE_CREATE/PAGE_UPDATE
+-- audit rows, a different actor, or an arbitrary operation.
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000002', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000003', true);
+INSERT INTO nexora.cms_audit_events (id, organization_id, site_id, page_id, version_id, operation, result, actor_id, trace_id)
+VALUES ('b0000000-0000-4000-8000-000000000006', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000001', '80000000-0000-4000-8000-000000000001', 'PUBLISH', 'ACCEPTED', '20000000-0000-4000-8000-000000000002', 'cms-reviewer-publish');
+DO $$
+BEGIN
+  BEGIN
+    INSERT INTO nexora.cms_audit_events (id, organization_id, site_id, page_id, operation, result, actor_id, trace_id)
+    VALUES ('b0000000-0000-4000-8000-000000000007', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000001', 'PAGE_CREATE', 'ACCEPTED', '20000000-0000-4000-8000-000000000002', 'cms-reviewer-create');
+    RAISE EXCEPTION 'REVIEWER PAGE_CREATE audit unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO nexora.cms_audit_events (id, organization_id, site_id, page_id, operation, result, actor_id, trace_id)
+    VALUES ('b0000000-0000-4000-8000-000000000008', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000001', 'PAGE_UPDATE', 'ACCEPTED', '20000000-0000-4000-8000-000000000002', 'cms-reviewer-update');
+    RAISE EXCEPTION 'REVIEWER PAGE_UPDATE audit unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO nexora.cms_audit_events (id, organization_id, site_id, page_id, operation, result, actor_id, trace_id)
+    VALUES ('b0000000-0000-4000-8000-000000000009', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000001', 'PUBLISH', 'ACCEPTED', '20000000-0000-4000-8000-000000000001', 'cms-forged-actor');
+    RAISE EXCEPTION 'forged CMS audit actor unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO nexora.cms_audit_events (id, organization_id, site_id, page_id, operation, result, actor_id, trace_id)
+    VALUES ('b0000000-0000-4000-8000-000000000010', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000001', 'UNSAFE', 'ACCEPTED', '20000000-0000-4000-8000-000000000002', 'cms-unsafe-operation');
+    RAISE EXCEPTION 'arbitrary CMS audit operation unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END $$;
+COMMIT;
+
 -- Use the disposable database's bootstrap role only to prove the trigger is
 -- immutable even outside runtime grants; runtime itself has no UPDATE grant.
 DO $$
@@ -114,6 +156,24 @@ BEGIN
 END $$;
 COMMIT;
 
+-- An ACTIVE actor in another tenant cannot append an Alpha audit row even with
+-- Alpha IDs and a page.publish-capable role in its own selected tenant.
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000003', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000002', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000004', true);
+DO $$
+BEGIN
+  BEGIN
+    INSERT INTO nexora.cms_audit_events (id, organization_id, site_id, page_id, operation, result, actor_id, trace_id)
+    VALUES ('b0000000-0000-4000-8000-000000000011', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000001', 'PUBLISH', 'ACCEPTED', '20000000-0000-4000-8000-000000000003', 'cms-cross-tenant');
+    RAISE EXCEPTION 'cross-tenant CMS audit insert unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END $$;
+COMMIT;
+
 BEGIN;
 SET LOCAL ROLE nexora_runtime;
 DO $$
@@ -121,6 +181,12 @@ BEGIN
   IF EXISTS (SELECT 1 FROM nexora.pages) OR EXISTS (SELECT 1 FROM nexora.page_versions) THEN
     RAISE EXCEPTION 'missing tenant context must deny CMS rows';
   END IF;
+  BEGIN
+    INSERT INTO nexora.cms_audit_events (id, organization_id, operation, result, actor_id, trace_id)
+    VALUES ('b0000000-0000-4000-8000-000000000012', '10000000-0000-4000-8000-000000000001', 'PUBLISH', 'DENIED', '20000000-0000-4000-8000-000000000001', 'cms-missing-context');
+    RAISE EXCEPTION 'missing tenant context unexpectedly appended CMS audit';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
 END $$;
 COMMIT;
 
