@@ -48,8 +48,8 @@ public class CmsPageService {
                     """, this::mapSummary, after, after, limit + 1);
             String nextCursor = null;
             if (rows.size() > limit) {
-                PageSummary extra = rows.removeLast();
-                nextCursor = extra.pageId().toString();
+                rows.removeLast();
+                nextCursor = rows.getLast().pageId().toString();
             }
             return new PageList(List.copyOf(rows), nextCursor);
         });

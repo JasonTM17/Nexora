@@ -11,6 +11,9 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
@@ -110,6 +113,31 @@ class CmsPageIntegrationTests {
                 .isEqualTo("WORKFLOW_TRANSITION_DENIED");
         assertThat(count("SELECT count(*) FROM nexora.page_versions WHERE organization_id = '"
                 + alpha.organizationId() + "'")).isZero();
+    }
+
+    @Test
+    void cursorUsesTheLastReturnedPageWithoutGapsOrDuplicates() throws Exception {
+        CmsFixture tenant = seedTenant();
+        for (int index = 1; index <= 26; index++) {
+            pages.create(tenant.ownerContext(), create(tenant, "page-" + String.format("%02d", index)),
+                    "cms-page-" + index);
+        }
+
+        CmsPageService.PageList first = pages.list(tenant.ownerContext(), null, 10);
+        CmsPageService.PageList second = pages.list(tenant.ownerContext(), first.nextCursor(), 10);
+        CmsPageService.PageList third = pages.list(tenant.ownerContext(), second.nextCursor(), 10);
+        List<UUID> seen = new java.util.ArrayList<>();
+        for (CmsPageService.PageList page : List.of(first, second, third)) {
+            seen.addAll(page.items().stream().map(CmsPageService.PageSummary::pageId).toList());
+        }
+
+        assertThat(first.items()).hasSize(10);
+        assertThat(second.items()).hasSize(10);
+        assertThat(third.items()).hasSize(6);
+        assertThat(first.nextCursor()).isEqualTo(first.items().getLast().pageId().toString());
+        assertThat(second.nextCursor()).isEqualTo(second.items().getLast().pageId().toString());
+        assertThat(third.nextCursor()).isNull();
+        assertThat(new HashSet<>(seen)).hasSize(26);
     }
 
     private CmsPageService.CreateCommand create(CmsFixture tenant, String slug) {
