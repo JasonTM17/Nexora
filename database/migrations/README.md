@@ -150,11 +150,23 @@ direct table DML or `BYPASSRLS`. The provider policy reads only the trusted
 `auth.uid()` and `realtime.topic()` helpers; Data API roles retain no `USAGE` on
 the application schema.
 
+`V015__scoped_realtime_channel_authorization.sql` adds an application-owned
+subject authorization epoch and replaces V014's broad channel policy with a
+read-only descriptor policy. A normal browser session JWT is denied: the
+provider-validated Realtime JWT must bind `sub`, the exact topic, event route,
+event version and the current subject epoch. Membership changes synchronously
+bump that epoch, so an old descriptor fails on a subsequent join or token
+refresh. Browser code receives no `INSERT` policy on `realtime.messages`, even
+for Presence; M3-T03 must validate a bounded same-origin intent and emit the
+canonical ephemeral state server-side. V015 does not configure a hosted Auth
+Hook, signing key or Supabase project, and it makes no hosted-provider claim.
+
 The M3 proof script creates a disposable local stand-in for `auth.uid()`,
-`realtime.topic()`, and `realtime.messages`, applies `V001` through `V014`,
-reruns the M2 tenant/CMS fixtures, then executes the actual private-channel RLS
-expression plus the outbox fixture. The stand-in is torn down with the Compose
-project; it is policy-conformance evidence, not hosted Supabase proof.
+`auth.jwt()`, `realtime.topic()`, and `realtime.messages`, applies `V001`
+through `V015`, reruns the M2 tenant/CMS fixtures, then executes the actual
+private-channel RLS expression plus the outbox fixture. The stand-in is torn
+down with the Compose project; it is policy-conformance evidence, not hosted
+Supabase proof.
 
 ```powershell
 pwsh -NoProfile -File database/migrations/scripts/verify-m3-schema-events.ps1

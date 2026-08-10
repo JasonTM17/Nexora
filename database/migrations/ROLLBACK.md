@@ -59,14 +59,16 @@ rollback, provider configuration, and deployment remain outside M2-DB01.
 
 ## M3-DB01 transactional outbox and private Realtime notes
 
-`V014` is append-only once applied. Do not remove the outbox table, helper
+`V014` and `V015` are append-only once applied. Do not remove the outbox table, helper
 functions, safe-payload check, idempotency contract, claim/lease semantics, or
-the guarded `realtime.messages` policy DDL by editing the applied migration in
-place. Any corrective change must be a reviewed forward migration after
-dependent-object inspection and the applicable Supabase platform-boundary
-review. The M3 proof script tears down its disposable Compose project and
-volumes automatically after success or failure unless `-KeepOnFailure` is
-explicitly supplied.
+the scoped `realtime.messages` policy DDL by editing an applied migration in
+place. In particular, do not reintroduce browser direct writes, fall back to a
+normal session JWT, stop epoch bumps on membership mutation, or weaken the
+topic/event/epoch descriptor binding as a rollback shortcut. Any corrective
+change must be a reviewed forward migration after dependent-object inspection
+and the applicable Supabase platform-boundary review. The M3 proof script tears
+down its disposable Compose project and volumes automatically after success or
+failure unless `-KeepOnFailure` is explicitly supplied.
 
 For a shared database, use a new reviewed forward migration only after the
 required dependency and rollback assessment. Preserve the outbox receipt and
