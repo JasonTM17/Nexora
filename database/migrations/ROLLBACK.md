@@ -59,7 +59,7 @@ rollback, provider configuration, and deployment remain outside M2-DB01.
 
 ## M3-DB01 transactional outbox and private Realtime notes
 
-`V014` through `V017` are append-only once applied. Do not remove the outbox table, helper
+`V014` through `V018` are append-only once applied. Do not remove the outbox table, helper
 functions, safe-payload check, idempotency contract, claim/lease semantics, or
 the scoped `realtime.messages` policy DDL by editing an applied migration in
 place. In particular, do not reintroduce browser direct writes, fall back to a

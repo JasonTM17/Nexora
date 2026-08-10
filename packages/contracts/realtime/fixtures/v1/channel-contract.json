@@ -26,14 +26,14 @@
       "subjectId": "90000000-0000-4000-8000-000000000001",
       "topic": "tenant:10000000-0000-4000-8000-000000000001:publication",
       "eventType": "PUBLICATION_INVALIDATED",
-      "eventVersion": 2,
+      "eventVersion": 1,
       "authorizationEpoch": 7,
       "expiresAt": "2026-08-10T01:00:00Z",
       "transportTokenClaims": {
         "sub": "90000000-0000-4000-8000-000000000001",
         "nexora_realtime_topic": "tenant:10000000-0000-4000-8000-000000000001:publication",
         "nexora_realtime_event_type": "PUBLICATION_INVALIDATED",
-        "nexora_realtime_event_version": 2,
+        "nexora_realtime_event_version": 1,
         "nexora_realtime_authorization_epoch": 7
       },
       "private": true,
@@ -92,6 +92,14 @@
       "name": "ordinarySessionTokenAttempt",
       "topic": "tenant:10000000-0000-4000-8000-000000000001:publication",
       "missingClaims": ["nexora_realtime_topic", "nexora_realtime_event_type", "nexora_realtime_event_version", "nexora_realtime_authorization_epoch"],
+      "result": "REALTIME_DESCRIPTOR_DENIED"
+    },
+    {
+      "name": "unsupportedEventVersion",
+      "topic": "tenant:10000000-0000-4000-8000-000000000001:publication",
+      "eventType": "PUBLICATION_INVALIDATED",
+      "presentEventVersion": 2,
+      "expectedEventVersion": 1,
       "result": "REALTIME_DESCRIPTOR_DENIED"
     },
     {

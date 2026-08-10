@@ -488,6 +488,15 @@ BEGIN
 
   PERFORM set_config(
     'request.jwt.claims',
+    '{"sub":"20000000-0000-4000-8000-000000000007","nexora_realtime_topic":"tenant:10000000-0000-4000-8000-000000000001:publication","nexora_realtime_event_type":"PUBLICATION_INVALIDATED","nexora_realtime_event_version":"2","nexora_realtime_authorization_epoch":"1"}',
+    true
+  );
+  IF (SELECT count(*) FROM realtime.messages) <> 0 THEN
+    RAISE EXCEPTION 'unsupported descriptor event version opened a private channel';
+  END IF;
+
+  PERFORM set_config(
+    'request.jwt.claims',
     '{"sub":"20000000-0000-4000-8000-000000000007","nexora_realtime_topic":"tenant:10000000-0000-4000-8000-000000000002:publication","nexora_realtime_event_type":"PUBLICATION_INVALIDATED","nexora_realtime_event_version":"1","nexora_realtime_authorization_epoch":"1"}',
     true
   );

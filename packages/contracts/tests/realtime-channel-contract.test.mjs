@@ -29,6 +29,7 @@ test("freezes private Realtime channels to the integrated event-routing matrix",
     assert.match(channel.topicTemplate, new RegExp(`^${route.scope}:\\{`));
     assert.match(channel.topicTemplate, new RegExp(`:${route.purpose}$`));
     assert.match(channel.owner, /current ACTIVE membership/i);
+    assert.equal(channel.eventVersion, 1, `${channel.eventType} must freeze its descriptor event version`);
   }
 
   assert.ok(channelContract.excludedEventTypes.some((entry) => entry.eventType === "NOTIFICATION_ENQUEUED"));
@@ -57,6 +58,7 @@ test("covers descriptor and presence denial cases without fabricating live autho
     && descriptor.result === "ISSUED"
     && descriptor.transportTokenClaims.sub === descriptor.subjectId
     && descriptor.transportTokenClaims.nexora_realtime_topic === descriptor.topic
+    && descriptor.transportTokenClaims.nexora_realtime_event_version === descriptor.eventVersion
     && descriptor.transportTokenClaims.nexora_realtime_authorization_epoch === descriptor.authorizationEpoch
   )));
   assert.ok(fixture.negativeCases.some((entry) => entry.name === "guessedCrossTenantTopic" && entry.result === "REALTIME_DESCRIPTOR_DENIED"));
@@ -65,6 +67,11 @@ test("covers descriptor and presence denial cases without fabricating live autho
   assert.ok(fixture.negativeCases.some((entry) => entry.name === "legacyLogicalTopicAttempt"));
   assert.ok(fixture.negativeCases.some((entry) => entry.name === "unsafePresencePayload" && entry.result === "REALTIME_DESCRIPTOR_DENIED"));
   assert.ok(fixture.negativeCases.some((entry) => entry.name === "ordinarySessionTokenAttempt" && entry.result === "REALTIME_DESCRIPTOR_DENIED"));
+  assert.ok(fixture.negativeCases.some((entry) => (
+    entry.name === "unsupportedEventVersion"
+    && entry.presentEventVersion !== entry.expectedEventVersion
+    && entry.result === "REALTIME_DESCRIPTOR_DENIED"
+  )));
   assert.ok(fixture.negativeCases.some((entry) => entry.name === "staleAuthorizationEpoch" && entry.result === "REALTIME_STALE_DESCRIPTOR"));
   assert.deepEqual(fixture.negativeCases.find((entry) => entry.name === "reconnectExhausted").attempts, [1000, 2000, 5000, 10000]);
   assert.ok(fixture.negativeCases.some((entry) => entry.name === "tokenRefreshFailure" && entry.result === "REALTIME_AUTH_REFRESH_REQUIRED"));

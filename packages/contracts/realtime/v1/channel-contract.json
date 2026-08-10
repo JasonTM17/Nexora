@@ -45,6 +45,7 @@
   "channels": [
     {
       "eventType": "PUBLICATION_INVALIDATED",
+      "eventVersion": 1,
       "topicTemplate": "tenant:{organizationId}:publication",
       "delivery": "broadcast",
       "direction": "server-to-client",
@@ -53,6 +54,7 @@
     },
     {
       "eventType": "WORKFLOW_TRANSITIONED",
+      "eventVersion": 1,
       "topicTemplate": "tenant:{organizationId}:workflow",
       "delivery": "broadcast",
       "direction": "server-to-client",
@@ -61,6 +63,7 @@
     },
     {
       "eventType": "JOB_PROGRESS_CHANGED",
+      "eventVersion": 1,
       "topicTemplate": "resource:{resourceId}:job-progress",
       "delivery": "broadcast",
       "direction": "server-to-client",
@@ -69,6 +72,7 @@
     },
     {
       "eventType": "PRESENCE_CHANGED",
+      "eventVersion": 1,
       "topicTemplate": "resource:{resourceId}:presence",
       "delivery": "presence",
       "direction": "server-mediated presence intent and server-to-client",

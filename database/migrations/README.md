@@ -172,6 +172,11 @@ projections unreadable by `nexora_runtime` while allowing their trigger-only
 UPSERT paths to run under a fixed-search-path, migrator-owned definer boundary.
 Neither synchronizer is directly executable by application or API roles.
 
+`V018__realtime_descriptor_event_versions.sql` pins every active v0.1 private
+Realtime route to its exact descriptor event version. The policy now rejects a
+numerically valid but unsupported event version; a version bump must be an
+explicit reviewed contract and forward-migration change.
+
 The M3 proof script creates a disposable local stand-in for `auth.uid()`,
 `auth.jwt()`, `realtime.topic()`, and `realtime.messages`, applies `V001`
 through `V017`, reruns the M2 tenant/CMS fixtures, then executes the actual
