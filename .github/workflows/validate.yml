@@ -1,0 +1,22 @@
+name: Validate repository foundation
+
+on:
+  push:
+    branches: [main, 'chore/**', 'feature/**', 'fix/**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Validate repository foundation
+        shell: pwsh
+        run: ./tools/validate-repo.ps1
+      - name: Render Compose configuration
+        run: docker compose -f compose.yaml config --quiet

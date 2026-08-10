@@ -6,9 +6,10 @@
 # Local AgentKit source bundle; not Nexora product source
 engineer/
 
-# Project-local linked worktrees and AgentKit runtime projections
+# Project-local linked worktrees and AgentKit runtime projections/cache
 .worktrees/
 .agentkit/state/
+.agentkit/state/**
 
 # Common generated artifacts
 node_modules/
@@ -17,3 +18,7 @@ dist/
 build/
 coverage/
 *.log
+
+# Local tool caches
+.cache/
+.mise/
