@@ -14,10 +14,23 @@ describe("frontend foundation guardrails", () => {
     expect(css).toContain("min-height: 44px");
   });
 
-  it("applies stricter no-store headers to non-public surfaces", () => {
+  it("uses static public CSP and nonce-bound no-store CSP for private surfaces", () => {
     const config = app("next.config.ts");
-    expect(config).toContain("private, no-store, max-age=0");
+    const proxy = app("proxy.ts");
+    expect(config).toContain("script-src 'self' 'unsafe-inline'");
+    expect(proxy).toContain("'strict-dynamic'");
+    expect(proxy).toContain('requestHeaders.set("x-nonce", nonce)');
+    expect(proxy).toContain("private, no-store, max-age=0");
     expect(config).toContain("frame-ancestors 'none'");
+  });
+
+  it("keeps the builder selection keyboard-operable and visibly focused", () => {
+    const builder = app("../../packages/ui-builder/src/builder-selection-fixture.tsx");
+    const css = app("app/globals.css");
+    expect(builder).toContain('type="button"');
+    expect(builder).toContain("aria-pressed={selected}");
+    expect(css).toContain("button:focus-visible");
+    expect(css).toContain(".nx-builder-selection");
   });
 
   it("keeps fixture language visible in every interactive surface", () => {
