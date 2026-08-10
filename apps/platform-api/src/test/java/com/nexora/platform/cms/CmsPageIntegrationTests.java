@@ -3,23 +3,31 @@ package com.nexora.platform.cms;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexora.platform.auth.DomainAccessException;
+import com.nexora.platform.auth.LocalJwtIssuer;
 import com.nexora.platform.tenant.TenantContext;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -30,6 +38,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 class CmsPageIntegrationTests {
     private static final String RUNTIME_LOGIN = "nexora_cms_runtime_login";
     private static final String RUNTIME_PASSWORD = "test-cms-runtime-login";
+    private static final LocalJwtIssuer ISSUER = new LocalJwtIssuer();
     private static final PostgreSQLContainer<?> DATABASE = new PostgreSQLContainer<>("postgres:17.5-alpine")
             .withDatabaseName("nexora_cms")
             .withUsername("postgres")
@@ -38,6 +47,12 @@ class CmsPageIntegrationTests {
 
     @Autowired
     private CmsPageService pages;
+
+    @LocalServerPort
+    private int port;
+
+    private final HttpClient http = HttpClient.newHttpClient();
+    private final ObjectMapper json = new ObjectMapper();
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
@@ -51,10 +66,13 @@ class CmsPageIntegrationTests {
         registry.add("NEXORA_MIGRATION_DATABASE_USERNAME", DATABASE::getUsername);
         registry.add("NEXORA_MIGRATION_DATABASE_PASSWORD", DATABASE::getPassword);
         registry.add("NEXORA_MIGRATIONS_LOCATION", () -> migrationDirectory.toString());
+        registry.add("NEXORA_AUTH_ISSUER", ISSUER::issuer);
+        registry.add("NEXORA_AUTH_JWKS_URI", ISSUER::jwksUri);
     }
 
     @AfterAll
     static void stopFixtures() throws Exception {
+        ISSUER.close();
         DATABASE.stop();
         if (migrationDirectory != null) {
             try (Stream<Path> paths = Files.walk(migrationDirectory)) {
@@ -138,6 +156,28 @@ class CmsPageIntegrationTests {
         assertThat(second.nextCursor()).isEqualTo(second.items().getLast().pageId().toString());
         assertThat(third.nextCursor()).isNull();
         assertThat(new HashSet<>(seen)).hasSize(26);
+    }
+
+    @Test
+    void httpDraftResponseOmitsUnsetOptionalFields() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView draft = pages.create(tenant.ownerContext(), create(tenant, "http-draft"),
+                "cms-http-draft-1");
+
+        HttpRequest request = HttpRequest.newBuilder(URI.create(
+                        "http://127.0.0.1:" + port + "/api/v1/cms/pages/" + draft.pageId()))
+                .header("Authorization", "Bearer " + ISSUER.token(tenant.ownerSubjectId(), Instant.now().plusSeconds(60)))
+                .header("X-Nexora-Organization-Id", tenant.organizationId().toString())
+                .GET()
+                .build();
+        HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode body = json.readTree(response.body());
+        assertThat(body.has("publishedVersionId")).isFalse();
+        assertThat(body.path("seo").path("openGraph").has("imageAssetId")).isFalse();
+        assertThat(body.path("seo").path("twitter").has("imageAssetId")).isFalse();
+        assertThat(body.path("seo").path("canonicalPath").asText()).isEqualTo("/welcome");
     }
 
     private CmsPageService.CreateCommand create(CmsFixture tenant, String slug) {

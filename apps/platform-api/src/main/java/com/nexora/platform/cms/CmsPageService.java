@@ -1,5 +1,6 @@
 package com.nexora.platform.cms;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.nexora.platform.auth.DomainAccessException;
 import com.nexora.platform.authorization.PermissionEvaluator;
 import com.nexora.platform.tenant.TenantContext;
@@ -8,7 +9,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.context.annotation.Profile;
@@ -262,6 +262,7 @@ public class CmsPageService {
     public record UpdateCommand(long expectedDraftVersion, String title, String schemaVersion,
                                 String contentDigest, UUID themeVersionId, SeoSnapshot seo) { }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record SeoSnapshot(
             String title, String description, String locale, String canonicalPath,
             String openGraphTitle, String openGraphDescription, UUID openGraphImageAssetId,
@@ -288,6 +289,7 @@ public class CmsPageService {
 
     public record PageList(List<PageSummary> items, String nextCursor) { }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record PageView(UUID pageId, UUID siteId, String slug, String title, String state,
                            long draftVersion, Instant updatedAt, String schemaVersion,
                            String contentDigest, UUID themeVersionId, SeoSnapshot seo,

@@ -22,13 +22,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
-final class LocalJwtIssuer implements AutoCloseable {
+public final class LocalJwtIssuer implements AutoCloseable {
     private final HttpServer server;
     private final ExecutorService executor;
     private final AtomicInteger jwksRequests = new AtomicInteger();
     private volatile RSAKey signingKey;
 
-    LocalJwtIssuer() {
+    public LocalJwtIssuer() {
         try {
             signingKey = newKey();
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -49,11 +49,11 @@ final class LocalJwtIssuer implements AutoCloseable {
         }
     }
 
-    String issuer() {
+    public String issuer() {
         return "http://127.0.0.1:" + server.getAddress().getPort() + "/auth/v1";
     }
 
-    String jwksUri() {
+    public String jwksUri() {
         return issuer() + "/.well-known/jwks.json";
     }
 
@@ -65,7 +65,7 @@ final class LocalJwtIssuer implements AutoCloseable {
         signingKey = newKey();
     }
 
-    String token(UUID subjectId, Instant expiresAt) {
+    public String token(UUID subjectId, Instant expiresAt) {
         return token(subjectId, expiresAt, Map.of());
     }
 
