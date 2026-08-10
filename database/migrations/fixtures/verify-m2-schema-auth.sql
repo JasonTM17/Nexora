@@ -304,8 +304,8 @@ END
 $$;
 COMMIT;
 
--- Full Alpha context exposes only the selected organization and exact current
--- membership; Beta remains invisible despite Alice belonging to both tenants.
+-- Full Alpha OWNER context may enumerate Alpha memberships, but Beta remains
+-- invisible despite Alice belonging to both tenants.
 BEGIN;
 SET LOCAL ROLE nexora_runtime;
 SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000001', true);
@@ -326,8 +326,8 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'Alpha context leaked Beta';
   END IF;
-  IF (SELECT count(*) FROM nexora.memberships) <> 1 THEN
-    RAISE EXCEPTION 'resolved context must expose the exact current membership only';
+  IF (SELECT count(*) FROM nexora.memberships) <> 5 THEN
+    RAISE EXCEPTION 'manager context must enumerate only Alpha memberships';
   END IF;
 END
 $$;
@@ -342,6 +342,9 @@ SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-00000000000
 SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000003', true);
 DO $$
 BEGIN
+  IF (SELECT count(*) FROM nexora.memberships) <> 1 THEN
+    RAISE EXCEPTION 'non-manager context must expose only the actor membership';
+  END IF;
   BEGIN
     INSERT INTO nexora.memberships (id, organization_id, subject_id, status, tenant_role)
     VALUES (
@@ -386,8 +389,9 @@ END
 $$;
 COMMIT;
 
--- A manager cannot enumerate Alpha. Without an explicitly scoped target the
--- normal SELECT policy still exposes only the current actor membership.
+-- An ACTIVE manager with both required permissions may enumerate only Alpha.
+-- The private authorization projection itself remains actor-only and cannot
+-- be altered directly by runtime SQL.
 BEGIN;
 SET LOCAL ROLE nexora_runtime;
 SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000007', true);
@@ -397,12 +401,16 @@ DO $$
 DECLARE
   updated_count bigint;
 BEGIN
-  IF (SELECT count(*) FROM nexora.memberships) <> 1
-     OR EXISTS (
+  IF (SELECT count(*) FROM nexora.memberships) <> 5
+     OR NOT EXISTS (
        SELECT 1 FROM nexora.memberships
        WHERE id = '30000000-0000-4000-8000-000000000003'
+     )
+     OR EXISTS (
+       SELECT 1 FROM nexora.memberships
+       WHERE organization_id = '10000000-0000-4000-8000-000000000002'
      ) THEN
-    RAISE EXCEPTION 'manager context without a target must not enumerate tenant memberships';
+    RAISE EXCEPTION 'manager enumeration must include only selected-tenant memberships';
   END IF;
 
   IF (SELECT count(*) FROM nexora.membership_authorizations) <> 1 THEN
@@ -455,11 +463,12 @@ BEGIN
 
   PERFORM set_config('nexora.target_membership_mutation', '', true);
 
-  IF EXISTS (
+  IF NOT EXISTS (
     SELECT 1 FROM nexora.memberships
     WHERE id = '30000000-0000-4000-8000-000000000003'
+      AND version = 2
   ) THEN
-    RAISE EXCEPTION 'stale target version unexpectedly read a target membership';
+    RAISE EXCEPTION 'manager enumeration must show the current target version';
   END IF;
 
   UPDATE nexora.memberships
@@ -509,6 +518,9 @@ DO $$
 DECLARE
   updated_count bigint;
 BEGIN
+  IF (SELECT count(*) FROM nexora.memberships) <> 1 THEN
+    RAISE EXCEPTION 'stale manager authority unexpectedly enumerated memberships';
+  END IF;
   IF EXISTS (
     SELECT 1 FROM nexora.memberships
     WHERE id = '30000000-0000-4000-8000-000000000003'
