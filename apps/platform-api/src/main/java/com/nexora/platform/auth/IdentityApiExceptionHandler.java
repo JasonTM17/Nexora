@@ -22,11 +22,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
         "com.nexora.platform.identity", "com.nexora.platform.tenant", "com.nexora.platform.profile"
 })
 public class IdentityApiExceptionHandler implements AuthenticationEntryPoint {
+    private static final String GENERIC_PERMISSION_DENIED_MESSAGE = "Permission denied.";
+
     @ExceptionHandler(DomainAccessException.class)
     ResponseEntity<ApiProblem> domainFailure(DomainAccessException exception, HttpServletRequest request) {
         return ResponseEntity.status(exception.status())
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(problem(exception.code(), exception.getMessage(), request));
+                .body(problem(exception.code(), clientMessage(exception), request));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -50,5 +52,12 @@ public class IdentityApiExceptionHandler implements AuthenticationEntryPoint {
 
     private ApiProblem problem(String code, String message, HttpServletRequest request) {
         return new ApiProblem(code, message, Map.of(), (String) request.getAttribute(TraceIdFilter.ATTRIBUTE));
+    }
+
+    private String clientMessage(DomainAccessException exception) {
+        if ("PERMISSION_DENIED".equals(exception.code())) {
+            return GENERIC_PERMISSION_DENIED_MESSAGE;
+        }
+        return exception.getMessage();
     }
 }

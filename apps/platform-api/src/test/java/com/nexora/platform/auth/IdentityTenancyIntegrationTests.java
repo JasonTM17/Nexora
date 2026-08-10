@@ -264,7 +264,10 @@ class IdentityTenancyIntegrationTests {
         var response = new IdentityApiExceptionHandler().domainFailure(failure, request);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().code()).isEqualTo("PERMISSION_DENIED");
-        assertThat(response.getBody().message()).doesNotContain("DENY_STALE_MEMBERSHIP_CONTEXT");
+        assertThat(response.getBody().message()).isEqualTo("Permission denied.");
+        assertThat(response.getBody().message())
+                .doesNotContain("DENY_STALE_MEMBERSHIP_CONTEXT")
+                .doesNotContainIgnoringCase("stale", "membership", "version", "role");
     }
 
     private HttpResponse<String> get(String path, String token, UUID organizationId) throws Exception {
