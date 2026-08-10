@@ -1,5 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+function supabaseConnectSources() {
+  const configured = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!configured) return [];
+  const url = new URL(configured);
+  const websocket = new URL(configured);
+  websocket.protocol = url.protocol === "http:" ? "ws:" : "wss:";
+  return [url.origin, websocket.origin];
+}
+
 function privateCsp(nonce: string) {
   return [
     "default-src 'self'",
@@ -7,7 +16,7 @@ function privateCsp(nonce: string) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "font-src 'self'",
-    "connect-src 'self'",
+    ["connect-src 'self'", ...supabaseConnectSources()].join(" "),
     "object-src 'none'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
