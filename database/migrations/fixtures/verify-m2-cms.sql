@@ -33,11 +33,14 @@ INSERT INTO nexora.themes (id, organization_id, slug)
 VALUES ('50000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'default');
 INSERT INTO nexora.theme_versions (id, organization_id, theme_id, version, state, token_digest, token_manifest, actor_id)
 VALUES ('60000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001', 1, 'PUBLISHED', 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '{"color":"safe"}'::jsonb, '20000000-0000-4000-8000-000000000001');
-INSERT INTO nexora.pages (id, organization_id, site_id, slug, title, schema_version, content_digest, theme_version_id, seo_title, seo_description, seo_locale, canonical_path)
-VALUES ('70000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', 'welcome', 'Welcome', '1.0.0', 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', '60000000-0000-4000-8000-000000000001', 'Welcome', 'Welcome to Alpha.', 'en-US', '/welcome');
+INSERT INTO nexora.memberships (id, organization_id, subject_id, status, tenant_role)
+VALUES
+  ('30000000-0000-4000-8000-000000000008', '10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000008', 'ACTIVE', 'CONTENT_CREATOR'),
+  ('30000000-0000-4000-8000-000000000009', '10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000009', 'ACTIVE', 'EDITOR');
+INSERT INTO nexora.pages (id, organization_id, site_id, slug, title, schema_version, content_digest, theme_version_id, seo_title, seo_description, seo_locale, canonical_path, state, published_version_id)
+VALUES ('70000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', 'welcome', 'Welcome', '1.0.0', 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', '60000000-0000-4000-8000-000000000001', 'Welcome', 'Welcome to Alpha.', 'en-US', '/welcome', 'PUBLISHED', '80000000-0000-4000-8000-000000000001');
 INSERT INTO nexora.page_versions (id, organization_id, site_id, page_id, source_draft_version, publication_operation, schema_version, content_digest, theme_version_id, seo_title, seo_description, seo_locale, canonical_path, seo_snapshot_digest, actor_id, trace_id)
 VALUES ('80000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000001', 1, 'PUBLISH', '1.0.0', 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', '60000000-0000-4000-8000-000000000001', 'Welcome', 'Welcome to Alpha.', 'en-US', '/welcome', 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc', '20000000-0000-4000-8000-000000000001', 'cms-fixture-1');
-UPDATE nexora.pages SET state = 'PUBLISHED', published_version_id = '80000000-0000-4000-8000-000000000001' WHERE id = '70000000-0000-4000-8000-000000000001';
 INSERT INTO nexora.page_publications (id, organization_id, site_id, page_id, source_draft_version, published_version_id, publication_operation, actor_id, trace_id, idempotency_key_digest, request_fingerprint)
 VALUES ('90000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000001', 1, '80000000-0000-4000-8000-000000000001', 'PUBLISH', '20000000-0000-4000-8000-000000000001', 'cms-fixture-1', 'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd', 'sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee');
 INSERT INTO nexora.workflow_reviews (id, organization_id, page_id, candidate_draft_version, action, from_state, to_state, actor_id, trace_id)
@@ -89,6 +92,84 @@ BEGIN
     VALUES ('90000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000001', 3, '80000000-0000-4000-8000-000000000003', 'ROLLBACK', '20000000-0000-4000-8000-000000000001', 'cms-fixture-operation-mismatch', 'sha256:3333333333333333333333333333333333333333333333333333333333333333', 'sha256:4444444444444444444444444444444444444444444444444444444444444444');
     RAISE EXCEPTION 'same-page publication operation mismatch unexpectedly succeeded';
   EXCEPTION WHEN foreign_key_violation THEN NULL;
+  END;
+END $$;
+COMMIT;
+
+-- CONTENT_CREATOR may make a state-stable draft edit but cannot use page.update
+-- to archive. EDITOR retains ordinary state-stable edit access.
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000008', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000008', true);
+DO $$
+BEGIN
+  BEGIN
+    UPDATE nexora.pages SET state = 'ARCHIVED'
+    WHERE id = '70000000-0000-4000-8000-000000000001';
+    RAISE EXCEPTION 'CONTENT_CREATOR archive unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END $$;
+COMMIT;
+
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000009', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000009', true);
+UPDATE nexora.pages SET title = 'Welcome editorial'
+WHERE id = '70000000-0000-4000-8000-000000000001';
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM nexora.pages
+    WHERE id = '70000000-0000-4000-8000-000000000001'
+      AND title = 'Welcome editorial'
+      AND state = 'PUBLISHED'
+  ) THEN
+    RAISE EXCEPTION 'EDITOR state-stable draft update unexpectedly failed';
+  END IF;
+END $$;
+COMMIT;
+
+-- REVIEWER has page.publish but not page.update: direct content/SEO edits are
+-- denied, while the frozen PUBLISHED -> ARCHIVED transition is allowed.
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000002', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000003', true);
+DO $$
+DECLARE
+  prior_version bigint;
+BEGIN
+  SELECT version INTO prior_version FROM nexora.pages WHERE id = '70000000-0000-4000-8000-000000000001';
+  BEGIN
+    UPDATE nexora.pages SET seo_title = 'Reviewer edit'
+    WHERE id = '70000000-0000-4000-8000-000000000001';
+    RAISE EXCEPTION 'REVIEWER direct SEO edit unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  UPDATE nexora.pages SET state = 'ARCHIVED'
+  WHERE id = '70000000-0000-4000-8000-000000000001';
+  IF NOT EXISTS (
+    SELECT 1 FROM nexora.pages
+    WHERE id = '70000000-0000-4000-8000-000000000001'
+      AND state = 'ARCHIVED'
+      AND title = 'Welcome editorial'
+      AND version = prior_version + 1
+  ) THEN
+    RAISE EXCEPTION 'REVIEWER PUBLISHED to ARCHIVED workflow transition failed or changed payload';
+  END IF;
+
+  BEGIN
+    UPDATE nexora.pages SET state = 'DRAFT'
+    WHERE id = '70000000-0000-4000-8000-000000000001';
+    RAISE EXCEPTION 'ARCHIVED to DRAFT workflow transition unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 END $$;
 COMMIT;

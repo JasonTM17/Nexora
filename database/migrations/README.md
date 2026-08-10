@@ -129,6 +129,12 @@ matching permission, publication-related operations require `page.publish`,
 and the audit actor must match the transaction subject. No API role is granted
 schema or table access.
 
+`V012` retains the normal `page.update` draft-edit path and adds a separate,
+forced-RLS `page.publish` path for server workflow transitions. Its SECURITY
+INVOKER trigger permits only the frozen C02 state graph and automatic row
+version/timestamp changes; content, SEO, theme, site, slug, title, publication
+pointer, and draft version remain immutable during that transition.
+
 Run the complete disposable PostgreSQL 17.5 proof from the repository root:
 
 ```powershell

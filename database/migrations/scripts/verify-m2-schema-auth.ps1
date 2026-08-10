@@ -52,8 +52,8 @@ try {
 
     $migrationFiles = Get-ChildItem -LiteralPath $migrationDirectory -File -Filter 'V*__*.sql' |
         Sort-Object Name
-    if ($migrationFiles.Count -ne 11) {
-        throw "Expected exactly eleven ordered migrations through M2-DB02; found $($migrationFiles.Count)"
+    if ($migrationFiles.Count -ne 12) {
+        throw "Expected exactly twelve ordered migrations through M2-DB02; found $($migrationFiles.Count)"
     }
 
     $env:NEXORA_POSTGRES_PORT = $PostgresPort
