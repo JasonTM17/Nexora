@@ -55,6 +55,21 @@ test("freezes the safe error, authentication, authorization, and trace contracts
   for (const forbidden of ["stack", "exception", "credential", "password", "token", "provider_response"]) {
     assert.ok(forbiddenDetailKeys.includes(forbidden), `details must reject ${forbidden}`);
   }
+  const detailValue = problem.properties.details.additionalProperties;
+  assert.equal(detailValue.minLength, 1);
+  assert.equal(detailValue.maxLength, 256);
+  assert.equal(detailValue.pattern, "^[ -~]{1,256}$");
+  const forbiddenValuePattern = new RegExp(detailValue.not.pattern);
+  for (const unsafeValue of [
+    "Authorization: Bearer secret-token",
+    "provider response payload",
+    "request source text",
+    "stack trace follows",
+    "client_secret=unsafe",
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature",
+  ]) {
+    assert.match(unsafeValue, forbiddenValuePattern, `details must reject ${unsafeValue}`);
+  }
 
   const bearer = spec.components.securitySchemes.bearerAuth;
   assert.deepEqual({ type: bearer.type, scheme: bearer.scheme }, { type: "http", scheme: "bearer" });

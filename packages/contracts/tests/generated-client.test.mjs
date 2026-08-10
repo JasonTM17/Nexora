@@ -38,15 +38,15 @@ test("keeps bearer credentials off an explicitly public operation while sending 
 
 test("surfaces only a valid safe problem envelope", async () => {
   const problem = {
-    code: "authentication_required",
-    message: "Authentication is required.",
-    details: {},
-    traceId: "trace-auth-1",
+    code: "validation_failed",
+    message: "Request validation failed.",
+    details: { message: "must not be blank" },
+    traceId: "trace-validation-1",
   };
   const client = new PlatformApiClient({
     baseUrl: "https://nexora.test",
     fetch: async () => new Response(JSON.stringify(problem), {
-      status: 401,
+      status: 400,
       headers: { "Content-Type": "application/json", "X-Trace-Id": "trace-header-1" },
     }),
   });
@@ -55,9 +55,9 @@ test("surfaces only a valid safe problem envelope", async () => {
     client.getPlatform(),
     (error) => {
       assert.ok(error instanceof NexoraApiError);
-      assert.equal(error.status, 401);
+      assert.equal(error.status, 400);
       assert.deepEqual(error.problem, problem);
-      assert.equal(error.traceId, "trace-auth-1");
+      assert.equal(error.traceId, "trace-validation-1");
       return true;
     },
   );
@@ -105,6 +105,29 @@ test("rejects sensitive-looking detail keys without exposing their values", asyn
       assert.equal(error.problem, null);
       assert.equal(error.traceId, "trace-detail-1");
       assert.doesNotMatch(error.message, /sensitive nested diagnostic/);
+      return true;
+    },
+  );
+});
+
+test("rejects a bearer credential hidden behind a benign detail key", async () => {
+  const client = new PlatformApiClient({
+    baseUrl: "https://nexora.test",
+    fetch: async () => new Response(JSON.stringify({
+      code: "validation_failed",
+      message: "Request validation failed.",
+      details: { message: "Authorization: Bearer redacted" },
+      traceId: "trace-detail-2",
+    }), { status: 400, headers: { "Content-Type": "application/json", "X-Trace-Id": "trace-detail-2" } }),
+  });
+
+  await assert.rejects(
+    client.echoPlatform({ message: "invalid" }),
+    (error) => {
+      assert.ok(error instanceof NexoraApiError);
+      assert.equal(error.problem, null);
+      assert.equal(error.traceId, "trace-detail-2");
+      assert.doesNotMatch(error.message, /redacted/);
       return true;
     },
   );

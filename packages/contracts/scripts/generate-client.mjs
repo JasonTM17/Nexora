@@ -93,6 +93,13 @@ export function renderClient(spec) {
   const detailPropertyRules = spec.components?.schemas?.ApiProblem?.properties?.details?.propertyNames?.allOf ?? [];
   const forbiddenDetailKeys = detailPropertyRules.find((rule) => Array.isArray(rule.not?.enum))?.not.enum;
   if (!forbiddenDetailKeys) throw new Error("ApiProblem details must define forbidden property names");
+  const detailValueSchema = spec.components?.schemas?.ApiProblem?.properties?.details?.additionalProperties;
+  const detailValueMaxLength = detailValueSchema?.maxLength;
+  const safeDetailValuePattern = detailValueSchema?.pattern;
+  const forbiddenDetailValuePattern = detailValueSchema?.not?.pattern;
+  if (!detailValueMaxLength || !safeDetailValuePattern || !forbiddenDetailValuePattern) {
+    throw new Error("ApiProblem details must define bounded safe value rules");
+  }
   const hasBearerAuth = Object.values(spec.components?.securitySchemes ?? {}).some(
     (scheme) => scheme.type === "http" && scheme.scheme === "bearer",
   );
@@ -140,6 +147,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 const FORBIDDEN_DETAIL_KEYS = new Set(${JSON.stringify(forbiddenDetailKeys)});
+const SAFE_DETAIL_VALUE_PATTERN = new RegExp(${JSON.stringify(safeDetailValuePattern)});
+const FORBIDDEN_DETAIL_VALUE_PATTERN = new RegExp(${JSON.stringify(forbiddenDetailValuePattern)});
 
 function asProblem(value: unknown): ApiProblem | null {
   if (!isRecord(value) || typeof value.code !== "string" || typeof value.message !== "string") return null;
@@ -153,7 +162,9 @@ function asProblem(value: unknown): ApiProblem | null {
     /^[a-z][a-z0-9_.-]{0,63}$/.test(key)
       && !FORBIDDEN_DETAIL_KEYS.has(key)
       && typeof detail === "string"
-      && detail.length <= 512
+      && detail.length <= ${detailValueMaxLength}
+      && SAFE_DETAIL_VALUE_PATTERN.test(detail)
+      && !FORBIDDEN_DETAIL_VALUE_PATTERN.test(detail)
   )) return null;
   return value as ApiProblem;
 }

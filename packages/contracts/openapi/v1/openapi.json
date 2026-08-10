@@ -276,7 +276,13 @@
             },
             "additionalProperties": {
               "type": "string",
-              "maxLength": 512
+              "description": "A printable validation message or code. Sensitive diagnostics and credential-like values are forbidden.",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^[ -~]{1,256}$",
+              "not": {
+                "pattern": "(?:[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Bb][Ee][Aa][Rr][Ee][Rr]|[Tt][Oo][Kk][Ee][Nn]|[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Aa][Pp][Ii][ _-]?[Kk][Ee][Yy]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][ _-]?[Kk][Ee][Yy]|[Cc][Ll][Ii][Ee][Nn][Tt][ _-]?[Ss][Ee][Cc][Rr][Ee][Tt]|[Cc][Oo][Oo][Kk][Ii][Ee]|[Ss][Tt][Aa][Cc][Kk](?:[ _-]?[Tt][Rr][Aa][Cc][Ee])?|[Ee][Xx][Cc][Ee][Pp][Tt][Ii][Oo][Nn]|[Pp][Rr][Oo][Vv][Ii][Dd][Ee][Rr]|[Ss][Oo][Uu][Rr][Cc][Ee]|[Pp][Rr][Oo][Mm][Pp][Tt]|eyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}|[A-Za-z0-9_-]{32,})"
+              }
             }
           },
           "traceId": {
