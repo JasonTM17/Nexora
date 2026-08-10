@@ -15,7 +15,8 @@ $composeFile = Join-Path $repoRoot 'compose.yaml'
 $migrationDirectory = Join-Path $repoRoot 'database\migrations'
 $foundationFixture = Join-Path $migrationDirectory 'fixtures\verify-foundation.sql'
 $m2Fixture = Join-Path $migrationDirectory 'fixtures\verify-m2-schema-auth.sql'
-$projectName = 'nexora-m2-db01-verify'
+$cmsFixture = Join-Path $migrationDirectory 'fixtures\verify-m2-cms.sql'
+$projectName = 'nexora-m2-db02-verify'
 $cleanupRequired = $false
 $succeeded = $false
 
@@ -43,7 +44,7 @@ try {
         throw 'Docker is required for the local PostgreSQL 17.5 migration verification.'
     }
 
-    foreach ($requiredFile in @($composeFile, $foundationFixture, $m2Fixture)) {
+    foreach ($requiredFile in @($composeFile, $foundationFixture, $m2Fixture, $cmsFixture)) {
         if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
             throw "Missing verification input: $requiredFile"
         }
@@ -51,8 +52,8 @@ try {
 
     $migrationFiles = Get-ChildItem -LiteralPath $migrationDirectory -File -Filter 'V*__*.sql' |
         Sort-Object Name
-    if ($migrationFiles.Count -ne 6) {
-        throw "Expected exactly six ordered migrations through M2-DB01; found $($migrationFiles.Count)"
+    if ($migrationFiles.Count -ne 10) {
+        throw "Expected exactly ten ordered migrations through M2-DB02; found $($migrationFiles.Count)"
     }
 
     $env:NEXORA_POSTGRES_PORT = $PostgresPort
@@ -88,9 +89,11 @@ $$;
     Invoke-PsqlText (Get-Content -LiteralPath $foundationFixture -Raw)
     Write-Output 'Running M2 tenant/RBAC/RLS fixture'
     Invoke-PsqlText (Get-Content -LiteralPath $m2Fixture -Raw)
+    Write-Output 'Running M2 CMS/immutable-history/RLS fixture'
+    Invoke-PsqlText (Get-Content -LiteralPath $cmsFixture -Raw)
 
     $succeeded = $true
-    Write-Output "M2-DB01 local verification passed on PostgreSQL 17.5 via Compose project $projectName."
+    Write-Output "M2-DB02 local verification passed on PostgreSQL 17.5 via Compose project $projectName."
 }
 finally {
     if ($cleanupRequired -and ($succeeded -or -not $KeepOnFailure)) {

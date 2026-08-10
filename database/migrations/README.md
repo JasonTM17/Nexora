@@ -118,6 +118,14 @@ membership remains active. The later backend freshness gate must compare the
 resolved `membershipId` and `membershipVersion` against the current row before
 setting the database context.
 
+## M2-DB02 CMS and publishing train
+
+`V007` creates tenant-scoped sites, themes, immutable page/publication history,
+workflow reviews and typed SEO snapshots. `V008` adds only explicit
+`nexora_runtime` forced-RLS policies; its helper is SECURITY INVOKER and
+rechecks the current ACTIVE actor plus frozen permission matrix. No API role is
+granted schema or table access.
+
 Run the complete disposable PostgreSQL 17.5 proof from the repository root:
 
 ```powershell
