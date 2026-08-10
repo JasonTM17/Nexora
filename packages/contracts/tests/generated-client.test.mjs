@@ -148,6 +148,46 @@ test("projects the protected optimistic membership mutation with a generated pat
   assert.equal(response.traceId, "trace-membership-mutation");
 });
 
+test("projects the protected selected-tenant membership directory without arbitrary filters", async () => {
+  let observedUrl;
+  let observedInit;
+  const client = new PlatformApiClient({
+    baseUrl: "https://nexora.test/",
+    accessToken: "short-lived-token",
+    fetch: async (url, init) => {
+      observedUrl = url;
+      observedInit = init;
+      return new Response(JSON.stringify([{
+        membershipId: "40000000-0000-4000-8000-000000000001",
+        organizationId: "30000000-0000-4000-8000-000000000001",
+        subjectId: "10000000-0000-4000-8000-000000000001",
+        status: "ACTIVE",
+        role: "ADMIN",
+        version: 2,
+      }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "X-Trace-Id": "trace-membership-directory" },
+      });
+    },
+  });
+
+  const response = await client.listMemberships(
+    { organizationId: "30000000-0000-4000-8000-000000000001" },
+    { traceId: "trace-membership-directory" },
+  );
+
+  assert.equal(observedUrl, "https://nexora.test/api/v1/authorization/memberships");
+  assert.equal(observedInit.method, "GET");
+  assert.equal(observedInit.headers.get("Authorization"), "Bearer short-lived-token");
+  assert.equal(observedInit.headers.get("X-Nexora-Organization-Id"), "30000000-0000-4000-8000-000000000001");
+  assert.equal(observedInit.headers.get("X-Trace-Id"), "trace-membership-directory");
+  assert.equal(observedInit.body, undefined);
+  assert.equal(response.data.length, 1);
+  assert.equal(response.data[0].organizationId, "30000000-0000-4000-8000-000000000001");
+  assert.equal(response.data[0].role, "ADMIN");
+  assert.equal(response.traceId, "trace-membership-directory");
+});
+
 test("projects CMS publication with generated component parameters and idempotency", async () => {
   let observedUrl;
   let observedInit;

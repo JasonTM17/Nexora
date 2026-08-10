@@ -131,6 +131,7 @@ test("projects the M2 identity, tenant-selection, authorization mutation, and pr
     "/api/v1/tenant-context/resolve": "resolveTenantContext",
     "/api/v1/tenant-context": "getTenantContext",
     "/api/v1/authorization/permission-matrix": "getPermissionMatrix",
+    "/api/v1/authorization/memberships": "listMemberships",
     "/api/v1/authorization/memberships/{membershipId}": "updateMembership",
     "/api/v1/profile": ["getProfile", "updateProfile"],
   };
@@ -196,6 +197,19 @@ test("projects the M2 identity, tenant-selection, authorization mutation, and pr
   assert.deepEqual(spec.components.schemas.MembershipStatus.enum, ["INVITED", "ACTIVE", "SUSPENDED", "REMOVED"]);
   assert.deepEqual(spec.components.schemas.MembershipMutationResponse.required,
     ["membershipId", "organizationId", "subjectId", "status", "role", "version"]);
+
+  const directory = spec.paths["/api/v1/authorization/memberships"].get;
+  assert.equal(directory.parameters[0].$ref, "#/components/parameters/RequiredOrganizationHeader");
+  assert.match(directory.description, /fresh active acting membership/i);
+  assert.match(directory.description, /user\.manage and role\.manage/i);
+  assert.deepEqual(Object.keys(directory.responses), ["200", "401", "403", "500"]);
+  const directorySchema = directory.responses["200"].content["application/json"].schema;
+  assert.equal(directorySchema.type, "array");
+  assert.equal(directorySchema.items.$ref, "#/components/schemas/MembershipDirectoryEntry");
+  const directoryEntry = spec.components.schemas.MembershipDirectoryEntry;
+  assert.equal(directoryEntry.additionalProperties, false);
+  assert.deepEqual(directoryEntry.required, ["membershipId", "organizationId", "subjectId", "status", "role", "version"]);
+  assert.deepEqual(Object.keys(directoryEntry.properties), ["membershipId", "organizationId", "subjectId", "status", "role", "version"]);
 });
 
 test("projects bounded CMS drafting, workflow, publication, theme, and SEO contracts", () => {
