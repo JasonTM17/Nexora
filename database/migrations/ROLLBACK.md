@@ -56,3 +56,19 @@ For a shared database, use a new reviewed forward migration after backup/restore
 authority and dependent-object inspection. Preserve membership history and the
 last-owner invariant during any expand/contract sequence. Hosted Supabase
 rollback, provider configuration, and deployment remain outside M2-DB01.
+
+## M3-DB01 transactional outbox and private Realtime notes
+
+`V014` is append-only once applied. Do not remove the outbox table, helper
+functions, safe-payload check, idempotency contract, claim/lease semantics, or
+the guarded `realtime.messages` policy DDL by editing the applied migration in
+place. Any corrective change must be a reviewed forward migration after
+dependent-object inspection and the applicable Supabase platform-boundary
+review. The M3 proof script tears down its disposable Compose project and
+volumes automatically after success or failure unless `-KeepOnFailure` is
+explicitly supplied.
+
+For a shared database, use a new reviewed forward migration only after the
+required dependency and rollback assessment. Preserve the outbox receipt and
+terminal-state contract during any expand/contract sequence. Hosted Supabase
+rollback, provider configuration, and deployment remain outside M3-DB01.

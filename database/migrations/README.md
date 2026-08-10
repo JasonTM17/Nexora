@@ -137,6 +137,29 @@ content, SEO, theme, site, slug, title, publication pointer, and draft version
 remain immutable during a transition. A normal draft edit must advance the
 draft version exactly once and cannot install a published-version pointer.
 
+## M3 transactional outbox and private Realtime policy train
+
+`V014__outbox_events_and_private_realtime_policy.sql` creates the
+application-owned transactional outbox/event-ledger table, versioned event and
+state types, safe payload validation, function-only record/publisher access,
+bounded lease/retry transitions, and a guarded `realtime.messages` policy block
+for the provider schema. The no-login migration owner is used by narrowly
+granted, hardened `SECURITY DEFINER` functions so tenant producers can record an
+event atomically while a publisher can claim across tenants without receiving
+direct table DML or `BYPASSRLS`. The provider policy reads only the trusted
+`auth.uid()` and `realtime.topic()` helpers; Data API roles retain no `USAGE` on
+the application schema.
+
+The M3 proof script creates a disposable local stand-in for `auth.uid()`,
+`realtime.topic()`, and `realtime.messages`, applies `V001` through `V014`,
+reruns the M2 tenant/CMS fixtures, then executes the actual private-channel RLS
+expression plus the outbox fixture. The stand-in is torn down with the Compose
+project; it is policy-conformance evidence, not hosted Supabase proof.
+
+```powershell
+pwsh -NoProfile -File database/migrations/scripts/verify-m3-schema-events.ps1
+```
+
 Run the complete disposable PostgreSQL 17.5 proof from the repository root:
 
 ```powershell
