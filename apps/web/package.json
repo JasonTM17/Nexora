@@ -1,0 +1,35 @@
+{
+  "name": "@nexora/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@hookform/resolvers": "5.7.1",
+    "@nexora/contracts": "workspace:*",
+    "@nexora/design-tokens": "workspace:*",
+    "@nexora/ui-ai": "workspace:*",
+    "@nexora/ui-builder": "workspace:*",
+    "@nexora/ui-core": "workspace:*",
+    "@nexora/ui-studio": "workspace:*",
+    "@supabase/ssr": "0.12.4",
+    "@supabase/supabase-js": "2.112.2",
+    "@tanstack/react-query": "5.101.4",
+    "next": "16.3.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-hook-form": "7.85.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
+    "@playwright/test": "1.62.1",
+    "@tailwindcss/postcss": "4.3.3",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.2",
+    "@vitejs/plugin-react": "5.2.0",
+    "axe-core": "4.13.0",
+    "jsdom": "27.4.0",
+    "tailwindcss": "4.3.3",
+    "vitest": "4.1.10"
+  }
+}

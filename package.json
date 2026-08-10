@@ -1,0 +1,38 @@
+{
+  "name": "@nexora/workspace",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.0.9",
+  "engines": {
+    "node": "24.12.0",
+    "pnpm": "11.0.9"
+  },
+  "scripts": {
+    "deps:install": "pnpm install --frozen-lockfile",
+    "deps:audit": "pnpm audit --audit-level=high"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "typescript": "5.9.3"
+  },
+  "x-nexora-dependency-window": {
+    "task": "M1-DW01",
+    "provenance": {
+      "registry": "https://registry.npmjs.org/",
+      "packageManager": "pnpm@11.0.9",
+      "resolution": "pnpm-lock.yaml records every resolved version, registry tarball, and integrity digest"
+    },
+    "licenseReview": {
+      "MIT": "Next.js, React, Tailwind CSS, Ant Design, Ant Design X, Supabase, TanStack Query, React Hook Form, Zod, Zustand, dnd-kit, Vitest, Testing Library, jsdom, and TypeScript declarations",
+      "Apache-2.0": "TypeScript and Playwright",
+      "MPL-2.0": "axe-core and @axe-core/playwright"
+    },
+    "securityReview": {
+      "command": "pnpm audit --audit-level=high",
+      "result": "No known vulnerabilities found for the M1-DW01 lockfile.",
+      "policy": "Lockfile integrity is required; no registry credentials, auth tokens, or private registries are configured."
+    }
+  }
+}
