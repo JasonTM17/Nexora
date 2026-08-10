@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 @Service
 @Profile("database")
 public class TenantContextService {
+    private static final String STALE_MEMBERSHIP_CONTEXT = "DENY_STALE_MEMBERSHIP_CONTEXT";
     private final TransactionLocalDatabaseContext databaseContext;
     private final MembershipRepository memberships;
 
@@ -55,10 +56,18 @@ public class TenantContextService {
                     .filter(current -> current.membershipId().equals(expected.membershipId()))
                     .filter(current -> current.membershipVersion() == expected.membershipVersion())
                     .filter(current -> current.role().equals(expected.role()))
-                    .orElseThrow(() -> denied("PERMISSION_DENIED", "The active membership context is stale."));
+                    .orElseThrow(this::staleMembershipContext);
             databaseContext.promoteToTenant(authoritative);
             return work.apply(authoritative, jdbc);
         });
+    }
+
+    private DomainAccessException staleMembershipContext() {
+        return new DomainAccessException(
+                HttpStatus.FORBIDDEN,
+                "PERMISSION_DENIED",
+                STALE_MEMBERSHIP_CONTEXT,
+                "The active membership context is stale.");
     }
 
     private DomainAccessException denied(String code, String message) {

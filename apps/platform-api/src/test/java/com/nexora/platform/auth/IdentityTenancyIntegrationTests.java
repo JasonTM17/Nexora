@@ -2,6 +2,7 @@ package com.nexora.platform.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,6 +33,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 @ActiveProfiles("database")
@@ -245,15 +247,24 @@ class IdentityTenancyIntegrationTests {
 
         changeMembershipRole(tenant, membershipId, "REVIEWER");
 
-        assertThatThrownBy(() -> tenantContexts.withFreshTenant(resolved, (context, jdbc) -> {
+        DomainAccessException failure = catchThrowableOfType(
+                () -> tenantContexts.withFreshTenant(resolved, (context, jdbc) -> {
             tenantWorkRan.set(true);
             return null;
-        })).isInstanceOfSatisfying(DomainAccessException.class, exception -> {
-            assertThat(exception.code()).isEqualTo("PERMISSION_DENIED");
-            assertThat(exception.getMessage()).contains("stale");
-        });
+        }), DomainAccessException.class);
+
+        assertThat(failure.code()).isEqualTo("PERMISSION_DENIED");
+        assertThat(failure.internalCode()).isEqualTo("DENY_STALE_MEMBERSHIP_CONTEXT");
+        assertThat(failure.getMessage()).contains("stale");
         assertThat(tenantWorkRan).isFalse();
         assertPooledSettingsAreEmpty();
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute(com.nexora.platform.observability.TraceIdFilter.ATTRIBUTE, "stale-test-trace");
+        var response = new IdentityApiExceptionHandler().domainFailure(failure, request);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo("PERMISSION_DENIED");
+        assertThat(response.getBody().message()).doesNotContain("DENY_STALE_MEMBERSHIP_CONTEXT");
     }
 
     private HttpResponse<String> get(String path, String token, UUID organizationId) throws Exception {
