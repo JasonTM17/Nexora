@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "info": {
     "title": "Nexora Platform API",
-    "version": "1.0.0",
-    "description": "Canonical browser-facing contract for the Nexora platform API v1."
+    "version": "1.1.0",
+    "description": "Canonical browser-facing contract for the Nexora platform API v1, including the M2 identity, tenant-context, authorization, and profile projection."
   },
   "servers": [
     {
@@ -104,6 +104,138 @@
           }
         }
       }
+    },
+    "/api/v1/identity/access-context": {
+      "get": {
+        "operationId": "getAccessContext",
+        "summary": "Read the authenticated actor's membership-derived access contexts",
+        "tags": ["Identity"],
+        "responses": {
+          "200": {
+            "description": "Active membership contexts for the authenticated actor",
+            "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } },
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AccessContextResponse" } } }
+          },
+          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
+          "403": { "$ref": "#/components/responses/PermissionDenied" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/tenant-context/resolve": {
+      "post": {
+        "operationId": "resolveTenantContext",
+        "summary": "Resolve one membership-derived tenant context from an organization selection candidate",
+        "tags": ["Tenant context"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ResolveTenantContextRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Current active membership context for the requested organization",
+            "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } },
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TenantContextResponse" } } }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
+          "403": { "$ref": "#/components/responses/PermissionDenied" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/tenant-context": {
+      "get": {
+        "operationId": "getTenantContext",
+        "summary": "Resolve the authenticated actor's tenant context from an explicit selection header",
+        "tags": ["Tenant context"],
+        "parameters": [
+          {
+            "name": "X-Nexora-Organization-Id",
+            "in": "header",
+            "required": false,
+            "x-nexora-client-name": "organizationId",
+            "description": "Organization selection candidate. It is never authority; the server derives authorization from the current active membership.",
+            "schema": { "$ref": "#/components/schemas/OrganizationId" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current active membership context for the selected organization",
+            "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } },
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TenantContextResponse" } } }
+          },
+          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
+          "403": { "$ref": "#/components/responses/PermissionDenied" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/authorization/permission-matrix": {
+      "get": {
+        "operationId": "getPermissionMatrix",
+        "summary": "Read the server-derived permission matrix for one selected tenant context",
+        "tags": ["Authorization"],
+        "parameters": [
+          {
+            "name": "X-Nexora-Organization-Id",
+            "in": "header",
+            "required": false,
+            "x-nexora-client-name": "organizationId",
+            "description": "Organization selection candidate. The server resolves a fresh active membership before deriving permissions.",
+            "schema": { "$ref": "#/components/schemas/OrganizationId" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The selected membership context and its server-derived permission strings",
+            "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } },
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PermissionMatrixResponse" } } }
+          },
+          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
+          "403": { "$ref": "#/components/responses/PermissionDenied" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/profile": {
+      "get": {
+        "operationId": "getProfile",
+        "summary": "Read the authenticated actor's allowlisted profile",
+        "tags": ["Profile"],
+        "responses": {
+          "200": {
+            "description": "The authenticated actor's profile",
+            "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } },
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserProfile" } } }
+          },
+          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
+          "403": { "$ref": "#/components/responses/PermissionDenied" },
+          "404": { "$ref": "#/components/responses/ProfileNotFound" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      },
+      "put": {
+        "operationId": "updateProfile",
+        "summary": "Update the authenticated actor's allowlisted profile with optimistic versioning",
+        "tags": ["Profile"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateProfileRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated profile with its new version",
+            "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } },
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserProfile" } } }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
+          "403": { "$ref": "#/components/responses/PermissionDenied" },
+          "409": { "$ref": "#/components/responses/VersionConflict" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
     }
   },
   "components": {
@@ -167,7 +299,7 @@
               "$ref": "#/components/schemas/ApiProblem"
             },
             "example": {
-              "code": "authentication_required",
+              "code": "AUTHENTICATION_REQUIRED",
               "message": "Authentication is required.",
               "details": {},
               "traceId": "01JTRACEAUTHENTICATION"
@@ -188,8 +320,8 @@
               "$ref": "#/components/schemas/ApiProblem"
             },
             "example": {
-              "code": "permission_denied",
-              "message": "The requested operation is not permitted.",
+              "code": "PERMISSION_DENIED",
+              "message": "Permission denied.",
               "details": {},
               "traceId": "01JTRACEAUTHORIZATION"
             }
@@ -216,6 +348,40 @@
             }
           }
         }
+      },
+      "ProfileNotFound": {
+        "description": "The authenticated actor does not yet have a profile.",
+        "headers": {
+          "X-Trace-Id": { "$ref": "#/components/headers/TraceId" }
+        },
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiProblem" },
+            "example": {
+              "code": "PROFILE_NOT_FOUND",
+              "message": "The profile does not exist.",
+              "details": {},
+              "traceId": "01JTRACEPROFILEMISSING"
+            }
+          }
+        }
+      },
+      "VersionConflict": {
+        "description": "The profile version in the request is stale.",
+        "headers": {
+          "X-Trace-Id": { "$ref": "#/components/headers/TraceId" }
+        },
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiProblem" },
+            "example": {
+              "code": "VERSION_CONFLICT",
+              "message": "The profile version is stale.",
+              "details": {},
+              "traceId": "01JTRACEPROFILEVERSION"
+            }
+          }
+        }
       }
     },
     "schemas": {
@@ -232,7 +398,7 @@
         "properties": {
           "code": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+            "pattern": "^(?:[A-Z][A-Z0-9_]{0,63}|[a-z][a-z0-9_]{0,63})$"
           },
           "message": {
             "type": "string",
@@ -363,6 +529,110 @@
           "message": {
             "type": "string"
           }
+        }
+      },
+      "OrganizationId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Opaque organization identifier. A caller may select it, but the server always derives access from a current active membership."
+      },
+      "MembershipId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Opaque membership identifier returned by the server; it is not browser authority."
+      },
+      "SubjectId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Authenticated identity subject identifier."
+      },
+      "SessionId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Authenticated session identifier."
+      },
+      "TenantRole": {
+        "type": "string",
+        "enum": ["OWNER", "ADMIN", "EDITOR", "REVIEWER", "USER"],
+        "description": "Frozen v1 tenant role. Permission evaluation remains server-side."
+      },
+      "MembershipContext": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["organizationId", "membershipId", "membershipVersion", "role"],
+        "properties": {
+          "organizationId": { "$ref": "#/components/schemas/OrganizationId" },
+          "membershipId": { "$ref": "#/components/schemas/MembershipId" },
+          "membershipVersion": { "type": "integer", "minimum": 1, "format": "int64" },
+          "role": { "$ref": "#/components/schemas/TenantRole" }
+        }
+      },
+      "AccessContextResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["subjectId", "sessionId", "assuranceLevel", "memberships", "tenantSelectionRequired"],
+        "properties": {
+          "subjectId": { "$ref": "#/components/schemas/SubjectId" },
+          "sessionId": { "$ref": "#/components/schemas/SessionId" },
+          "assuranceLevel": { "type": "string", "minLength": 1, "maxLength": 32 },
+          "memberships": { "type": "array", "items": { "$ref": "#/components/schemas/MembershipContext" } },
+          "tenantSelectionRequired": { "type": "boolean" }
+        }
+      },
+      "ResolveTenantContextRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["organizationId"],
+        "properties": {
+          "organizationId": { "$ref": "#/components/schemas/OrganizationId" }
+        }
+      },
+      "TenantContextResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["organizationId", "membershipId", "membershipVersion", "role"],
+        "properties": {
+          "organizationId": { "$ref": "#/components/schemas/OrganizationId" },
+          "membershipId": { "$ref": "#/components/schemas/MembershipId" },
+          "membershipVersion": { "type": "integer", "minimum": 1, "format": "int64" },
+          "role": { "$ref": "#/components/schemas/TenantRole" }
+        }
+      },
+      "PermissionMatrixResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["context", "permissions"],
+        "properties": {
+          "context": { "$ref": "#/components/schemas/TenantContextResponse" },
+          "permissions": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^[a-z]+(?:\\.[a-z]+)+$" }
+          }
+        }
+      },
+      "UpdateProfileRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["displayName", "locale", "reducedMotion", "highContrast", "expectedVersion"],
+        "properties": {
+          "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "locale": { "type": "string", "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$" },
+          "reducedMotion": { "type": "boolean" },
+          "highContrast": { "type": "boolean" },
+          "expectedVersion": { "type": "integer", "minimum": 0, "format": "int64" }
+        }
+      },
+      "UserProfile": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["subjectId", "displayName", "locale", "reducedMotion", "highContrast", "version"],
+        "properties": {
+          "subjectId": { "$ref": "#/components/schemas/SubjectId" },
+          "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "locale": { "type": "string", "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$" },
+          "reducedMotion": { "type": "boolean" },
+          "highContrast": { "type": "boolean" },
+          "version": { "type": "integer", "minimum": 1, "format": "int64" }
         }
       }
     }

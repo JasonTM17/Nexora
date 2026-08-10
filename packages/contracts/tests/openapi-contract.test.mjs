@@ -51,6 +51,10 @@ test("freezes the safe error, authentication, authorization, and trace contracts
   assert.deepEqual(Object.keys(problem.properties), ["code", "message", "details", "traceId"]);
   assert.equal(problem.properties.traceId.$ref, "#/components/schemas/TraceId");
   assert.equal(spec.components.schemas.TraceId.pattern, "^[A-Za-z0-9._-]{1,128}$");
+  const problemCodePattern = new RegExp(problem.properties.code.pattern);
+  for (const code of ["validation_failed", "AUTHENTICATION_REQUIRED", "PERMISSION_DENIED", "VERSION_CONFLICT"]) {
+    assert.match(code, problemCodePattern, `ApiProblem must retain the backend's safe ${code} code`);
+  }
   const forbiddenDetailKeys = problem.properties.details.propertyNames.allOf[1].not.enum;
   for (const forbidden of ["stack", "exception", "credential", "password", "token", "provider_response"]) {
     assert.ok(forbiddenDetailKeys.includes(forbidden), `details must reject ${forbidden}`);
@@ -119,6 +123,49 @@ test("requires bearer auth with 401/403 responses or an explicit public exceptio
     assert.equal(operation["x-nexora-public"]?.access, "public", `${label} must identify the public exception`);
     assert.match(operation["x-nexora-public"]?.reason ?? "", /unauthenticated/i, `${label} must explain why it is public`);
   }
+});
+
+test("projects the M2 identity, tenant-selection, and profile endpoints as protected same-origin operations", () => {
+  const expected = {
+    "/api/v1/identity/access-context": "getAccessContext",
+    "/api/v1/tenant-context/resolve": "resolveTenantContext",
+    "/api/v1/tenant-context": "getTenantContext",
+    "/api/v1/authorization/permission-matrix": "getPermissionMatrix",
+    "/api/v1/profile": ["getProfile", "updateProfile"],
+  };
+
+  for (const [path, operationIds] of Object.entries(expected)) {
+    const pathItem = spec.paths[path];
+    assert.ok(pathItem, `${path} must be projected from the M2 authority`);
+    const actual = Object.values(pathItem).map((operation) => operation.operationId);
+    assert.deepEqual(actual, Array.isArray(operationIds) ? operationIds : [operationIds]);
+    for (const operation of Object.values(pathItem)) {
+      assert.equal(operation.security, undefined, `${operation.operationId} must inherit bearer protection`);
+      assert.equal(operation.responses["401"]?.$ref, "#/components/responses/AuthenticationRequired");
+      assert.equal(operation.responses["403"]?.$ref, "#/components/responses/PermissionDenied");
+    }
+  }
+
+  const selectionHeader = spec.paths["/api/v1/tenant-context"].get.parameters[0];
+  assert.deepEqual(
+    {
+      name: selectionHeader.name,
+      in: selectionHeader.in,
+      required: selectionHeader.required,
+      clientName: selectionHeader["x-nexora-client-name"],
+      schema: selectionHeader.schema.$ref,
+    },
+    {
+      name: "X-Nexora-Organization-Id",
+      in: "header",
+      required: false,
+      clientName: "organizationId",
+      schema: "#/components/schemas/OrganizationId",
+    },
+  );
+  assert.equal(spec.components.responses.VersionConflict.content["application/json"].schema.$ref, "#/components/schemas/ApiProblem");
+  assert.deepEqual(spec.components.schemas.UpdateProfileRequest.required,
+    ["displayName", "locale", "reducedMotion", "highContrast", "expectedVersion"]);
 });
 
 test("generates bearer handling when an operation inherits the protected default", () => {

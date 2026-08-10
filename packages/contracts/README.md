@@ -12,7 +12,17 @@ an explicit reviewed public exception. The two current loopback bootstrap
 operations are explicit public exceptions, so the generated client does not
 resolve or send an access token for them. Authentication does not imply
 organization authorization. The generated client API exposes a bearer
-access-token input, but no provider-credential or arbitrary-header input.
+access-token input and only the reviewed `X-Nexora-Organization-Id` selection
+header on `getTenantContext`; that header is a selection candidate, never
+tenant authority. It exposes no provider-credential or arbitrary-header input.
+
+The protected M2 projection supplies generated request/response types for the
+identity access context, explicit tenant-context resolution/selection, and
+allowlisted profile read/update routes. Profile updates carry `expectedVersion`
+for optimistic conflict handling; profile fields never authorize tenant access.
+Safe problem codes may use the established lowercase validation form or the
+uppercase identity/domain form, while the envelope and detail-value guards stay
+unchanged.
 
 Problem `details` are limited to short printable validation messages or codes.
 Detail keys are normalized from camelCase and `.`, `_`, `-` separators into

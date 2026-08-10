@@ -36,6 +36,76 @@ test("keeps bearer credentials off an explicitly public operation while sending 
   assert.equal(response.data.apiVersion, "v1");
 });
 
+test("projects protected identity, tenant selection, and profile calls with the generated shared types", async () => {
+  const requests = [];
+  const client = new PlatformApiClient({
+    baseUrl: "https://nexora.test/",
+    accessToken: "short-lived-token",
+    fetch: async (url, init) => {
+      requests.push({ url, init });
+      const path = new URL(url).pathname;
+      const body = path === "/api/v1/identity/access-context"
+        ? {
+            subjectId: "10000000-0000-4000-8000-000000000001",
+            sessionId: "20000000-0000-4000-8000-000000000001",
+            assuranceLevel: "aal2",
+            memberships: [],
+            tenantSelectionRequired: false,
+          }
+        : path === "/api/v1/authorization/permission-matrix"
+          ? {
+              context: {
+                organizationId: "30000000-0000-4000-8000-000000000001",
+                membershipId: "40000000-0000-4000-8000-000000000001",
+                membershipVersion: 1,
+                role: "USER",
+              },
+              permissions: ["organization.read"],
+            }
+          : path === "/api/v1/profile"
+          ? {
+              subjectId: "10000000-0000-4000-8000-000000000001",
+              displayName: "Ada",
+              locale: "en-US",
+              reducedMotion: false,
+              highContrast: false,
+              version: 1,
+            }
+          : {
+              organizationId: "30000000-0000-4000-8000-000000000001",
+              membershipId: "40000000-0000-4000-8000-000000000001",
+              membershipVersion: 1,
+              role: "USER",
+            };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "X-Trace-Id": "trace-m2-projection" },
+      });
+    },
+  });
+
+  await client.getAccessContext();
+  await client.resolveTenantContext({ organizationId: "30000000-0000-4000-8000-000000000001" });
+  await client.getTenantContext({ organizationId: "30000000-0000-4000-8000-000000000001" });
+  await client.getPermissionMatrix({ organizationId: "30000000-0000-4000-8000-000000000001" });
+  await client.getProfile();
+  await client.updateProfile({
+    displayName: "Ada",
+    locale: "en-US",
+    reducedMotion: false,
+    highContrast: false,
+    expectedVersion: 1,
+  });
+
+  assert.equal(requests.length, 6);
+  for (const { init } of requests) assert.equal(init.headers.get("Authorization"), "Bearer short-lived-token");
+  assert.equal(requests[2].init.headers.get("X-Nexora-Organization-Id"), "30000000-0000-4000-8000-000000000001");
+  assert.equal(requests[3].init.headers.get("X-Nexora-Organization-Id"), "30000000-0000-4000-8000-000000000001");
+  assert.equal(requests[1].init.body, JSON.stringify({ organizationId: "30000000-0000-4000-8000-000000000001" }));
+  assert.equal(requests[5].init.method, "PUT");
+  assert.equal(requests[5].init.headers.get("Content-Type"), "application/json");
+});
+
 test("surfaces only a valid safe problem envelope", async () => {
   const problem = {
     code: "validation_failed",

@@ -50,6 +50,27 @@ function resolveLocalRef(spec, value) {
   return parts.reduce((current, part) => current?.[part], spec);
 }
 
+function typeName(operationId, suffix) {
+  return `${operationId.charAt(0).toUpperCase()}${operationId.slice(1)}${suffix}`;
+}
+
+function headerParametersFor(operation) {
+  return (operation.parameters ?? [])
+    .filter((parameter) => parameter?.in === "header")
+    .map((parameter) => {
+      if (typeof parameter.name !== "string" || !parameter.name) {
+        throw new Error("Header parameters must have a name");
+      }
+      if (!parameter.schema) throw new Error(`Header parameter ${parameter.name} has no schema`);
+      return {
+        name: parameter.name,
+        propertyName: parameter["x-nexora-client-name"] ?? parameter.name,
+        required: parameter.required === true,
+        type: typeFor(parameter.schema),
+      };
+    });
+}
+
 function operationsFor(spec) {
   const operations = [];
   for (const [path, pathItem] of Object.entries(spec.paths ?? {})) {
@@ -73,6 +94,7 @@ function operationsFor(spec) {
         requestType: requestSchema ? typeFor(requestSchema) : null,
         responseType: typeFor(responseSchema),
         requiresAuth: effectiveSecurity.some((requirement) => Object.hasOwn(requirement, "bearerAuth")),
+        headerParameters: headerParametersFor(operation),
       });
     }
   }
@@ -82,13 +104,30 @@ function operationsFor(spec) {
 function renderOperation(operation) {
   const bodyParameter = operation.requestType ? `body: ${operation.requestType}, ` : "";
   const bodyOption = operation.requestType ? ", body" : "";
-  return `  async ${operation.operationId}(${bodyParameter}options: RequestOptions = {}): Promise<ApiResponse<${operation.responseType}>> {
-    return this.request<${operation.responseType}>(${JSON.stringify(operation.path)}, { method: ${JSON.stringify(operation.method)}${bodyOption} }, options, ${operation.requiresAuth});
+  const headerType = typeName(operation.operationId, "Headers");
+  const headerParameter = operation.headerParameters.length
+    ? `headers: ${headerType}${operation.headerParameters.some((parameter) => parameter.required) ? "" : " = {}"}, `
+    : "";
+  const headerOption = operation.headerParameters.length
+    ? `, headers: { ${operation.headerParameters.map((parameter) => `${JSON.stringify(parameter.name)}: headers.${parameter.propertyName}`).join(", ")} }`
+    : "";
+  return `  async ${operation.operationId}(${bodyParameter}${headerParameter}options: RequestOptions = {}): Promise<ApiResponse<${operation.responseType}>> {
+    return this.request<${operation.responseType}>(${JSON.stringify(operation.path)}, { method: ${JSON.stringify(operation.method)}${bodyOption}${headerOption} }, options, ${operation.requiresAuth});
   }`;
+}
+
+function renderHeaderTypes(spec) {
+  return operationsFor(spec)
+    .filter((operation) => operation.headerParameters.length > 0)
+    .map((operation) => `export interface ${typeName(operation.operationId, "Headers")} {\n${operation.headerParameters
+      .map((parameter) => `  readonly ${JSON.stringify(parameter.propertyName)}${parameter.required ? "" : "?"}: ${parameter.type};`)
+      .join("\n")}\n}`)
+    .join("\n\n");
 }
 
 export function renderClient(spec) {
   const schemas = renderSchemas(spec);
+  const headerTypes = renderHeaderTypes(spec);
   const operations = operationsFor(spec).map(renderOperation).join("\n\n");
   const detailPropertyRules = spec.components?.schemas?.ApiProblem?.properties?.details?.propertyNames?.allOf ?? [];
   const forbiddenDetailKeys = detailPropertyRules.find((rule) => Array.isArray(rule.not?.enum))?.not.enum;
@@ -98,12 +137,14 @@ export function renderClient(spec) {
     throw new Error("ApiProblem details must define forbidden normalized key segments");
   }
   const detailValueSchema = spec.components?.schemas?.ApiProblem?.properties?.details?.additionalProperties;
+  const problemCodePattern = spec.components?.schemas?.ApiProblem?.properties?.code?.pattern;
   const detailValueMaxLength = detailValueSchema?.maxLength;
   const safeDetailValuePattern = detailValueSchema?.pattern;
   const forbiddenDetailValuePattern = detailValueSchema?.not?.pattern;
   if (!detailValueMaxLength || !safeDetailValuePattern || !forbiddenDetailValuePattern) {
     throw new Error("ApiProblem details must define bounded safe value rules");
   }
+  if (!problemCodePattern) throw new Error("ApiProblem code must define a pattern");
   const hasBearerAuth = Object.values(spec.components?.securitySchemes ?? {}).some(
     (scheme) => scheme.type === "http" && scheme.scheme === "bearer",
   );
@@ -115,6 +156,8 @@ export function renderClient(spec) {
 export const API_CONTRACT_VERSION = ${JSON.stringify(spec.info.version)} as const;
 
 ${schemas}
+
+${headerTypes}
 
 export interface ApiResponse<T> {
   readonly data: T;
@@ -152,6 +195,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 const FORBIDDEN_DETAIL_KEYS = new Set(${JSON.stringify(forbiddenDetailKeys)});
 const FORBIDDEN_DETAIL_KEY_SEGMENTS = new Set(${JSON.stringify(forbiddenDetailSegments)});
+const API_PROBLEM_CODE_PATTERN = new RegExp(${JSON.stringify(problemCodePattern)});
 const SAFE_DETAIL_VALUE_PATTERN = new RegExp(${JSON.stringify(safeDetailValuePattern)});
 const FORBIDDEN_DETAIL_VALUE_PATTERN = new RegExp(${JSON.stringify(forbiddenDetailValuePattern)});
 
@@ -172,7 +216,7 @@ function asProblem(value: unknown): ApiProblem | null {
   if (!isRecord(value.details) || typeof value.traceId !== "string") return null;
   const keys = Object.keys(value);
   if (keys.length !== 4 || !keys.every((key) => ["code", "message", "details", "traceId"].includes(key))) return null;
-  if (!/^[a-z][a-z0-9_]{0,63}$/.test(value.code) || value.message.length < 1 || value.message.length > 512) return null;
+  if (!API_PROBLEM_CODE_PATTERN.test(value.code) || value.message.length < 1 || value.message.length > 512) return null;
   if (!/^[A-Za-z0-9._-]{1,128}$/.test(value.traceId)) return null;
   const details = Object.entries(value.details);
   if (details.length > 50 || !details.every(([key, detail]) =>
@@ -201,11 +245,14 @@ ${operations}
 
   private async request<T>(
     path: string,
-    request: { readonly method: string; readonly body?: unknown },
+    request: { readonly method: string; readonly body?: unknown; readonly headers?: Readonly<Record<string, string | undefined>> },
     options: RequestOptions,
     requiresAuth: boolean,
   ): Promise<ApiResponse<T>> {
     const headers = new Headers({ Accept: "application/json" });
+    for (const [name, value] of Object.entries(request.headers ?? {})) {
+      if (value !== undefined) headers.set(name, value);
+    }
     if (request.body !== undefined) headers.set("Content-Type", "application/json");
     if (options.traceId) headers.set("X-Trace-Id", options.traceId);
 
