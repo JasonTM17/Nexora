@@ -27,7 +27,7 @@ public class SecurityConfiguration {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(requests -> requests
                         .requestMatchers("/api/v1/identity/**", "/api/v1/tenant-context/**",
-                                "/api/v1/authorization/**", "/api/v1/profile/**")
+                                "/api/v1/authorization/**", "/api/v1/profile/**", "/api/v1/cms/**")
                         .authenticated()
                         .anyRequest().permitAll())
                 .oauth2ResourceServer(resourceServer -> resourceServer
