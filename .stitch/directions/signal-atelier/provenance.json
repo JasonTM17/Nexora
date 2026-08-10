@@ -1,0 +1,39 @@
+{
+  "task": "M1-D01A",
+  "direction": "Signal Atelier",
+  "artifact_status": "planned concept evidence only",
+  "start_revision": "5c0349b4c3cec81a9c13a16efa738aff77fc7868",
+  "stitch": {
+    "project_id": "8293661789942295178",
+    "project_title": "Nexora — M1-D01A Signal Atelier (planned direction)",
+    "project_visibility": "PRIVATE",
+    "project_type": "PROJECT_DESIGN",
+    "project_updated_at": "2026-08-10T04:17:38.973029Z",
+    "generation_session_id": "12670900387464644738",
+    "device_type": "DESKTOP",
+    "model": "GEMINI_3_PRO",
+    "operations_used": 1,
+    "thumbnail_resource": "projects/8293661789942295178/files/14fc1c5a2c094643b4d575329e666129"
+  },
+  "local_capture": {
+    "file": "assets/designs/signal-atelier/public-home-concept.png",
+    "dimensions_px": "366x512",
+    "sha256": "7D127B92C4EB519C3CAC18D7896C9685BDBDD565A887DFE14DDC06336ED65287"
+  },
+  "screen_metadata_limitation": {
+    "observed": "The completed PROJECT_DESIGN generation returned a private project design system and thumbnail screenshot, but did not expose a screen ID or htmlCode.",
+    "checks": [
+      "list_screens returned an empty object",
+      "get_screen with the generation session ID returned not found"
+    ],
+    "handling": "The local HTML file is a non-executable evidence wrapper around the captured thumbnail. It is not asserted to be a Stitch-generated HTML export and no substitute UI source was fabricated."
+  },
+  "generated_feedback": {
+    "description": "A high-fidelity desktop planned landing-page concept with porcelain and ink styling, editorial hierarchy, a provenance rail, planned/fixture labels, and a described 375px stacked collapse.",
+    "suggestions": [
+      "Show the mobile collapse view (375px)",
+      "Refine the signal rail's visual treatment",
+      "Add more fixture data examples to the process band"
+    ]
+  }
+}
