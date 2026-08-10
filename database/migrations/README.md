@@ -179,7 +179,7 @@ explicit reviewed contract and forward-migration change.
 
 The M3 proof script creates a disposable local stand-in for `auth.uid()`,
 `auth.jwt()`, `realtime.topic()`, and `realtime.messages`, applies `V001`
-through `V017`, reruns the M2 tenant/CMS fixtures, then executes the actual
+through `V018`, reruns the M2 tenant/CMS fixtures, then executes the actual
 private-channel RLS expression plus the outbox fixture. The stand-in is torn
 down with the Compose project; it is policy-conformance evidence, not hosted
 Supabase proof.
