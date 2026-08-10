@@ -27,7 +27,7 @@ public class MembershipManagementService {
             TenantContext actor, UUID targetMembershipId, long expectedVersion, String targetRole) {
         try {
             return tenantContexts.withFreshTenantTarget(
-                    actor, targetMembershipId, expectedVersion, true,
+                    actor, targetMembershipId, expectedVersion,
                     (authoritative, jdbc) -> {
                         permissions.requireAssignment(jdbc, authoritative, targetRole);
                         return updateRole(jdbc, targetMembershipId, expectedVersion, targetRole);
@@ -44,7 +44,7 @@ public class MembershipManagementService {
         }
         try {
             return tenantContexts.withFreshTenantTarget(
-                    actor, targetMembershipId, expectedVersion, true,
+                    actor, targetMembershipId, expectedVersion,
                     (authoritative, jdbc) -> {
                         permissions.require(jdbc, authoritative, "user.manage");
                         permissions.require(jdbc, authoritative, "role.manage");
@@ -58,13 +58,18 @@ public class MembershipManagementService {
     private MembershipView updateRole(
             JdbcTemplate jdbc, UUID targetMembershipId, long expectedVersion, String targetRole) {
         try {
-            return jdbc.query("""
+            MembershipView target = expectedTarget(jdbc, targetMembershipId, expectedVersion);
+            int updated = tenantContexts.withTargetMembershipMutation(() -> jdbc.update("""
                     UPDATE nexora.memberships
                     SET tenant_role = ?::nexora.tenant_role
                     WHERE id = ? AND version = ?
-                    RETURNING id, organization_id, subject_id, status::text, tenant_role::text, version
-                    """, this::map, targetRole, targetMembershipId, expectedVersion)
-                    .stream().findFirst().orElseThrow(this::versionConflict);
+                    """, targetRole, targetMembershipId, expectedVersion));
+            if (updated != 1) {
+                throw versionConflict();
+            }
+            return new MembershipView(
+                    target.membershipId(), target.organizationId(), target.subjectId(), target.status(),
+                    targetRole, expectedVersion + 1);
         } catch (DataAccessException exception) {
             throw translateDatabaseDenial(exception);
         }
@@ -73,16 +78,30 @@ public class MembershipManagementService {
     private MembershipView updateStatus(
             JdbcTemplate jdbc, UUID targetMembershipId, long expectedVersion, MembershipStatus status) {
         try {
-            return jdbc.query("""
+            MembershipView target = expectedTarget(jdbc, targetMembershipId, expectedVersion);
+            int updated = tenantContexts.withTargetMembershipMutation(() -> jdbc.update("""
                     UPDATE nexora.memberships
                     SET status = ?::nexora.membership_status
                     WHERE id = ? AND version = ?
-                    RETURNING id, organization_id, subject_id, status::text, tenant_role::text, version
-                    """, this::map, status.name(), targetMembershipId, expectedVersion)
-                    .stream().findFirst().orElseThrow(this::versionConflict);
+                    """, status.name(), targetMembershipId, expectedVersion));
+            if (updated != 1) {
+                throw versionConflict();
+            }
+            return new MembershipView(
+                    target.membershipId(), target.organizationId(), target.subjectId(), status.name(),
+                    target.role(), expectedVersion + 1);
         } catch (DataAccessException exception) {
             throw translateDatabaseDenial(exception);
         }
+    }
+
+    private MembershipView expectedTarget(JdbcTemplate jdbc, UUID targetMembershipId, long expectedVersion) {
+        return jdbc.query("""
+                SELECT id, organization_id, subject_id, status::text, tenant_role::text, version
+                FROM nexora.memberships
+                WHERE id = ? AND version = ?
+                """, this::map, targetMembershipId, expectedVersion)
+                .stream().findFirst().orElseThrow(this::versionConflict);
     }
 
     private MembershipView map(java.sql.ResultSet result, int row) throws java.sql.SQLException {

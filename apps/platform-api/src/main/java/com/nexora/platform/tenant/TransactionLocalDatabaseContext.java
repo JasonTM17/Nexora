@@ -3,6 +3,7 @@ package com.nexora.platform.tenant;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -42,7 +43,7 @@ public class TransactionLocalDatabaseContext {
         setLocal("nexora.membership_id", context.membershipId());
     }
 
-    void setTargetMembership(UUID membershipId, long version, boolean mutation) {
+    void setTargetMembership(UUID membershipId, long version) {
         if (!TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("Target membership context requires an active transaction");
         }
@@ -51,7 +52,19 @@ public class TransactionLocalDatabaseContext {
         }
         setLocal("nexora.target_membership_id", membershipId);
         setLocal("nexora.target_membership_version", Long.toString(version));
-        setLocal("nexora.target_membership_mutation", mutation ? "true" : "");
+        setLocal("nexora.target_membership_mutation", "");
+    }
+
+    <T> T withTargetMembershipMutation(Supplier<T> work) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("Target membership mutation requires an active transaction");
+        }
+        setLocal("nexora.target_membership_mutation", "true");
+        try {
+            return work.get();
+        } finally {
+            setLocal("nexora.target_membership_mutation", "");
+        }
     }
 
     private <T> T execute(

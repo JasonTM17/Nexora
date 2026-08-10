@@ -349,6 +349,35 @@ class IdentityTenancyIntegrationTests {
     }
 
     @Test
+    void targetMutationMarkerOnlyCoversTheExpectedVersionUpdate() throws Exception {
+        OrganizationFixture tenant = seedOrganization(UUID.randomUUID());
+        UUID target = seedMembership(tenant, UUID.randomUUID(), "USER", "ACTIVE");
+
+        tenantContexts.withFreshTenantTarget(tenant.ownerContext(), target, 1, (actor, jdbc) -> {
+            assertThat(jdbc.queryForObject(
+                    "SELECT current_setting('nexora.target_membership_mutation', true)", String.class)).isEmpty();
+            assertThat(jdbc.queryForObject(
+                    "SELECT count(*) FROM nexora.memberships WHERE id = ? AND version = 1",
+                    Integer.class, target)).isEqualTo(1);
+
+            int changed = tenantContexts.withTargetMembershipMutation(() -> jdbc.update("""
+                    UPDATE nexora.memberships
+                    SET tenant_role = 'REVIEWER'::nexora.tenant_role
+                    WHERE id = ? AND version = 1
+                    """, target));
+
+            assertThat(changed).isEqualTo(1);
+            assertThat(jdbc.queryForObject(
+                    "SELECT current_setting('nexora.target_membership_mutation', true)", String.class)).isEmpty();
+            assertThat(jdbc.queryForObject(
+                    "SELECT count(*) FROM nexora.memberships WHERE id = ? AND version = 2",
+                    Integer.class, target)).isZero();
+            return null;
+        });
+        assertPooledSettingsAreEmpty();
+    }
+
+    @Test
     void membershipMutationHttpBoundaryReturnsAControlledPermissionEnvelope() throws Exception {
         UUID ownerSubject = UUID.randomUUID();
         OrganizationFixture tenant = seedOrganization(ownerSubject);

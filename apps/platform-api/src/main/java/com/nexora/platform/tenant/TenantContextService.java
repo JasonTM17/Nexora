@@ -4,6 +4,7 @@ import com.nexora.platform.auth.DomainAccessException;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.BiFunction;
+import java.util.function.Supplier;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -72,12 +73,15 @@ public class TenantContextService {
             TenantContext expected,
             UUID targetMembershipId,
             long targetMembershipVersion,
-            boolean mutation,
             BiFunction<TenantContext, JdbcTemplate, T> work) {
         return withFreshTenant(expected, (authoritative, jdbc) -> {
-            databaseContext.setTargetMembership(targetMembershipId, targetMembershipVersion, mutation);
+            databaseContext.setTargetMembership(targetMembershipId, targetMembershipVersion);
             return work.apply(authoritative, jdbc);
         });
+    }
+
+    public <T> T withTargetMembershipMutation(Supplier<T> work) {
+        return databaseContext.withTargetMembershipMutation(work);
     }
 
     private DomainAccessException staleMembershipContext() {
