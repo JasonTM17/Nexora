@@ -22,6 +22,11 @@ The local endpoints are:
 - `GET /v3/api-docs`
 - `GET /api/v1/platform`
 
+The server binds to `127.0.0.1` by default. A reviewed deployment that needs a
+non-loopback listener must explicitly set `NEXORA_BIND_ADDRESS` (for example,
+to its approved private address or `0.0.0.0`). That override alone does not
+establish a deployment, network policy, or production-readiness claim.
+
 `X-Trace-Id` is returned on every HTTP response. A caller may supply a
 printable 1–128 character value; all other values are replaced with a new
 opaque identifier.

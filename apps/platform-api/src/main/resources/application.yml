@@ -7,6 +7,7 @@ spring:
     timeout-per-shutdown-phase: 20s
 
 server:
+  address: ${NEXORA_BIND_ADDRESS:127.0.0.1}
   shutdown: graceful
 
 nexora:
