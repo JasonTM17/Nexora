@@ -241,14 +241,18 @@ FOR EACH ROW
 EXECUTE FUNCTION nexora.guard_owner_transfer();
 
 -- A just-created organization is visible only to the exact transaction-local
--- subject/membership context named as its pending owner. This permits the
--- deferred organization + first OWNER membership bootstrap in one transaction.
+-- subject/membership context named as its pending owner and only while the row
+-- still belongs to the inserting transaction. A committed organization cannot
+-- re-enter this bootstrap path even when its id and owner membership id are
+-- known. This permits the deferred organization + first OWNER membership
+-- bootstrap in one transaction without weakening committed tenant reads.
 CREATE POLICY organizations_select_pending_bootstrap
 ON nexora.organizations
 FOR SELECT
 TO nexora_runtime
 USING (
-  id = NULLIF(current_setting('nexora.organization_id', true), '')::uuid
+  xmin = pg_current_xact_id()::xid
+  AND id = NULLIF(current_setting('nexora.organization_id', true), '')::uuid
   AND owner_membership_id = NULLIF(current_setting('nexora.membership_id', true), '')::uuid
   AND NULLIF(current_setting('nexora.subject_id', true), '') IS NOT NULL
 );

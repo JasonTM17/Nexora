@@ -182,6 +182,24 @@ VALUES (
 );
 COMMIT;
 
+-- A subject with no membership must not reopen the bootstrap policy against a
+-- committed tenant, even when both real organization and designated owner IDs
+-- are supplied as transaction-local context.
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000005', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000001', true);
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM nexora.organizations) <> 0
+     OR (SELECT count(*) FROM nexora.memberships) <> 0 THEN
+    RAISE EXCEPTION 'known committed organization/owner IDs must not authorize a non-member';
+  END IF;
+END
+$$;
+COMMIT;
+
 -- Alpha owner assigns the exact frozen roles used by isolation/denial checks.
 BEGIN;
 SET LOCAL ROLE nexora_runtime;
