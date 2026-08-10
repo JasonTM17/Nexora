@@ -15,7 +15,7 @@ $composeFile = Join-Path $repoRoot 'compose.yaml'
 $migrationDirectory = Join-Path $repoRoot 'database\migrations'
 $fixturePath = Join-Path $migrationDirectory 'fixtures\verify-foundation.sql'
 $projectName = 'nexora-migration-verify'
-$started = $false
+$cleanupRequired = $false
 $succeeded = $false
 
 function Invoke-Compose {
@@ -56,8 +56,9 @@ try {
     $env:NEXORA_POSTGRES_PORT = $PostgresPort
     $env:NEXORA_NATS_CLIENT_PORT = $NatsClientPort
     $env:NEXORA_NATS_MONITOR_PORT = $NatsMonitorPort
+    # Mark cleanup before Compose can partially create any local state.
+    $cleanupRequired = $true
     Invoke-Compose -Arguments @('up', '--detach', '--wait')
-    $started = $true
 
     # Fixture-only local stand-ins let the migration prove explicit revokes for
     # Supabase Data API role names without creating managed schemas or contacting
@@ -89,11 +90,16 @@ $$;
     Write-Output "M1-DB01 local migration verification passed on PostgreSQL via Compose project $projectName."
 }
 finally {
-    if ($started -and ($succeeded -or -not $KeepOnFailure)) {
-        Invoke-Compose -Arguments @('down', '--volumes', '--remove-orphans')
-        Write-Output "Removed disposable Compose project $projectName."
+    if ($cleanupRequired -and ($succeeded -or -not $KeepOnFailure)) {
+        try {
+            Invoke-Compose -Arguments @('down', '--volumes', '--remove-orphans')
+            Write-Output "Removed disposable Compose project $projectName."
+        }
+        catch {
+            Write-Warning "Disposable Compose cleanup failed: $($_.Exception.Message)"
+        }
     }
-    elseif ($started) {
+    elseif ($cleanupRequired) {
         Write-Warning "Verification failed; preserving $projectName for inspection. Run: docker compose --project-name $projectName -f `"$composeFile`" down --volumes --remove-orphans"
     }
 }
