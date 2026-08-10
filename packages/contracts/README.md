@@ -26,6 +26,13 @@ and the client exposes no arbitrary-header input. Profile updates also carry
 `expectedVersion` for optimistic conflict handling; profile fields never
 authorize tenant access.
 
+The membership-directory projection returns only the bounded authoritative rows
+for one selected organization. It has no browser-controlled tenant, permission,
+or filter input: the required organization header is a selection candidate, and
+the server must re-resolve the acting ACTIVE membership and require both
+`user.manage` and `role.manage` before returning the array. The contract does
+not claim pagination, cross-tenant lookup, or a runtime authorization result.
+
 The protected CMS projection freezes page drafting, immutable-version publication
 or rollback receipts, workflow transitions, typed theme snapshots, and typed SEO
 metadata. Every CMS request carries the reviewed organization-selection header;
