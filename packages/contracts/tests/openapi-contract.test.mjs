@@ -125,12 +125,13 @@ test("requires bearer auth with 401/403 responses or an explicit public exceptio
   }
 });
 
-test("projects the M2 identity, tenant-selection, and profile endpoints as protected same-origin operations", () => {
+test("projects the M2 identity, tenant-selection, authorization mutation, and profile endpoints as protected same-origin operations", () => {
   const expected = {
     "/api/v1/identity/access-context": "getAccessContext",
     "/api/v1/tenant-context/resolve": "resolveTenantContext",
     "/api/v1/tenant-context": "getTenantContext",
     "/api/v1/authorization/permission-matrix": "getPermissionMatrix",
+    "/api/v1/authorization/memberships/{membershipId}": "updateMembership",
     "/api/v1/profile": ["getProfile", "updateProfile"],
   };
 
@@ -166,6 +167,35 @@ test("projects the M2 identity, tenant-selection, and profile endpoints as prote
   assert.equal(spec.components.responses.VersionConflict.content["application/json"].schema.$ref, "#/components/schemas/ApiProblem");
   assert.deepEqual(spec.components.schemas.UpdateProfileRequest.required,
     ["displayName", "locale", "reducedMotion", "highContrast", "expectedVersion"]);
+
+  const membershipMutation = spec.paths["/api/v1/authorization/memberships/{membershipId}"].patch;
+  assert.equal(membershipMutation.parameters[0].in, "path");
+  assert.equal(membershipMutation.parameters[0].name, "membershipId");
+  assert.equal(membershipMutation.parameters[0].required, true);
+  assert.equal(membershipMutation.parameters[0].schema.$ref, "#/components/schemas/MembershipId");
+  assert.deepEqual(membershipMutation.parameters[1], {
+    name: "X-Nexora-Organization-Id",
+    in: "header",
+    required: true,
+    "x-nexora-client-name": "organizationId",
+    description: "Organization selection candidate. The server resolves a fresh active acting membership and checks assignment authority.",
+    schema: { $ref: "#/components/schemas/OrganizationId" },
+  });
+  assert.deepEqual(Object.keys(membershipMutation.responses), ["200", "400", "401", "403", "409", "500"]);
+  assert.equal(membershipMutation.responses["409"].$ref, "#/components/responses/VersionConflict");
+  assert.equal(membershipMutation.requestBody.content["application/json"].schema.$ref,
+    "#/components/schemas/MembershipMutationRequest");
+  assert.equal(membershipMutation.responses["200"].content["application/json"].schema.$ref,
+    "#/components/schemas/MembershipMutationResponse");
+
+  const mutationVariants = spec.components.schemas.MembershipMutationRequest.oneOf;
+  assert.deepEqual(mutationVariants.map((variant) => variant.required), [
+    ["expectedVersion", "role"],
+    ["expectedVersion", "status"],
+  ]);
+  assert.deepEqual(spec.components.schemas.MembershipStatus.enum, ["INVITED", "ACTIVE", "SUSPENDED", "REMOVED"]);
+  assert.deepEqual(spec.components.schemas.MembershipMutationResponse.required,
+    ["membershipId", "organizationId", "subjectId", "status", "role", "version"]);
 });
 
 test("generates bearer handling when an operation inherits the protected default", () => {
