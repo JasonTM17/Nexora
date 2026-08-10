@@ -243,9 +243,31 @@ test("projects bounded CMS drafting, workflow, publication, theme, and SEO contr
   assert.ok(pageSummary.required.includes("title"));
   assert.equal(pageSummary.additionalProperties, false);
   const pageDetail = spec.components.schemas.PageDetail;
-  assert.equal(pageDetail.allOf[0].$ref, "#/components/schemas/PageSummary");
-  assert.equal(pageDetail.allOf[1].properties.contentDigest.pattern, "^sha256:[a-f0-9]{64}$");
-  assert.equal(Object.hasOwn(pageDetail.allOf[1].properties, "content"), false);
+  assert.equal(pageDetail.type, "object");
+  assert.equal(pageDetail.additionalProperties, false);
+  assert.equal(pageDetail.allOf, undefined);
+  for (const required of ["pageId", "siteId", "slug", "title", "state", "draftVersion", "updatedAt", "schemaVersion", "contentDigest", "themeVersionId", "seo"]) {
+    assert.ok(pageDetail.required.includes(required), `PageDetail must accept its ${required} response field`);
+    assert.ok(Object.hasOwn(pageDetail.properties, required), `PageDetail must define its ${required} response field`);
+  }
+  assert.equal(pageDetail.properties.contentDigest.pattern, "^sha256:[a-f0-9]{64}$");
+  assert.equal(Object.hasOwn(pageDetail.properties, "content"), false);
+
+  const listPages = spec.paths["/api/v1/cms/pages"].get;
+  assert.deepEqual(listPages.parameters.slice(1).map((parameter) => ({
+    name: parameter.name,
+    in: parameter.in,
+    required: parameter.required,
+    type: parameter.schema.type,
+  })), [
+    { name: "cursor", in: "query", required: false, type: "string" },
+    { name: "limit", in: "query", required: false, type: "integer" },
+  ]);
+  const generated = renderClient(spec);
+  assert.match(generated, /export interface ListCmsPagesQuery[\s\S]*?"cursor"\?: string;[\s\S]*?"limit"\?: number;/);
+  assert.match(generated, /async listCmsPages\(headers: ListCmsPagesHeaders, query: ListCmsPagesQuery = \{\}/);
+  assert.match(generated, /queryParameters\.set\("cursor", String\(query\["cursor"\]\)\)/);
+  assert.match(generated, /queryParameters\.set\("limit", String\(query\["limit"\]\)\)/);
 
   const seo = spec.components.schemas.SeoSnapshot;
   assert.equal(seo.additionalProperties, false);
@@ -259,7 +281,34 @@ test("projects bounded CMS drafting, workflow, publication, theme, and SEO contr
   const publication = spec.components.schemas.PublicationRequest;
   assert.deepEqual(publication.properties.operation.enum, ["PUBLISH", "ROLLBACK"]);
   assert.deepEqual(publication.allOf[0].then.required, ["rollbackSourceVersionId"]);
+  assert.deepEqual(publication.allOf[0].else, { not: { required: ["rollbackSourceVersionId"] } });
   assert.deepEqual(spec.components.schemas.ThemeVersion.properties.status.enum, ["DRAFT", "PUBLISHED", "ARCHIVED"]);
+  assert.doesNotMatch(generated, /export type WorkflowTransitionRequest = unknown/);
+  assert.match(generated, /export type WorkflowTransitionRequest = \([\s\S]*?"action": "REJECT"[\s\S]*?"reason": string;[\s\S]*?Exclude<WorkflowAction, "REJECT">/);
+  assert.doesNotMatch(generated, /export type PublicationRequest = unknown/);
+  assert.match(generated, /export type PublicationRequest = \([\s\S]*?"operation": "ROLLBACK"[\s\S]*?"rollbackSourceVersionId": PageVersionId;[\s\S]*?"rollbackSourceVersionId"\?: never;/);
+  assert.match(generated, /export interface ArchiveCmsPageQuery[\s\S]*?"expectedDraftVersion": number;/);
+  assert.match(generated, /async archiveCmsPage\(path: ArchiveCmsPagePath, headers: ArchiveCmsPageHeaders, query: ArchiveCmsPageQuery/);
+});
+
+test("keeps publication request variants mutually exclusive in the source schema", () => {
+  const schema = spec.components.schemas.PublicationRequest;
+  const [conditional] = schema.allOf;
+  const allowedProperties = new Set(Object.keys(schema.properties));
+  const required = new Set(schema.required);
+  const validates = (candidate) => {
+    if (Object.keys(candidate).some((key) => !allowedProperties.has(key))) return false;
+    if (![...required].every((key) => Object.hasOwn(candidate, key))) return false;
+    if (!schema.properties.operation.enum.includes(candidate.operation)) return false;
+    const rollback = candidate.operation === conditional.if.properties.operation.const;
+    if (rollback) return conditional.then.required.every((key) => Object.hasOwn(candidate, key));
+    return !(conditional.else.not.required ?? []).some((key) => Object.hasOwn(candidate, key));
+  };
+
+  assert.equal(validates({ operation: "PUBLISH", expectedDraftVersion: 3 }), true);
+  assert.equal(validates({ operation: "ROLLBACK", expectedDraftVersion: 3, rollbackSourceVersionId: "60000000-0000-4000-8000-000000000001" }), true);
+  assert.equal(validates({ operation: "PUBLISH", expectedDraftVersion: 3, rollbackSourceVersionId: "60000000-0000-4000-8000-000000000001" }), false);
+  assert.equal(validates({ operation: "ROLLBACK", expectedDraftVersion: 3 }), false);
 });
 
 test("generates bearer handling when an operation inherits the protected default", () => {

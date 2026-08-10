@@ -57,7 +57,7 @@ export type SeoSnapshot = { readonly "title": string; readonly "description": st
 
 export type PageSummary = { readonly "pageId": PageId; readonly "siteId": SiteId; readonly "slug": string; readonly "title": string; readonly "state": PageState; readonly "draftVersion": number; readonly "updatedAt": string; };
 
-export type PageDetail = PageSummary & { readonly "schemaVersion": string; readonly "contentDigest": string; readonly "themeVersionId": ThemeVersionId; readonly "seo": SeoSnapshot; readonly "publishedVersionId"?: PageVersionId; };
+export type PageDetail = { readonly "pageId": PageId; readonly "siteId": SiteId; readonly "slug": string; readonly "title": string; readonly "state": PageState; readonly "draftVersion": number; readonly "updatedAt": string; readonly "schemaVersion": string; readonly "contentDigest": string; readonly "themeVersionId": ThemeVersionId; readonly "seo": SeoSnapshot; readonly "publishedVersionId"?: PageVersionId; };
 
 export type PageListResponse = { readonly "items": ReadonlyArray<PageSummary>; readonly "nextCursor": unknown; };
 
@@ -67,9 +67,9 @@ export type CreatePageRequest = { readonly "siteId": SiteId; readonly "slug": st
 
 export type UpdatePageRequest = { readonly "expectedDraftVersion": number; readonly "title": string; readonly "schemaVersion": string; readonly "contentDigest": string; readonly "themeVersionId": ThemeVersionId; readonly "seo": SeoSnapshot; };
 
-export type WorkflowTransitionRequest = unknown;
+export type WorkflowTransitionRequest = ({ readonly "expectedDraftVersion": number; readonly "action": "REJECT"; readonly "reason": string; } | { readonly "expectedDraftVersion": number; readonly "action": Exclude<WorkflowAction, "REJECT">; readonly "reason"?: string; });
 
-export type PublicationRequest = unknown;
+export type PublicationRequest = ({ readonly "operation": "ROLLBACK"; readonly "expectedDraftVersion": number; readonly "rollbackSourceVersionId": PageVersionId; } | { readonly "operation": Exclude<"PUBLISH" | "ROLLBACK", "ROLLBACK">; readonly "expectedDraftVersion": number; readonly "rollbackSourceVersionId"?: never; });
 
 export type PublicationReceipt = { readonly "receiptId": PublicationReceiptId; readonly "operation": "PUBLISH" | "ROLLBACK"; readonly "pageId": PageId; readonly "publishedVersionId": PageVersionId; readonly "sourceDraftVersion": number; readonly "schemaVersion": string; readonly "themeVersionId": ThemeVersionId; readonly "seoSnapshotDigest": string; readonly "createdAt": string; };
 
@@ -150,6 +150,15 @@ export interface PublishCmsPagePath {
 
 export interface GetCmsThemeVersionPath {
   readonly "themeVersionId": ThemeVersionId;
+}
+
+export interface ListCmsPagesQuery {
+  readonly "cursor"?: string;
+  readonly "limit"?: number;
+}
+
+export interface ArchiveCmsPageQuery {
+  readonly "expectedDraftVersion": number;
 }
 
 export interface ApiResponse<T> {
@@ -270,8 +279,13 @@ export class PlatformApiClient {
     return this.request<UserProfile>(`/api/v1/profile`, { method: "PUT", body }, options, true);
   }
 
-  async listCmsPages(headers: ListCmsPagesHeaders, options: RequestOptions = {}): Promise<ApiResponse<PageListResponse>> {
-    return this.request<PageListResponse>(`/api/v1/cms/pages`, { method: "GET", headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
+  async listCmsPages(headers: ListCmsPagesHeaders, query: ListCmsPagesQuery = {}, options: RequestOptions = {}): Promise<ApiResponse<PageListResponse>> {
+    const queryParameters = new URLSearchParams();
+    if (query["cursor"] !== undefined) queryParameters.set("cursor", String(query["cursor"]));
+    if (query["limit"] !== undefined) queryParameters.set("limit", String(query["limit"]));
+    const queryString = queryParameters.toString();
+    const requestPath = `/api/v1/cms/pages${queryString ? `?${queryString}` : ""}`;
+    return this.request<PageListResponse>(requestPath, { method: "GET", headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
   }
 
   async createCmsPage(body: CreatePageRequest, headers: CreateCmsPageHeaders, options: RequestOptions = {}): Promise<ApiResponse<PageDetail>> {
@@ -286,8 +300,12 @@ export class PlatformApiClient {
     return this.request<PageDetail>(`/api/v1/cms/pages/${encodeURIComponent(String(path["pageId"]))}`, { method: "PATCH", body, headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
   }
 
-  async archiveCmsPage(path: ArchiveCmsPagePath, headers: ArchiveCmsPageHeaders, options: RequestOptions = {}): Promise<ApiResponse<ArchivePageResponse>> {
-    return this.request<ArchivePageResponse>(`/api/v1/cms/pages/${encodeURIComponent(String(path["pageId"]))}`, { method: "DELETE", headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
+  async archiveCmsPage(path: ArchiveCmsPagePath, headers: ArchiveCmsPageHeaders, query: ArchiveCmsPageQuery, options: RequestOptions = {}): Promise<ApiResponse<ArchivePageResponse>> {
+    const queryParameters = new URLSearchParams();
+    if (query["expectedDraftVersion"] !== undefined) queryParameters.set("expectedDraftVersion", String(query["expectedDraftVersion"]));
+    const queryString = queryParameters.toString();
+    const requestPath = `/api/v1/cms/pages/${encodeURIComponent(String(path["pageId"]))}${queryString ? `?${queryString}` : ""}`;
+    return this.request<ArchivePageResponse>(requestPath, { method: "DELETE", headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
   }
 
   async transitionCmsPageWorkflow(path: TransitionCmsPageWorkflowPath, body: WorkflowTransitionRequest, headers: TransitionCmsPageWorkflowHeaders, options: RequestOptions = {}): Promise<ApiResponse<PageDetail>> {

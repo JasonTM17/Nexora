@@ -908,15 +908,19 @@
         }
       },
       "PageDetail": {
-        "allOf": [
-          { "$ref": "#/components/schemas/PageSummary" },
-          { "type": "object", "additionalProperties": false, "required": ["schemaVersion", "contentDigest", "themeVersionId", "seo"], "properties": {
-            "schemaVersion": { "type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$" },
-            "contentDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-            "themeVersionId": { "$ref": "#/components/schemas/ThemeVersionId" }, "seo": { "$ref": "#/components/schemas/SeoSnapshot" },
-            "publishedVersionId": { "$ref": "#/components/schemas/PageVersionId" }
-          } }
-        ]
+        "type": "object", "additionalProperties": false,
+        "required": ["pageId", "siteId", "slug", "title", "state", "draftVersion", "updatedAt", "schemaVersion", "contentDigest", "themeVersionId", "seo"],
+        "properties": {
+          "pageId": { "$ref": "#/components/schemas/PageId" }, "siteId": { "$ref": "#/components/schemas/SiteId" },
+          "slug": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 120 },
+          "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+          "state": { "$ref": "#/components/schemas/PageState" }, "draftVersion": { "type": "integer", "minimum": 1, "format": "int64" },
+          "updatedAt": { "type": "string", "format": "date-time" },
+          "schemaVersion": { "type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$" },
+          "contentDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "themeVersionId": { "$ref": "#/components/schemas/ThemeVersionId" }, "seo": { "$ref": "#/components/schemas/SeoSnapshot" },
+          "publishedVersionId": { "$ref": "#/components/schemas/PageVersionId" }
+        }
       },
       "PageListResponse": {
         "type": "object", "additionalProperties": false, "required": ["items", "nextCursor"],
@@ -950,7 +954,7 @@
       "PublicationRequest": {
         "type": "object", "additionalProperties": false, "required": ["operation", "expectedDraftVersion"],
         "properties": { "operation": { "type": "string", "enum": ["PUBLISH", "ROLLBACK"] }, "expectedDraftVersion": { "type": "integer", "minimum": 1, "format": "int64" }, "rollbackSourceVersionId": { "$ref": "#/components/schemas/PageVersionId" } },
-        "allOf": [{ "if": { "properties": { "operation": { "const": "ROLLBACK" } } }, "then": { "required": ["rollbackSourceVersionId"] } }]
+        "allOf": [{ "if": { "properties": { "operation": { "const": "ROLLBACK" } } }, "then": { "required": ["rollbackSourceVersionId"] }, "else": { "not": { "required": ["rollbackSourceVersionId"] } } }]
       },
       "PublicationReceipt": {
         "type": "object", "additionalProperties": false,

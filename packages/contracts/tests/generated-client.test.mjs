@@ -196,6 +196,71 @@ test("projects CMS publication with generated component parameters and idempoten
   assert.equal(response.traceId, "trace-cms-publish");
 });
 
+test("serializes typed CMS page cursor and limit query parameters", async () => {
+  let observedUrl;
+  let observedInit;
+  const client = new PlatformApiClient({
+    baseUrl: "https://nexora.test/",
+    accessToken: "short-lived-token",
+    fetch: async (url, init) => {
+      observedUrl = url;
+      observedInit = init;
+      return new Response(JSON.stringify({ items: [], nextCursor: null }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "X-Trace-Id": "trace-cms-list" },
+      });
+    },
+  });
+
+  const response = await client.listCmsPages(
+    { organizationId: "30000000-0000-4000-8000-000000000001" },
+    { cursor: "cursor:page-2", limit: 10 },
+    { traceId: "trace-cms-list" },
+  );
+
+  assert.equal(observedUrl, "https://nexora.test/api/v1/cms/pages?cursor=cursor%3Apage-2&limit=10");
+  assert.equal(observedInit.method, "GET");
+  assert.equal(observedInit.headers.get("Authorization"), "Bearer short-lived-token");
+  assert.equal(observedInit.headers.get("X-Nexora-Organization-Id"), "30000000-0000-4000-8000-000000000001");
+  assert.equal(observedInit.headers.get("X-Trace-Id"), "trace-cms-list");
+  assert.equal(response.data.nextCursor, null);
+});
+
+test("serializes the required CMS archive concurrency query parameter", async () => {
+  let observedUrl;
+  let observedInit;
+  const client = new PlatformApiClient({
+    baseUrl: "https://nexora.test/",
+    accessToken: "short-lived-token",
+    fetch: async (url, init) => {
+      observedUrl = url;
+      observedInit = init;
+      return new Response(JSON.stringify({
+        pageId: "50000000-0000-4000-8000-000000000001",
+        state: "ARCHIVED",
+        archivedAt: "2026-08-10T00:00:00Z",
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "X-Trace-Id": "trace-cms-archive" },
+      });
+    },
+  });
+
+  const response = await client.archiveCmsPage(
+    { pageId: "50000000-0000-4000-8000-000000000001" },
+    { organizationId: "30000000-0000-4000-8000-000000000001" },
+    { expectedDraftVersion: 3 },
+    { traceId: "trace-cms-archive" },
+  );
+
+  assert.equal(observedUrl, "https://nexora.test/api/v1/cms/pages/50000000-0000-4000-8000-000000000001?expectedDraftVersion=3");
+  assert.equal(observedInit.method, "DELETE");
+  assert.equal(observedInit.headers.get("Authorization"), "Bearer short-lived-token");
+  assert.equal(observedInit.headers.get("X-Nexora-Organization-Id"), "30000000-0000-4000-8000-000000000001");
+  assert.equal(observedInit.headers.get("X-Trace-Id"), "trace-cms-archive");
+  assert.equal(response.data.state, "ARCHIVED");
+});
+
 test("surfaces only a valid safe problem envelope", async () => {
   const problem = {
     code: "validation_failed",

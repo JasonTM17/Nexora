@@ -12,25 +12,61 @@ function refName(ref) {
   return ref.slice(ref.lastIndexOf("/") + 1);
 }
 
+function objectType(schema, options = {}) {
+  const required = new Set([...(schema.required ?? []), ...(options.required ?? [])]);
+  const constants = options.constants ?? {};
+  const rawTypes = options.rawTypes ?? {};
+  const forbiddenOptional = new Set(options.forbiddenOptional ?? []);
+  const properties = Object.entries(schema.properties ?? {}).map(([name, property]) => {
+    const literal = Object.hasOwn(constants, name) ? JSON.stringify(constants[name]) : null;
+    const propertyType = forbiddenOptional.has(name) && !required.has(name)
+      ? "never"
+      : Object.hasOwn(rawTypes, name)
+        ? rawTypes[name]
+        : literal ?? typeFor(property);
+    return `readonly ${JSON.stringify(name)}${required.has(name) ? "" : "?"}: ${propertyType};`;
+  });
+  if (schema.additionalProperties && typeof schema.additionalProperties === "object") {
+    properties.push(`readonly [key: string]: ${typeFor(schema.additionalProperties)};`);
+  }
+  return `{ ${properties.join(" ")} }`;
+}
+
+function conditionalObjectType(schema) {
+  const clause = (schema.allOf ?? []).find((candidate) => {
+    const properties = candidate?.if?.properties;
+    return properties && Object.keys(properties).length === 1
+      && Object.values(properties).every((property) => Object.hasOwn(property, "const"));
+  });
+  if (!clause) return objectType(schema);
+
+  const [[discriminator, condition]] = Object.entries(clause.if.properties);
+  const discriminatorSchema = schema.properties?.[discriminator];
+  if (!discriminatorSchema) return objectType(schema);
+
+  const positive = objectType(schema, {
+    constants: { [discriminator]: condition.const },
+    required: clause.then?.required,
+  });
+  const excluded = JSON.stringify(condition.const);
+  const negativeDiscriminator = `Exclude<${typeFor(discriminatorSchema)}, ${excluded}>`;
+  const negative = objectType(schema, {
+    rawTypes: { [discriminator]: negativeDiscriminator },
+    forbiddenOptional: clause.else?.not?.required,
+  });
+  return `(${positive} | ${negative})`;
+}
+
 function typeFor(schema) {
   if (!schema) return "unknown";
   if (schema.$ref) return refName(schema.$ref);
   if (schema.enum) return schema.enum.map((value) => JSON.stringify(value)).join(" | ");
   if (schema.oneOf) return schema.oneOf.map(typeFor).join(" | ");
-  if (schema.allOf) return schema.allOf.map(typeFor).join(" & ");
   if (schema.type === "array") return `ReadonlyArray<${typeFor(schema.items)}>`;
   if (schema.type === "integer" || schema.type === "number") return "number";
   if (schema.type === "boolean") return "boolean";
-  if (schema.type === "object") {
-    const required = new Set(schema.required ?? []);
-    const properties = Object.entries(schema.properties ?? {}).map(
-      ([name, property]) => `readonly ${JSON.stringify(name)}${required.has(name) ? "" : "?"}: ${typeFor(property)};`,
-    );
-    if (schema.additionalProperties && typeof schema.additionalProperties === "object") {
-      properties.push(`readonly [key: string]: ${typeFor(schema.additionalProperties)};`);
-    }
-    return `{ ${properties.join(" ")} }`;
-  }
+  if (schema.type === "object") return conditionalObjectType(schema);
+  if (schema.allOf) return schema.allOf.map(typeFor).join(" & ");
   if (schema.type === "string") return "string";
   return "unknown";
 }
@@ -104,6 +140,7 @@ function operationsFor(spec) {
         requiresAuth: effectiveSecurity.some((requirement) => Object.hasOwn(requirement, "bearerAuth")),
         headerParameters: parametersFor(spec, operation, "header"),
         pathParameters,
+        queryParameters: parametersFor(spec, operation, "query"),
       });
     }
   }
@@ -115,6 +152,10 @@ function renderOperation(operation) {
   const pathParameter = operation.pathParameters.length ? `path: ${pathType}, ` : "";
   const bodyParameter = operation.requestType ? `body: ${operation.requestType}, ` : "";
   const bodyOption = operation.requestType ? ", body" : "";
+  const queryType = typeName(operation.operationId, "Query");
+  const queryParameter = operation.queryParameters.length
+    ? `query: ${queryType}${operation.queryParameters.some((parameter) => parameter.required) ? "" : " = {}"}, `
+    : "";
   const headerType = typeName(operation.operationId, "Headers");
   const headerParameter = operation.headerParameters.length
     ? `headers: ${headerType}${operation.headerParameters.some((parameter) => parameter.required) ? "" : " = {}"}, `
@@ -126,8 +167,15 @@ function renderOperation(operation) {
     const parameter = operation.pathParameters.find((candidate) => candidate.name === name);
     return `\${encodeURIComponent(String(path[${JSON.stringify(parameter.propertyName)}]))}`;
   });
-  return `  async ${operation.operationId}(${pathParameter}${bodyParameter}${headerParameter}options: RequestOptions = {}): Promise<ApiResponse<${operation.responseType}>> {
-    return this.request<${operation.responseType}>(\`${path}\`, { method: ${JSON.stringify(operation.method)}${bodyOption}${headerOption} }, options, ${operation.requiresAuth});
+  const queryPrelude = operation.queryParameters.length
+    ? `    const queryParameters = new URLSearchParams();
+${operation.queryParameters.map((parameter) => `    if (query[${JSON.stringify(parameter.propertyName)}] !== undefined) queryParameters.set(${JSON.stringify(parameter.name)}, String(query[${JSON.stringify(parameter.propertyName)}]));`).join("\n")}
+    const queryString = queryParameters.toString();
+    const requestPath = \`${path}\${queryString ? \`?\${queryString}\` : ""}\`;\n`
+    : "";
+  const requestPath = operation.queryParameters.length ? "requestPath" : `\`${path}\``;
+  return `  async ${operation.operationId}(${pathParameter}${bodyParameter}${headerParameter}${queryParameter}options: RequestOptions = {}): Promise<ApiResponse<${operation.responseType}>> {
+${queryPrelude}    return this.request<${operation.responseType}>(${requestPath}, { method: ${JSON.stringify(operation.method)}${bodyOption}${headerOption} }, options, ${operation.requiresAuth});
   }`;
 }
 
@@ -149,10 +197,20 @@ function renderPathTypes(spec) {
     .join("\n\n");
 }
 
+function renderQueryTypes(spec) {
+  return operationsFor(spec)
+    .filter((operation) => operation.queryParameters.length > 0)
+    .map((operation) => `export interface ${typeName(operation.operationId, "Query")} {\n${operation.queryParameters
+      .map((parameter) => `  readonly ${JSON.stringify(parameter.propertyName)}${parameter.required ? "" : "?"}: ${parameter.type};`)
+      .join("\n")}\n}`)
+    .join("\n\n");
+}
+
 export function renderClient(spec) {
   const schemas = renderSchemas(spec);
   const headerTypes = renderHeaderTypes(spec);
   const pathTypes = renderPathTypes(spec);
+  const queryTypes = renderQueryTypes(spec);
   const operations = operationsFor(spec).map(renderOperation).join("\n\n");
   const detailPropertyRules = spec.components?.schemas?.ApiProblem?.properties?.details?.propertyNames?.allOf ?? [];
   const forbiddenDetailKeys = detailPropertyRules.find((rule) => Array.isArray(rule.not?.enum))?.not.enum;
@@ -185,6 +243,8 @@ ${schemas}
 ${headerTypes}
 
 ${pathTypes}
+
+${queryTypes}
 
 export interface ApiResponse<T> {
   readonly data: T;
