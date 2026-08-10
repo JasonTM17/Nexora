@@ -33,6 +33,9 @@ export function AdminDirectory({ mode }: { mode: Mode }) {
   const [saving, setSaving] = useState<string | null>(null);
   const [removing, setRemoving] = useState<MembershipDirectoryEntry | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
+  const removalTrigger = useRef<HTMLButtonElement>(null);
+  const removalDialog = useRef<HTMLElement>(null);
+  const cancelRemoval = useRef<HTMLButtonElement>(null);
 
   const setFailure = useCallback((error: unknown) => {
     const next = asProblem(error);
@@ -55,6 +58,23 @@ export function AdminDirectory({ mode }: { mode: Mode }) {
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { heading.current?.focus(); }, [state]);
+  useEffect(() => {
+    if (!removing) return;
+    const trigger = removalTrigger.current;
+    cancelRemoval.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); setRemoving(null); return; }
+      if (event.key !== "Tab") return;
+      const dialog = removalDialog.current;
+      const focusable = dialog ? Array.from(dialog.querySelectorAll<HTMLElement>("button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])")) : [];
+      if (focusable.length === 0) { event.preventDefault(); return; }
+      const first = focusable[0]; const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !dialog?.contains(document.activeElement))) { event.preventDefault(); last.focus(); }
+      if (!event.shiftKey && (document.activeElement === last || !dialog?.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => { document.removeEventListener("keydown", onKeyDown); trigger?.focus(); };
+  }, [removing]);
 
   async function changeOrganization(next: string) {
     setOrganizationId(next); setState("loading"); setProblem(null);
@@ -87,7 +107,7 @@ export function AdminDirectory({ mode }: { mode: Mode }) {
     {state === "loading" && <section className="nx-access-card" role="status"><StatusLabel kind="loading" /> Loading the server-authorized membership directory…</section>}
     {state === "empty" && <section className="nx-access-card"><StatusLabel kind="planned" /><h2>Choose an organization</h2><p>Choose an active organization in your account before accessing its administration directory.</p><Link className="nx-action-button nx-action-button--secondary" href="/account">Go to account</Link></section>}
     {(state === "denied" || state === "error" || state === "version-conflict") && <section className="nx-access-card nx-error-card" aria-live="assertive"><StatusLabel kind={state === "denied" ? "denied" : "error"} /><p>{problem?.message}</p>{problem?.traceId && <p className="nx-field-help">Reference: {problem.traceId}</p>}<ActionButton tone="secondary" onClick={() => void load()}>{state === "version-conflict" ? "Reload directory" : "Retry"}</ActionButton></section>}
-    {state === "ready" && <section className="nx-access-card nx-admin-directory" aria-labelledby="directory-title"><div className="nx-card-heading"><div><h2 id="directory-title">{title}</h2><p className="nx-field-help">Selected organization · your current role: {selectedMembership?.role ?? "server-confirmed"}</p></div><StatusLabel kind="fixture" /></div>{memberships.length === 0 ? <p className="nx-empty-copy">No memberships are available in this organization.</p> : <div className="nx-table-scroll"><table><caption className="nx-visually-hidden">Membership directory</caption><thead><tr><th scope="col">Subject</th><th scope="col">Status</th><th scope="col">Role</th><th scope="col"><span className="nx-visually-hidden">Action</span></th></tr></thead><tbody>{memberships.map((member) => <tr key={member.membershipId}><td><code>{member.subjectId}</code><small>Version {member.version}</small></td><td>{member.status}</td><td>{mode === "roles" ? <select aria-label={`Role for ${member.subjectId}`} defaultValue={member.role} disabled={saving !== null} onChange={(event) => { if (event.target.value !== member.role) void update(member, { role: event.target.value as TenantRole }); }}>{roles.map((role) => <option key={role} value={role}>{role}</option>)}</select> : member.role}</td><td>{mode === "users" && <ActionButton tone="secondary" disabled={saving !== null || member.status === "REMOVED"} onClick={() => setRemoving(member)}>{saving === member.membershipId ? "Saving…" : member.status === "REMOVED" ? "Removed" : "Remove"}</ActionButton>}</td></tr>)}</tbody></table></div>}</section>}
-    {removing && <div className="nx-dialog-backdrop" role="presentation"><section className="nx-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="remove-title"><h2 id="remove-title">Remove this member?</h2><p>This permanently removes the active membership for <code>{removing.subjectId}</code>. The server confirms both the current tenant and your permission before applying it.</p><div className="nx-hero-actions"><ActionButton tone="secondary" disabled={saving !== null} onClick={() => setRemoving(null)}>Cancel</ActionButton><ActionButton disabled={saving !== null} onClick={() => void update(removing, { status: "REMOVED" })}>{saving === removing.membershipId ? "Removing…" : "Remove member"}</ActionButton></div></section></div>}
+    {state === "ready" && <section className="nx-access-card nx-admin-directory" aria-labelledby="directory-title"><div className="nx-card-heading"><div><h2 id="directory-title">{title}</h2><p className="nx-field-help">Selected organization · your current role: {selectedMembership?.role ?? "server-confirmed"}</p></div><StatusLabel kind="fixture" /></div>{memberships.length === 0 ? <p className="nx-empty-copy">No memberships are available in this organization.</p> : <div className="nx-table-scroll"><table><caption className="nx-visually-hidden">Membership directory</caption><thead><tr><th scope="col">Subject</th><th scope="col">Status</th><th scope="col">Role</th><th scope="col"><span className="nx-visually-hidden">Action</span></th></tr></thead><tbody>{memberships.map((member) => <tr key={member.membershipId}><td><code>{member.subjectId}</code><small>Version {member.version}</small></td><td>{member.status}</td><td>{mode === "roles" ? <select aria-label={`Role for ${member.subjectId}`} defaultValue={member.role} disabled={saving !== null} onChange={(event) => { if (event.target.value !== member.role) void update(member, { role: event.target.value as TenantRole }); }}>{roles.map((role) => <option key={role} value={role}>{role}</option>)}</select> : member.role}</td><td>{mode === "users" && <ActionButton tone="secondary" disabled={saving !== null || member.status === "REMOVED"} onClick={(event) => { removalTrigger.current = event.currentTarget; setRemoving(member); }}>{saving === member.membershipId ? "Saving…" : member.status === "REMOVED" ? "Removed" : "Remove"}</ActionButton>}</td></tr>)}</tbody></table></div>}</section>}
+    {removing && <div className="nx-dialog-backdrop" role="presentation"><section ref={removalDialog} className="nx-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="remove-title" aria-describedby="remove-copy"><h2 id="remove-title">Remove this member?</h2><p id="remove-copy">This permanently removes the active membership for <code>{removing.subjectId}</code>. The server confirms both the current tenant and your permission before applying it.</p><div className="nx-hero-actions"><button ref={cancelRemoval} className="nx-action-button nx-action-button--secondary" disabled={saving !== null} onClick={() => setRemoving(null)} type="button">Cancel</button><ActionButton disabled={saving !== null} onClick={() => void update(removing, { status: "REMOVED" })}>{saving === removing.membershipId ? "Removing…" : "Remove member"}</ActionButton></div></section></div>}
   </main></PageGrid></AppShell>;
 }
