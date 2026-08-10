@@ -1,0 +1,360 @@
+{
+  "contractVersion": "1.0.0",
+  "task": "M2-C01",
+  "status": "frozen-contract-only",
+  "authority": {
+    "identityIssuer": "supabase-auth",
+    "identitySubjectClaim": "sub",
+    "domainAuthorization": "spring-postgresql",
+    "membershipTable": "nexora.memberships",
+    "rules": [
+      "A verified identity is not organization authority.",
+      "Only a current ACTIVE membership row grants tenant membership.",
+      "Browser headers, request bodies, JWT role, app_metadata, and user_metadata are selection hints or identity attributes only and never membership authority.",
+      "Organization and permission checks fail closed when identity, membership, role assignment, or transaction-local database context is absent or stale."
+    ]
+  },
+  "identity": {
+    "requiredVerifiedClaims": [
+      "iss",
+      "aud",
+      "exp",
+      "sub",
+      "session_id",
+      "role",
+      "aal",
+      "is_anonymous"
+    ],
+    "acceptedDatabaseExecutionRole": "authenticated",
+    "databaseRoleIsAuthorization": false,
+    "anonymousIdentityAllowedForDomainApi": false,
+    "authorizationClaimRules": {
+      "user_metadata": "never-authoritative",
+      "app_metadata": "never-membership-authoritative",
+      "role": "database-execution-only",
+      "organization_id": "never-authoritative",
+      "permissions": "never-authoritative"
+    }
+  },
+  "session": {
+    "browserBoundary": "same-origin-bff",
+    "accessToken": "short-lived-verified-bearer",
+    "refreshToken": "secure-http-only-same-site-cookie-under-approved-supabase-ssr-flow",
+    "csrf": "state-changing cookie-authenticated BFF requests require same-origin CSRF protection",
+    "membershipFreshness": "resolve current membership for every domain request; any cache must be bounded and invalidated by membership version",
+    "membershipRemovalEffect": "deny the next domain request after authoritative membership removal",
+    "revocation": "sign-out or account closure revokes refresh sessions; sensitive operations may require current session_id validation",
+    "logging": "log only safe actor, session correlation, organization, membership, action, result, and trace identifiers; never tokens, cookies, metadata payloads, or profile values"
+  },
+  "tenantResolution": {
+    "selectionHeader": "X-Nexora-Organization-Id",
+    "bodyFieldForResolveOperation": "organizationId",
+    "rules": [
+      {
+        "order": 1,
+        "condition": "identity is absent, invalid, expired, anonymous, or wrong issuer/audience",
+        "result": "AUTHENTICATION_REQUIRED"
+      },
+      {
+        "order": 2,
+        "condition": "selection is supplied and no current ACTIVE membership exists for subject plus organization",
+        "result": "PERMISSION_DENIED"
+      },
+      {
+        "order": 3,
+        "condition": "selection is supplied and exactly one current ACTIVE membership matches subject plus organization",
+        "result": "RESOLVED"
+      },
+      {
+        "order": 4,
+        "condition": "selection is absent and exactly one current ACTIVE membership exists",
+        "result": "RESOLVED"
+      },
+      {
+        "order": 5,
+        "condition": "selection is absent and multiple current ACTIVE memberships exist",
+        "result": "TENANT_SELECTION_REQUIRED"
+      },
+      {
+        "order": 6,
+        "condition": "selection is absent and no current ACTIVE membership exists",
+        "result": "MEMBERSHIP_REQUIRED"
+      }
+    ],
+    "antiEnumeration": "A selected organization without an active membership returns the same permission-denied envelope whether the organization exists or not.",
+    "requestContext": "immutable request-scoped value derived after authentication and membership lookup; never a process singleton",
+    "resourceRule": "A resource organizationId must equal resolved organizationId before permission evaluation and persistence access."
+  },
+  "membership": {
+    "statuses": [
+      "INVITED",
+      "ACTIVE",
+      "SUSPENDED",
+      "REMOVED"
+    ],
+    "grantingStatus": "ACTIVE",
+    "cardinality": "at most one membership per organizationId plus subjectId",
+    "roleCardinality": "exactly one tenant role for every ACTIVE membership in v1",
+    "customRoles": "not-supported-in-v1",
+    "versioning": "all membership and role mutations require expectedVersion and increment version",
+    "ownerInvariant": "every non-deleting organization has at least one ACTIVE OWNER; the last owner cannot leave, be removed, suspended, or demoted until another owner is active",
+    "assignmentRule": "the actor requires both user.manage and role.manage, must hold every permission granted by the target role, and only an OWNER may assign OWNER"
+  },
+  "roles": {
+    "platform": [
+      {
+        "role": "SUPER_ADMIN",
+        "scope": "platform",
+        "tenantAssignable": false,
+        "tenantPermissions": [],
+        "rule": "No implicit tenant access or RLS bypass. Any future break-glass tenant access requires a separate audited R3 contract."
+      }
+    ],
+    "tenant": [
+      "OWNER",
+      "ADMIN",
+      "EDITOR",
+      "CONTENT_CREATOR",
+      "REVIEWER",
+      "USER"
+    ],
+    "viewerEquivalent": "USER"
+  },
+  "permissions": [
+    "organization.read",
+    "organization.update",
+    "role.read",
+    "role.manage",
+    "page.read",
+    "page.create",
+    "page.update",
+    "page.publish",
+    "theme.read",
+    "theme.update",
+    "knowledge.read",
+    "knowledge.manage",
+    "user.manage"
+  ],
+  "permissionMatrix": {
+    "OWNER": [
+      "organization.read",
+      "organization.update",
+      "role.read",
+      "role.manage",
+      "page.read",
+      "page.create",
+      "page.update",
+      "page.publish",
+      "theme.read",
+      "theme.update",
+      "knowledge.read",
+      "knowledge.manage",
+      "user.manage"
+    ],
+    "ADMIN": [
+      "organization.read",
+      "organization.update",
+      "role.read",
+      "role.manage",
+      "page.read",
+      "page.create",
+      "page.update",
+      "page.publish",
+      "theme.read",
+      "theme.update",
+      "knowledge.read",
+      "knowledge.manage",
+      "user.manage"
+    ],
+    "EDITOR": [
+      "organization.read",
+      "role.read",
+      "page.read",
+      "page.create",
+      "page.update",
+      "page.publish",
+      "theme.read",
+      "theme.update",
+      "knowledge.read",
+      "knowledge.manage"
+    ],
+    "CONTENT_CREATOR": [
+      "organization.read",
+      "page.read",
+      "page.create",
+      "page.update",
+      "theme.read",
+      "knowledge.read"
+    ],
+    "REVIEWER": [
+      "organization.read",
+      "page.read",
+      "page.publish",
+      "theme.read",
+      "knowledge.read"
+    ],
+    "USER": [
+      "organization.read",
+      "page.read",
+      "theme.read",
+      "knowledge.read"
+    ]
+  },
+  "database": {
+    "schemas": [
+      "nexora"
+    ],
+    "relations": {
+      "organizations": {
+        "primaryKey": [
+          "id"
+        ],
+        "tenantKey": null,
+        "requiredColumns": [
+          "id",
+          "slug",
+          "name",
+          "status",
+          "version",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "profiles": {
+        "primaryKey": [
+          "subject_id"
+        ],
+        "tenantKey": null,
+        "requiredColumns": [
+          "subject_id",
+          "display_name",
+          "locale",
+          "reduced_motion",
+          "high_contrast",
+          "version",
+          "created_at",
+          "updated_at"
+        ],
+        "authorizationColumnsForbidden": true
+      },
+      "memberships": {
+        "primaryKey": [
+          "id"
+        ],
+        "tenantKey": "organization_id",
+        "requiredColumns": [
+          "id",
+          "organization_id",
+          "subject_id",
+          "status",
+          "tenant_role",
+          "version",
+          "created_at",
+          "updated_at"
+        ],
+        "unique": [
+          "organization_id",
+          "subject_id"
+        ]
+      }
+    },
+    "roles": {
+      "migration": "owner-capable migration identity; never used by application runtime",
+      "runtime": "non-owner login role with no BYPASSRLS; only minimum application-schema privileges",
+      "supabaseApiRoles": "anon, authenticated, and service_role receive no domain relation privileges in v1"
+    },
+    "rls": {
+      "mode": "enabled-and-forced-on-every-tenant-owned-relation",
+      "default": "deny",
+      "tenantPredicate": "row.organization_id equals transaction-local nexora.organization_id",
+      "membershipPredicate": "transaction-local subject and membership identify a current ACTIVE membership for the same organization",
+      "writeCheck": "INSERT and UPDATE WITH CHECK enforce the resolved organization; UPDATE also requires a matching SELECT/USING policy",
+      "missingContext": "deny",
+      "views": "security_invoker only or unavailable to runtime/API roles",
+      "functions": "security invoker by default; any exceptional definer function is private, fixed-search-path, least-grant, and separately reviewed"
+    },
+    "transactionContext": {
+      "scope": "transaction-local-only",
+      "settings": [
+        "nexora.subject_id",
+        "nexora.organization_id",
+        "nexora.membership_id"
+      ],
+      "sequence": [
+        "begin transaction",
+        "set all three settings locally from the resolved request context",
+        "execute authorized application queries",
+        "commit or rollback",
+        "verify pooled connection has no retained settings"
+      ]
+    }
+  },
+  "api": {
+    "authority": "packages/contracts/domain/v1/identity-tenant-permission.json",
+    "projectionTarget": "packages/contracts/openapi/v1/openapi.json",
+    "organizationSelectionHeader": "X-Nexora-Organization-Id",
+    "operations": [
+      {
+        "operationId": "getAccessContext",
+        "method": "GET",
+        "path": "/api/v1/identity/access-context",
+        "tenantContext": "not-required"
+      },
+      {
+        "operationId": "resolveTenantContext",
+        "method": "POST",
+        "path": "/api/v1/tenant-context/resolve",
+        "tenantContext": "validated-from-organizationId-body-candidate"
+      },
+      {
+        "operationId": "getTenantContext",
+        "method": "GET",
+        "path": "/api/v1/tenant-context",
+        "tenantContext": "required-from-selection-header"
+      },
+      {
+        "operationId": "getPermissionMatrix",
+        "method": "GET",
+        "path": "/api/v1/authorization/permission-matrix",
+        "tenantContext": "required-from-selection-header"
+      }
+    ],
+    "profileFields": [
+      "displayName",
+      "locale",
+      "reducedMotion",
+      "highContrast"
+    ],
+    "profileRule": "profile values are user-editable domain data and never authorization inputs",
+    "errors": [
+      "AUTHENTICATION_REQUIRED",
+      "PERMISSION_DENIED",
+      "MEMBERSHIP_REQUIRED",
+      "TENANT_SELECTION_REQUIRED",
+      "VERSION_CONFLICT"
+    ]
+  },
+  "handoffs": {
+    "M2-DB01": [
+      "implement the declared relations, constraints, grants, forced RLS, transaction settings, database fixtures, and rollback evidence",
+      "prove runtime-role and pooled-connection isolation without changing this vocabulary"
+    ],
+    "M2-T01": [
+      "validate JWT identity and session claims, implement access/profile/tenant APIs, and resolve membership on every domain request",
+      "deny removed, suspended, anonymous, forged-selection, and cross-tenant cases"
+    ],
+    "M2-T02": [
+      "implement the centralized deny-by-default evaluator and role-assignment invariants from this exact matrix",
+      "do not hardcode endpoint behavior from role names"
+    ],
+    "M2-U01": [
+      "consume only the generated same-origin API types for access context, explicit organization selection, and allowlisted profile fields",
+      "render selection-required, membership-denied, session-expired, conflict, and empty states without treating UI state as authority"
+    ]
+  },
+  "limitations": [
+    "This artifact defines contracts only; it contains no migration, runtime enforcement, UI, hosted configuration, provider call, or live Supabase evidence.",
+    "Custom tenant roles, platform break-glass access, tenant deletion, provider administration, and Data API domain access require later accepted contracts.",
+    "Deterministic fixture tests prove contract consistency only, not PostgreSQL RLS, session revocation, pooled connection cleanup, or hosted behavior."
+  ]
+}

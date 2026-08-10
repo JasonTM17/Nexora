@@ -1,0 +1,224 @@
+{
+  "fixtureVersion": "1.0.0",
+  "contractVersion": "1.0.0",
+  "organizations": [
+    {
+      "id": "10000000-0000-4000-8000-000000000001",
+      "slug": "nexora-alpha",
+      "name": "Nexora Alpha",
+      "status": "ACTIVE",
+      "version": 1
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000002",
+      "slug": "nexora-beta",
+      "name": "Nexora Beta",
+      "status": "ACTIVE",
+      "version": 1
+    }
+  ],
+  "subjects": [
+    {
+      "id": "20000000-0000-4000-8000-000000000001",
+      "displayName": "Alpha Owner"
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000002",
+      "displayName": "Alpha Editor"
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000003",
+      "displayName": "Beta Owner"
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000004",
+      "displayName": "Removed Member"
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000005",
+      "displayName": "No Membership"
+    }
+  ],
+  "memberships": [
+    {
+      "id": "30000000-0000-4000-8000-000000000001",
+      "organizationId": "10000000-0000-4000-8000-000000000001",
+      "subjectId": "20000000-0000-4000-8000-000000000001",
+      "status": "ACTIVE",
+      "role": "OWNER",
+      "version": 1
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000002",
+      "organizationId": "10000000-0000-4000-8000-000000000002",
+      "subjectId": "20000000-0000-4000-8000-000000000001",
+      "status": "ACTIVE",
+      "role": "USER",
+      "version": 1
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000003",
+      "organizationId": "10000000-0000-4000-8000-000000000001",
+      "subjectId": "20000000-0000-4000-8000-000000000002",
+      "status": "ACTIVE",
+      "role": "EDITOR",
+      "version": 1
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000004",
+      "organizationId": "10000000-0000-4000-8000-000000000002",
+      "subjectId": "20000000-0000-4000-8000-000000000003",
+      "status": "ACTIVE",
+      "role": "OWNER",
+      "version": 1
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000005",
+      "organizationId": "10000000-0000-4000-8000-000000000001",
+      "subjectId": "20000000-0000-4000-8000-000000000004",
+      "status": "REMOVED",
+      "role": "ADMIN",
+      "version": 2
+    }
+  ],
+  "tenantResolutionCases": [
+    {
+      "id": "anonymous-denied",
+      "subjectId": null,
+      "authenticated": false,
+      "anonymous": false,
+      "selectedOrganizationId": null,
+      "expected": "AUTHENTICATION_REQUIRED"
+    },
+    {
+      "id": "anonymous-auth-user-denied",
+      "subjectId": "20000000-0000-4000-8000-000000000005",
+      "authenticated": true,
+      "anonymous": true,
+      "selectedOrganizationId": null,
+      "expected": "AUTHENTICATION_REQUIRED"
+    },
+    {
+      "id": "single-membership-defaults",
+      "subjectId": "20000000-0000-4000-8000-000000000002",
+      "authenticated": true,
+      "anonymous": false,
+      "selectedOrganizationId": null,
+      "expected": "RESOLVED"
+    },
+    {
+      "id": "multiple-memberships-require-selection",
+      "subjectId": "20000000-0000-4000-8000-000000000001",
+      "authenticated": true,
+      "anonymous": false,
+      "selectedOrganizationId": null,
+      "expected": "TENANT_SELECTION_REQUIRED"
+    },
+    {
+      "id": "explicit-active-membership-resolves",
+      "subjectId": "20000000-0000-4000-8000-000000000001",
+      "authenticated": true,
+      "anonymous": false,
+      "selectedOrganizationId": "10000000-0000-4000-8000-000000000002",
+      "expected": "RESOLVED"
+    },
+    {
+      "id": "forged-cross-tenant-selection-denied",
+      "subjectId": "20000000-0000-4000-8000-000000000002",
+      "authenticated": true,
+      "anonymous": false,
+      "selectedOrganizationId": "10000000-0000-4000-8000-000000000002",
+      "expected": "PERMISSION_DENIED"
+    },
+    {
+      "id": "removed-membership-denied",
+      "subjectId": "20000000-0000-4000-8000-000000000004",
+      "authenticated": true,
+      "anonymous": false,
+      "selectedOrganizationId": "10000000-0000-4000-8000-000000000001",
+      "expected": "PERMISSION_DENIED"
+    },
+    {
+      "id": "no-membership-denied",
+      "subjectId": "20000000-0000-4000-8000-000000000005",
+      "authenticated": true,
+      "anonymous": false,
+      "selectedOrganizationId": null,
+      "expected": "MEMBERSHIP_REQUIRED"
+    }
+  ],
+  "permissionCases": [
+    {
+      "id": "owner-manages-alpha-users",
+      "subjectId": "20000000-0000-4000-8000-000000000001",
+      "resolvedOrganizationId": "10000000-0000-4000-8000-000000000001",
+      "resourceOrganizationId": "10000000-0000-4000-8000-000000000001",
+      "permission": "user.manage",
+      "expected": "ALLOW"
+    },
+    {
+      "id": "same-subject-beta-user-cannot-manage",
+      "subjectId": "20000000-0000-4000-8000-000000000001",
+      "resolvedOrganizationId": "10000000-0000-4000-8000-000000000002",
+      "resourceOrganizationId": "10000000-0000-4000-8000-000000000002",
+      "permission": "user.manage",
+      "expected": "DENY"
+    },
+    {
+      "id": "editor-updates-alpha-page",
+      "subjectId": "20000000-0000-4000-8000-000000000002",
+      "resolvedOrganizationId": "10000000-0000-4000-8000-000000000001",
+      "resourceOrganizationId": "10000000-0000-4000-8000-000000000001",
+      "permission": "page.update",
+      "expected": "ALLOW"
+    },
+    {
+      "id": "editor-cannot-manage-alpha-users",
+      "subjectId": "20000000-0000-4000-8000-000000000002",
+      "resolvedOrganizationId": "10000000-0000-4000-8000-000000000001",
+      "resourceOrganizationId": "10000000-0000-4000-8000-000000000001",
+      "permission": "user.manage",
+      "expected": "DENY"
+    },
+    {
+      "id": "forged-beta-resource-denied",
+      "subjectId": "20000000-0000-4000-8000-000000000002",
+      "resolvedOrganizationId": "10000000-0000-4000-8000-000000000001",
+      "resourceOrganizationId": "10000000-0000-4000-8000-000000000002",
+      "permission": "page.update",
+      "expected": "DENY"
+    },
+    {
+      "id": "beta-owner-manages-beta-roles",
+      "subjectId": "20000000-0000-4000-8000-000000000003",
+      "resolvedOrganizationId": "10000000-0000-4000-8000-000000000002",
+      "resourceOrganizationId": "10000000-0000-4000-8000-000000000002",
+      "permission": "role.manage",
+      "expected": "ALLOW"
+    },
+    {
+      "id": "beta-owner-cannot-cross-alpha",
+      "subjectId": "20000000-0000-4000-8000-000000000003",
+      "resolvedOrganizationId": "10000000-0000-4000-8000-000000000002",
+      "resourceOrganizationId": "10000000-0000-4000-8000-000000000001",
+      "permission": "role.manage",
+      "expected": "DENY"
+    },
+    {
+      "id": "removed-admin-denied",
+      "subjectId": "20000000-0000-4000-8000-000000000004",
+      "resolvedOrganizationId": "10000000-0000-4000-8000-000000000001",
+      "resourceOrganizationId": "10000000-0000-4000-8000-000000000001",
+      "permission": "organization.read",
+      "expected": "DENY"
+    },
+    {
+      "id": "unknown-permission-denied",
+      "subjectId": "20000000-0000-4000-8000-000000000001",
+      "resolvedOrganizationId": "10000000-0000-4000-8000-000000000001",
+      "resourceOrganizationId": "10000000-0000-4000-8000-000000000001",
+      "permission": "tenant.escape",
+      "expected": "DENY"
+    }
+  ]
+}
