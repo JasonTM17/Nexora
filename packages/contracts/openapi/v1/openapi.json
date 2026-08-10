@@ -1,0 +1,302 @@
+{
+  "openapi": "3.1.0",
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "info": {
+    "title": "Nexora Platform API",
+    "version": "1.0.0",
+    "description": "Canonical browser-facing contract for the Nexora platform API v1."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Same-origin API boundary"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Platform",
+      "description": "Platform foundation and contract verification"
+    }
+  ],
+  "paths": {
+    "/api/v1/platform": {
+      "get": {
+        "operationId": "getPlatform",
+        "summary": "Read the platform contract baseline",
+        "tags": [
+          "Platform"
+        ],
+        "responses": {
+          "200": {
+            "description": "Platform baseline",
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/platform/echo": {
+      "post": {
+        "operationId": "echoPlatform",
+        "summary": "Validate the bootstrap API contract",
+        "tags": [
+          "Platform"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EchoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validated request payload",
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EchoResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Send a short-lived access token as Authorization: Bearer <token>. Authentication does not grant organization authorization."
+      }
+    },
+    "headers": {
+      "TraceId": {
+        "description": "Opaque request correlation identifier. Callers may supply a safe value; the server replaces invalid values.",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/TraceId"
+        }
+      }
+    },
+    "responses": {
+      "ValidationError": {
+        "description": "The request failed validation.",
+        "headers": {
+          "X-Trace-Id": {
+            "$ref": "#/components/headers/TraceId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiProblem"
+            },
+            "example": {
+              "code": "validation_failed",
+              "message": "Request validation failed.",
+              "details": {
+                "message": "must not be blank"
+              },
+              "traceId": "validation-trace-7"
+            }
+          }
+        }
+      },
+      "AuthenticationRequired": {
+        "description": "A valid bearer token is required.",
+        "headers": {
+          "WWW-Authenticate": {
+            "description": "Bearer authentication challenge.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "X-Trace-Id": {
+            "$ref": "#/components/headers/TraceId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiProblem"
+            },
+            "example": {
+              "code": "authentication_required",
+              "message": "Authentication is required.",
+              "details": {},
+              "traceId": "01JTRACEAUTHENTICATION"
+            }
+          }
+        }
+      },
+      "PermissionDenied": {
+        "description": "The authenticated actor is not authorized for the requested operation.",
+        "headers": {
+          "X-Trace-Id": {
+            "$ref": "#/components/headers/TraceId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiProblem"
+            },
+            "example": {
+              "code": "permission_denied",
+              "message": "The requested operation is not permitted.",
+              "details": {},
+              "traceId": "01JTRACEAUTHORIZATION"
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "An unexpected error occurred. Internal implementation details are never returned.",
+        "headers": {
+          "X-Trace-Id": {
+            "$ref": "#/components/headers/TraceId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiProblem"
+            },
+            "example": {
+              "code": "internal_error",
+              "message": "An unexpected error occurred.",
+              "details": {},
+              "traceId": "01JTRACEINTERNALERROR"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ApiProblem": {
+        "type": "object",
+        "description": "Stable, client-safe error envelope. It must not contain stack traces, provider responses, credentials, or request source.",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message",
+          "details",
+          "traceId"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "details": {
+            "type": "object",
+            "description": "Bounded field-level details safe for the caller.",
+            "maxProperties": 50,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 512
+            }
+          },
+          "traceId": {
+            "$ref": "#/components/schemas/TraceId"
+          }
+        }
+      },
+      "TraceId": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._-]{1,128}$",
+        "maxLength": 128
+      },
+      "PlatformResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "apiVersion",
+          "migrationBaseline",
+          "schemas"
+        ],
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "migrationBaseline": {
+            "type": "string"
+          },
+          "schemas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "EchoRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 140
+          }
+        }
+      },
+      "EchoResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "x-nexora-contract": {
+    "authority": "packages/contracts/openapi/v1/openapi.json",
+    "generatedClient": "packages/contracts/src/generated/platform-api.ts",
+    "stability": "stable-v1"
+  }
+}
