@@ -42,6 +42,18 @@ public class TransactionLocalDatabaseContext {
         setLocal("nexora.membership_id", context.membershipId());
     }
 
+    void setTargetMembership(UUID membershipId, long version, boolean mutation) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("Target membership context requires an active transaction");
+        }
+        if (membershipId == null || version < 1) {
+            throw new IllegalArgumentException("A target membership id and positive version are required");
+        }
+        setLocal("nexora.target_membership_id", membershipId);
+        setLocal("nexora.target_membership_version", Long.toString(version));
+        setLocal("nexora.target_membership_mutation", mutation ? "true" : "");
+    }
+
     private <T> T execute(
             UUID subjectId, UUID organizationId, UUID membershipId, Function<JdbcTemplate, T> work) {
         return transactions.execute(status -> {
@@ -53,7 +65,10 @@ public class TransactionLocalDatabaseContext {
     }
 
     private void setLocal(String setting, UUID value) {
-        jdbc.queryForObject("SELECT set_config(?, ?, true)", String.class,
-                setting, value == null ? "" : value.toString());
+        setLocal(setting, value == null ? "" : value.toString());
+    }
+
+    private void setLocal(String setting, String value) {
+        jdbc.queryForObject("SELECT set_config(?, ?, true)", String.class, setting, value);
     }
 }

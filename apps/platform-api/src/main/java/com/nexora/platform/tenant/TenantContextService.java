@@ -62,6 +62,24 @@ public class TenantContextService {
         });
     }
 
+    /**
+     * Runs one authorization operation with an exact, transaction-local target
+     * membership. The target settings are never promoted to a pooled session
+     * and are only populated after the actor's fresh ACTIVE membership has
+     * passed the normal stale-context gate.
+     */
+    public <T> T withFreshTenantTarget(
+            TenantContext expected,
+            UUID targetMembershipId,
+            long targetMembershipVersion,
+            boolean mutation,
+            BiFunction<TenantContext, JdbcTemplate, T> work) {
+        return withFreshTenant(expected, (authoritative, jdbc) -> {
+            databaseContext.setTargetMembership(targetMembershipId, targetMembershipVersion, mutation);
+            return work.apply(authoritative, jdbc);
+        });
+    }
+
     private DomainAccessException staleMembershipContext() {
         return new DomainAccessException(
                 HttpStatus.FORBIDDEN,
