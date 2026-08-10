@@ -17,6 +17,7 @@ function typeFor(schema) {
   if (schema.$ref) return refName(schema.$ref);
   if (schema.enum) return schema.enum.map((value) => JSON.stringify(value)).join(" | ");
   if (schema.oneOf) return schema.oneOf.map(typeFor).join(" | ");
+  if (schema.allOf) return schema.allOf.map(typeFor).join(" & ");
   if (schema.type === "array") return `ReadonlyArray<${typeFor(schema.items)}>`;
   if (schema.type === "integer" || schema.type === "number") return "number";
   if (schema.type === "boolean") return "boolean";
@@ -54,8 +55,9 @@ function typeName(operationId, suffix) {
   return `${operationId.charAt(0).toUpperCase()}${operationId.slice(1)}${suffix}`;
 }
 
-function parametersFor(operation, location) {
+function parametersFor(spec, operation, location) {
   return (operation.parameters ?? [])
+    .map((parameter) => resolveLocalRef(spec, parameter))
     .filter((parameter) => parameter?.in === location)
     .map((parameter) => {
       if (typeof parameter.name !== "string" || !parameter.name) {
@@ -85,7 +87,7 @@ function operationsFor(spec) {
       if (!responseSchema) throw new Error(`${operation.operationId} has no application/json success schema`);
       const effectiveSecurity = operation.security ?? spec.security ?? [];
 
-      const pathParameters = parametersFor(operation, "path");
+      const pathParameters = parametersFor(spec, operation, "path");
       const referencedPathParameters = [...path.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]);
       if (pathParameters.length !== referencedPathParameters.length
         || !referencedPathParameters.every((name) => pathParameters.some((parameter) => parameter.name === name))
@@ -100,7 +102,7 @@ function operationsFor(spec) {
         requestType: requestSchema ? typeFor(requestSchema) : null,
         responseType: typeFor(responseSchema),
         requiresAuth: effectiveSecurity.some((requirement) => Object.hasOwn(requirement, "bearerAuth")),
-        headerParameters: parametersFor(operation, "header"),
+        headerParameters: parametersFor(spec, operation, "header"),
         pathParameters,
       });
     }

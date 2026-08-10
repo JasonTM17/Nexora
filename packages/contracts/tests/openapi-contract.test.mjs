@@ -198,6 +198,70 @@ test("projects the M2 identity, tenant-selection, authorization mutation, and pr
     ["membershipId", "organizationId", "subjectId", "status", "role", "version"]);
 });
 
+test("projects bounded CMS drafting, workflow, publication, theme, and SEO contracts", () => {
+  const expected = {
+    "/api/v1/cms/pages": ["listCmsPages", "createCmsPage"],
+    "/api/v1/cms/pages/{pageId}": ["getCmsPage", "updateCmsPage", "archiveCmsPage"],
+    "/api/v1/cms/pages/{pageId}/workflow-transitions": ["transitionCmsPageWorkflow"],
+    "/api/v1/cms/pages/{pageId}/publication": ["publishCmsPage"],
+    "/api/v1/cms/themes/{themeVersionId}": ["getCmsThemeVersion"],
+  };
+
+  for (const [path, operationIds] of Object.entries(expected)) {
+    const pathItem = spec.paths[path];
+    assert.ok(pathItem, `${path} must be projected from the CMS authority`);
+    assert.deepEqual(Object.values(pathItem).map((operation) => operation.operationId), operationIds);
+    for (const operation of Object.values(pathItem)) {
+      assert.equal(operation.security, undefined, `${operation.operationId} must inherit bearer protection`);
+      assert.equal(operation.responses["401"]?.$ref, "#/components/responses/AuthenticationRequired");
+      assert.equal(operation.responses["403"]?.$ref, "#/components/responses/PermissionDenied");
+    }
+  }
+
+  const pageId = resolve(spec.components.parameters.PageId);
+  assert.deepEqual(
+    { name: pageId.name, in: pageId.in, required: pageId.required, schema: pageId.schema.$ref },
+    { name: "pageId", in: "path", required: true, schema: "#/components/schemas/PageId" },
+  );
+  const organizationHeader = resolve(spec.components.parameters.RequiredOrganizationHeader);
+  assert.deepEqual(
+    { name: organizationHeader.name, in: organizationHeader.in, required: organizationHeader.required, schema: organizationHeader.schema.$ref },
+    { name: "X-Nexora-Organization-Id", in: "header", required: true, schema: "#/components/schemas/OrganizationId" },
+  );
+
+  const publish = spec.paths["/api/v1/cms/pages/{pageId}/publication"].post;
+  assert.equal(publish.parameters[2].name, "Idempotency-Key");
+  assert.equal(publish.parameters[2].required, true);
+  assert.deepEqual(Object.keys(publish.responses), ["200", "201", "400", "401", "403", "409", "422", "500"]);
+  assert.equal(publish.responses["422"].$ref, "#/components/responses/PublicationValidationFailed");
+  assert.equal(
+    publish.requestBody.content["application/json"].schema.$ref,
+    "#/components/schemas/PublicationRequest",
+  );
+
+  const pageSummary = spec.components.schemas.PageSummary;
+  assert.ok(pageSummary.required.includes("title"));
+  assert.equal(pageSummary.additionalProperties, false);
+  const pageDetail = spec.components.schemas.PageDetail;
+  assert.equal(pageDetail.allOf[0].$ref, "#/components/schemas/PageSummary");
+  assert.equal(pageDetail.allOf[1].properties.contentDigest.pattern, "^sha256:[a-f0-9]{64}$");
+  assert.equal(Object.hasOwn(pageDetail.allOf[1].properties, "content"), false);
+
+  const seo = spec.components.schemas.SeoSnapshot;
+  assert.equal(seo.additionalProperties, false);
+  assert.ok(seo.required.includes("canonicalPath"));
+  assert.equal(seo.properties.canonicalPath.pattern, "^/[a-z0-9]+(?:[/-][a-z0-9]+)*$");
+  assert.equal(Object.hasOwn(seo.properties, "html"), false);
+
+  const workflow = spec.components.schemas.WorkflowTransitionRequest;
+  assert.deepEqual(spec.components.schemas.WorkflowAction.enum, ["SUBMIT_FOR_REVIEW", "APPROVE", "REJECT"]);
+  assert.deepEqual(workflow.allOf[0].then.required, ["reason"]);
+  const publication = spec.components.schemas.PublicationRequest;
+  assert.deepEqual(publication.properties.operation.enum, ["PUBLISH", "ROLLBACK"]);
+  assert.deepEqual(publication.allOf[0].then.required, ["rollbackSourceVersionId"]);
+  assert.deepEqual(spec.components.schemas.ThemeVersion.properties.status.enum, ["DRAFT", "PUBLISHED", "ARCHIVED"]);
+});
+
 test("generates bearer handling when an operation inherits the protected default", () => {
   const protectedSpec = structuredClone(spec);
   const operation = protectedSpec.paths["/api/v1/platform"].get;
