@@ -123,8 +123,11 @@ setting the database context.
 `V007` creates tenant-scoped sites, themes, immutable page/publication history,
 workflow reviews and typed SEO snapshots. `V008` adds only explicit
 `nexora_runtime` forced-RLS policies; its helper is SECURITY INVOKER and
-rechecks the current ACTIVE actor plus frozen permission matrix. No API role is
-granted schema or table access.
+rechecks the current ACTIVE actor plus frozen permission matrix. `V011` makes
+CMS audit inserts operation-aware: PAGE_CREATE/PAGE_UPDATE require their
+matching permission, publication-related operations require `page.publish`,
+and the audit actor must match the transaction subject. No API role is granted
+schema or table access.
 
 Run the complete disposable PostgreSQL 17.5 proof from the repository root:
 

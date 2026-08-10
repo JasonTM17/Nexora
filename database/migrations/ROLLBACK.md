@@ -17,9 +17,12 @@ is outside M1-DB01.
 
 ## M2-DB02 and M2-DB01 ordered rollback notes
 
-`V007` and `V008` are append-only once applied. Do not edit immutable CMS
-history, disable forced RLS, or grant Data API roles as a rollback shortcut.
-Use a reviewed forward migration after dependency and backup/restore assessment.
+`V007` through `V011` are append-only once applied. Do not edit immutable CMS
+history, disable forced RLS, weaken the operation-aware CMS audit insert policy,
+or grant Data API roles as a rollback shortcut. `V011` binds audit `actor_id`
+to the transaction subject and maps PAGE_CREATE/PAGE_UPDATE to their respective
+permissions; any corrective change must be a reviewed forward migration after
+dependency and backup/restore assessment.
 
 `V002`, `V003`, `V004`, and `V005` are append-only once applied. Do not edit their SQL,
 drop the private schema, disable or relax forced RLS, remove the active-owner
