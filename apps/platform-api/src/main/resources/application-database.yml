@@ -1,18 +1,21 @@
 spring:
   datasource:
     url: ${NEXORA_RUNTIME_DATABASE_URL}
-    username: ${NEXORA_RUNTIME_DATABASE_USERNAME:nexora_runtime}
+    username: ${NEXORA_RUNTIME_DATABASE_USERNAME}
     password: ${NEXORA_RUNTIME_DATABASE_PASSWORD}
     hikari:
       maximum-pool-size: 10
       minimum-idle: 0
+      connection-init-sql: SET ROLE nexora_runtime
   flyway:
     enabled: true
     url: ${NEXORA_MIGRATION_DATABASE_URL}
     user: ${NEXORA_MIGRATION_DATABASE_USERNAME}
     password: ${NEXORA_MIGRATION_DATABASE_PASSWORD}
     locations: filesystem:${NEXORA_MIGRATIONS_LOCATION}
-    validate-migration-naming: true
+    # The migration authority directory also contains a fixture-only SQL file;
+    # Flyway applies only its ordered VNNN__description.sql migrations.
+    validate-migration-naming: false
     clean-disabled: true
 
 management:

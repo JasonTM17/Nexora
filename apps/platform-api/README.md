@@ -33,16 +33,18 @@ opaque identifier.
 
 ## Database profile
 
-The `database` profile is deliberately opt-in. It connects with the separate
-non-owner runtime identity and lets Flyway read the authoritative migration
-train. Migration and runtime credentials are intentionally separate; none are
-stored in this repository.
+The `database` profile is deliberately opt-in. The baseline defines
+`nexora_runtime` as `NOLOGIN`, so JDBC must use a separately managed LOGIN
+credential that is a member of that non-owner role. Hikari runs `SET ROLE
+nexora_runtime` for each connection. Flyway uses a distinct approved migrator
+LOGIN to read the authoritative migration train. No credential is stored in
+this repository.
 
 ```powershell
 $env:SPRING_PROFILES_ACTIVE = 'database'
 $env:NEXORA_RUNTIME_DATABASE_URL = 'jdbc:postgresql://127.0.0.1:5432/postgres'
-$env:NEXORA_RUNTIME_DATABASE_USERNAME = 'nexora_runtime'
-$env:NEXORA_RUNTIME_DATABASE_PASSWORD = '<runtime credential>'
+$env:NEXORA_RUNTIME_DATABASE_USERNAME = '<LOGIN member of nexora_runtime>'
+$env:NEXORA_RUNTIME_DATABASE_PASSWORD = '<runtime LOGIN credential>'
 $env:NEXORA_MIGRATION_DATABASE_URL = $env:NEXORA_RUNTIME_DATABASE_URL
 $env:NEXORA_MIGRATION_DATABASE_USERNAME = '<approved migrator login>'
 $env:NEXORA_MIGRATION_DATABASE_PASSWORD = '<migrator credential>'
@@ -50,6 +52,8 @@ $env:NEXORA_MIGRATIONS_LOCATION = 'C:/absolute/path/to/Nexora/database/migration
 mvn spring-boot:run
 ```
 
-In this profile, readiness includes the database check. The local profile does
-not claim database availability, migration application, tenant authorization,
-or production readiness.
+In this profile, readiness includes the database check. The integration test
+uses a disposable local PostgreSQL container to prove this configuration only;
+it is not provider or production evidence. The local profile does not claim
+database availability, migration application, tenant authorization, or
+production readiness.
