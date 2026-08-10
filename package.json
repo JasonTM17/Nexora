@@ -22,10 +22,13 @@
     "provenance": {
       "registry": "https://registry.npmjs.org/",
       "packageManager": "pnpm@11.0.9",
-      "resolution": "pnpm-lock.yaml records every resolved version, registry tarball, and integrity digest"
+      "configuration": "Registry selection is in .npmrc; pnpm 11 operational settings, including autoInstallPeers=false, are in pnpm-workspace.yaml.",
+      "resolution": "pnpm-lock.yaml records the resolved package graph and integrity hashes observed by pnpm.",
+      "limitations": "This lockfile does not itself record tarball URLs, and this metadata does not claim a complete transitive-license inventory."
     },
     "licenseReview": {
-      "MIT": "Next.js, React, Tailwind CSS, Ant Design, Ant Design X, Supabase, TanStack Query, React Hook Form, Zod, Zustand, dnd-kit, Vitest, Testing Library, jsdom, and TypeScript declarations",
+      "scope": "Bounded to direct production, development, and peer package metadata observed during M1-DW01 resolution; transitive licenses require a dedicated inventory.",
+      "MIT": "Next.js, React, Tailwind CSS, Ant Design, Ant Design X, Supabase, TanStack Query, React Hook Form, Zod, Zustand, dnd-kit, Vitest, Testing Library, jsdom, and @types declarations",
       "Apache-2.0": "TypeScript and Playwright",
       "MPL-2.0": "axe-core and @axe-core/playwright"
     },
@@ -33,6 +36,48 @@
       "command": "pnpm audit --audit-level=high",
       "result": "No known vulnerabilities found for the M1-DW01 lockfile.",
       "policy": "Lockfile integrity is required; no registry credentials, auth tokens, or private registries are configured."
+    },
+    "evidence": {
+      "scope": "Executed after regenerating pnpm-lock.yaml with autoInstallPeers=false; rerun from this commit and compare the lockfile SHA-256 below.",
+      "toolchain": {
+        "node": "24.12.0",
+        "pnpm": "11.0.9"
+      },
+      "artifactDigests": {
+        "pnpmLockSha256": "c05c533516944bfabc9ee49913692965e945b9140fdd40e7e946b06c05712437"
+      },
+      "checks": [
+        {
+          "id": "frozen-install",
+          "cwd": ".",
+          "command": "corepack pnpm@11.0.9 install --frozen-lockfile",
+          "outcome": "PASS: completed with no lockfile drift."
+        },
+        {
+          "id": "audit",
+          "cwd": ".",
+          "command": "corepack pnpm@11.0.9 audit --audit-level=high",
+          "outcome": "PASS: no known vulnerabilities found."
+        },
+        {
+          "id": "next-import",
+          "cwd": "apps/web",
+          "command": "node --input-type=module -e \"import next from 'next'; if (typeof next !== 'function') process.exit(1)\"",
+          "outcome": "PASS: Next default export imported as a callable function."
+        },
+        {
+          "id": "antd-ssr",
+          "cwd": "packages/ui-studio",
+          "command": "node --input-type=module -e \"import React from 'react'; import { renderToStaticMarkup } from 'react-dom/server'; import { Button } from 'antd'; if (!renderToStaticMarkup(React.createElement(Button, null, 'Nexora')).includes('Nexora')) process.exit(1)\"",
+          "outcome": "PASS: Ant Design Button rendered to static markup."
+        },
+        {
+          "id": "antd-x-import",
+          "cwd": "packages/ui-ai",
+          "command": "node --input-type=module -e \"import * as AntdX from '@ant-design/x'; if (Object.keys(AntdX).length === 0) process.exit(1)\"",
+          "outcome": "PASS: Ant Design X exports imported."
+        }
+      ]
     }
   }
 }

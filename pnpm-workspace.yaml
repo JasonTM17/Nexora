@@ -1,3 +1,12 @@
 packages:
   - apps/web
   - packages/*
+
+autoInstallPeers: false
+engineStrict: true
+strictPeerDependencies: true
+preferFrozenLockfile: true
+verifyStoreIntegrity: true
+sharedWorkspaceLockfile: true
+saveExact: true
+auditLevel: high
