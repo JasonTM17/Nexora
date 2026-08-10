@@ -7,7 +7,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexora.platform.auth.DomainAccessException;
 import com.nexora.platform.auth.LocalJwtIssuer;
+import com.nexora.platform.events.outbox.OutboxEventRepository;
+import com.nexora.platform.events.outbox.OutboxPublisher;
+import com.nexora.platform.events.outbox.OutboxPublisherProperties;
+import com.nexora.platform.events.outbox.OutboxTransport;
 import com.nexora.platform.tenant.TenantContext;
+import io.nats.client.Nats;
+import io.nats.client.api.StorageType;
+import io.nats.client.api.StreamConfiguration;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -32,6 +39,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.containers.GenericContainer;
 
 @ActiveProfiles("database")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -43,10 +51,27 @@ class CmsPageIntegrationTests {
             .withDatabaseName("nexora_cms")
             .withUsername("postgres")
             .withPassword("postgres");
+    private static final GenericContainer<?> NATS = new GenericContainer<>("nats:2.11.0-alpine")
+            .withCommand("-js", "-sd", "/data")
+            .withExposedPorts(4222);
+    private static final String OUTBOX_STREAM = "NEXORA_EVENTS";
+    private static final String OUTBOX_SUBJECT = "nexora.events.workflow";
     private static Path migrationDirectory;
 
     @Autowired
     private CmsPageService pages;
+
+    @Autowired
+    private OutboxPublisher publisher;
+
+    @Autowired
+    private OutboxEventRepository outboxEvents;
+
+    @Autowired
+    private OutboxPublisherProperties outboxProperties;
+
+    @Autowired
+    private OutboxTransport outboxTransport;
 
     @LocalServerPort
     private int port;
@@ -57,8 +82,10 @@ class CmsPageIntegrationTests {
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         DATABASE.start();
+        NATS.start();
         prepareRuntimeRole();
         prepareMigrations();
+        prepareOutboxStream();
         registry.add("NEXORA_RUNTIME_DATABASE_URL", DATABASE::getJdbcUrl);
         registry.add("NEXORA_RUNTIME_DATABASE_USERNAME", () -> RUNTIME_LOGIN);
         registry.add("NEXORA_RUNTIME_DATABASE_PASSWORD", () -> RUNTIME_PASSWORD);
@@ -68,11 +95,15 @@ class CmsPageIntegrationTests {
         registry.add("NEXORA_MIGRATIONS_LOCATION", () -> migrationDirectory.toString());
         registry.add("NEXORA_AUTH_ISSUER", ISSUER::issuer);
         registry.add("NEXORA_AUTH_JWKS_URI", ISSUER::jwksUri);
+        registry.add("nexora.outbox.publisher.enabled", () -> "true");
+        registry.add("nexora.outbox.publisher.nats-url", CmsPageIntegrationTests::natsUrl);
+        registry.add("nexora.outbox.publisher.subject", () -> OUTBOX_SUBJECT);
     }
 
     @AfterAll
     static void stopFixtures() throws Exception {
         ISSUER.close();
+        NATS.stop();
         DATABASE.stop();
         if (migrationDirectory != null) {
             try (Stream<Path> paths = Files.walk(migrationDirectory)) {
@@ -131,6 +162,8 @@ class CmsPageIntegrationTests {
                 .isEqualTo("WORKFLOW_TRANSITION_DENIED");
         assertThat(count("SELECT count(*) FROM nexora.page_versions WHERE organization_id = '"
                 + alpha.organizationId() + "'")).isZero();
+        assertThat(count("SELECT count(*) FROM nexora.outbox_events WHERE resource_id = '"
+                + alphaPage.pageId() + "'")).isZero();
     }
 
     @Test
@@ -212,6 +245,79 @@ class CmsPageIntegrationTests {
                 + " AND safe_payload ->> 'resourceType' = 'page'"
                 + " AND safe_payload -> 'safeDisplay' ->> 'status' = 'ARCHIVED'"))
                 .isEqualTo(1);
+    }
+
+    @Test
+    void publishesClaimedWorkflowEventsToJetStreamBeforeAcknowledgingTheOutbox() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "outbox-page"),
+                "cms-outbox-create-1");
+        publish(tenant, page.pageId());
+        pages.archive(tenant.ownerContext(), page.pageId(), 1, "cms-outbox-archive-1");
+        long messagesBefore = streamMessageCount();
+
+        OutboxPublisher.PublishResult result = publisher.publishAvailable();
+
+        assertThat(result.claimed()).isGreaterThanOrEqualTo(1);
+        assertThat(result.published()).isGreaterThanOrEqualTo(1);
+        assertThat(result.acknowledgementUncertain()).isZero();
+        assertThat(streamMessageCount()).isGreaterThan(messagesBefore);
+        assertThat(count("SELECT count(*) FROM nexora.outbox_events WHERE resource_id = '" + page.pageId()
+                + "' AND state = 'PUBLISHED' AND attempt_count = 1 AND published_at IS NOT NULL"))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void retriesAfterTransportOutageThenRecoversThroughJetStream() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "outbox-retry"),
+                "cms-outbox-retry-create-1");
+        publish(tenant, page.pageId());
+        pages.archive(tenant.ownerContext(), page.pageId(), 1, "cms-outbox-retry-archive-1");
+        OutboxPublisher unavailable = new OutboxPublisher(outboxEvents,
+                event -> { throw new IllegalStateException("simulated NATS outage"); }, outboxProperties);
+
+        OutboxPublisher.PublishResult failed = unavailable.publishAvailable();
+
+        assertThat(failed.retrying()).isGreaterThanOrEqualTo(1);
+        assertThat(count("SELECT count(*) FROM nexora.outbox_events WHERE resource_id = '" + page.pageId()
+                + "' AND state = 'FAILED' AND attempt_count = 1")).isEqualTo(1);
+        Thread.sleep(1_500);
+
+        OutboxPublisher.PublishResult recovered = publisher.publishAvailable();
+
+        assertThat(recovered.published()).isGreaterThanOrEqualTo(1);
+        assertThat(count("SELECT count(*) FROM nexora.outbox_events WHERE resource_id = '" + page.pageId()
+                + "' AND state = 'PUBLISHED' AND attempt_count = 2")).isEqualTo(1);
+    }
+
+    @Test
+    void replaysAfterAmbiguousPostPublishFailureInsteadOfFalseAcknowledgement() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "outbox-replay"),
+                "cms-outbox-replay-create-1");
+        publish(tenant, page.pageId());
+        pages.archive(tenant.ownerContext(), page.pageId(), 1, "cms-outbox-replay-archive-1");
+        long messagesBefore = streamMessageCount();
+        OutboxPublisher ambiguous = new OutboxPublisher(outboxEvents, event -> {
+            outboxTransport.publish(event);
+            throw new IllegalStateException("simulated crash after JetStream acknowledgement");
+        }, outboxProperties);
+
+        OutboxPublisher.PublishResult failed = ambiguous.publishAvailable();
+
+        assertThat(failed.retrying()).isGreaterThanOrEqualTo(1);
+        assertThat(streamMessageCount()).isGreaterThan(messagesBefore);
+        assertThat(count("SELECT count(*) FROM nexora.outbox_events WHERE resource_id = '" + page.pageId()
+                + "' AND state = 'FAILED' AND attempt_count = 1")).isEqualTo(1);
+        Thread.sleep(1_500);
+
+        OutboxPublisher.PublishResult replayed = publisher.publishAvailable();
+
+        assertThat(replayed.published()).isGreaterThanOrEqualTo(1);
+        assertThat(streamMessageCount()).isGreaterThan(messagesBefore + 1);
+        assertThat(count("SELECT count(*) FROM nexora.outbox_events WHERE resource_id = '" + page.pageId()
+                + "' AND state = 'PUBLISHED' AND attempt_count = 2")).isEqualTo(1);
     }
 
     private CmsPageService.CreateCommand create(CmsFixture tenant, String slug) {
@@ -296,6 +402,22 @@ class CmsPageIntegrationTests {
         }
     }
 
+    private static void prepareOutboxStream() {
+        try (io.nats.client.Connection connection = Nats.connect(natsUrl())) {
+            connection.jetStreamManagement().addStream(StreamConfiguration.builder()
+                    .name(OUTBOX_STREAM)
+                    .subjects(OUTBOX_SUBJECT)
+                    .storageType(StorageType.Memory)
+                    .build());
+        } catch (Exception exception) {
+            throw new IllegalStateException("Unable to prepare the disposable JetStream outbox stream", exception);
+        }
+    }
+
+    private static String natsUrl() {
+        return "nats://" + NATS.getHost() + ":" + NATS.getMappedPort(4222);
+    }
+
     private static void prepareMigrations() {
         try {
             migrationDirectory = Files.createTempDirectory("nexora-cms-flyway-");
@@ -358,6 +480,12 @@ class CmsPageIntegrationTests {
              var rows = statement.executeQuery(sql)) {
             rows.next();
             return rows.getInt(1);
+        }
+    }
+
+    private long streamMessageCount() throws Exception {
+        try (io.nats.client.Connection connection = Nats.connect(natsUrl())) {
+            return connection.jetStreamManagement().getStreamInfo(OUTBOX_STREAM).getStreamState().getMsgCount();
         }
     }
 

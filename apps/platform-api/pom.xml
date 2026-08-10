@@ -22,6 +22,7 @@
         <java.version>24</java.version>
         <springdoc.version>3.0.1</springdoc.version>
         <testcontainers.version>2.0.3</testcontainers.version>
+        <nats.java.version>2.26.1</nats.java.version>
     </properties>
 
     <dependencies>
@@ -60,6 +61,11 @@
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.nats</groupId>
+            <artifactId>jnats</artifactId>
+            <version>${nats.java.version}</version>
         </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
