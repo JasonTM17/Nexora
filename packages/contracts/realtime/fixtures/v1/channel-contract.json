@@ -1,5 +1,5 @@
 {
-  "fixtureVersion": "1.0.0",
+  "fixtureVersion": "1.1.0",
   "authority": "M3-T01 Realtime channel fixture only; it is not a Supabase project configuration, a live subscription, or a broker record.",
   "subjects": [
     {
@@ -28,6 +28,14 @@
       "eventType": "PUBLICATION_INVALIDATED",
       "eventVersion": 2,
       "authorizationEpoch": 7,
+      "expiresAt": "2026-08-10T01:00:00Z",
+      "transportTokenClaims": {
+        "sub": "90000000-0000-4000-8000-000000000001",
+        "nexora_realtime_topic": "tenant:10000000-0000-4000-8000-000000000001:publication",
+        "nexora_realtime_event_type": "PUBLICATION_INVALIDATED",
+        "nexora_realtime_event_version": 2,
+        "nexora_realtime_authorization_epoch": 7
+      },
       "private": true,
       "result": "ISSUED"
     },
@@ -37,6 +45,14 @@
       "eventType": "PRESENCE_CHANGED",
       "eventVersion": 1,
       "authorizationEpoch": 7,
+      "expiresAt": "2026-08-10T01:00:00Z",
+      "transportTokenClaims": {
+        "sub": "90000000-0000-4000-8000-000000000001",
+        "nexora_realtime_topic": "resource:50000000-0000-4000-8000-000000000001:presence",
+        "nexora_realtime_event_type": "PRESENCE_CHANGED",
+        "nexora_realtime_event_version": 1,
+        "nexora_realtime_authorization_epoch": 7
+      },
       "private": true,
       "result": "ISSUED"
     }
@@ -69,7 +85,21 @@
       "name": "unsafePresencePayload",
       "topic": "resource:50000000-0000-4000-8000-000000000001:presence",
       "payload": { "state": "editing", "cursor": 42 },
-      "result": "PAYLOAD_REJECTED"
+      "result": "REALTIME_DESCRIPTOR_DENIED",
+      "reason": "The browser has no direct realtime.messages write authority; the M3-T03 same-origin adapter validates a bounded intent before server-side delivery."
+    },
+    {
+      "name": "ordinarySessionTokenAttempt",
+      "topic": "tenant:10000000-0000-4000-8000-000000000001:publication",
+      "missingClaims": ["nexora_realtime_topic", "nexora_realtime_event_type", "nexora_realtime_event_version", "nexora_realtime_authorization_epoch"],
+      "result": "REALTIME_DESCRIPTOR_DENIED"
+    },
+    {
+      "name": "staleAuthorizationEpoch",
+      "topic": "tenant:10000000-0000-4000-8000-000000000001:publication",
+      "presentEpoch": 6,
+      "currentEpoch": 7,
+      "result": "REALTIME_STALE_DESCRIPTOR"
     },
     {
       "name": "reconnectExhausted",

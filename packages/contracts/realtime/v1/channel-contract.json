@@ -1,5 +1,5 @@
 {
-  "contractVersion": "1.0.0",
+  "contractVersion": "1.1.0",
   "task": "M3-T01",
   "status": "frozen-channel-contract-amendment",
   "authority": {
@@ -15,7 +15,15 @@
     "descriptor": {
       "issuer": "same-origin server boundary",
       "browserInputsAllowed": [],
-      "requiredFields": ["topic", "eventType", "eventVersion", "authorizationEpoch"],
+      "requiredFields": ["topic", "eventType", "eventVersion", "authorizationEpoch", "expiresAt"],
+      "transportToken": {
+        "kind": "short-lived server-signed Realtime JWT",
+        "requiredClaims": ["sub", "nexora_realtime_topic", "nexora_realtime_event_type", "nexora_realtime_event_version", "nexora_realtime_authorization_epoch"],
+        "rules": [
+          "A normal browser session token is not a channel credential and must be denied by the Realtime policy.",
+          "Only the same-origin server may sign or obtain the scoped transport token after rechecking current authorization. The signing material never enters browser code, logs, fixtures or Git."
+        ]
+      },
       "rules": [
         "The browser receives a descriptor after authorization; it must not concatenate tenant, resource, page, job or subject identifiers into a topic.",
         "A descriptor becomes unusable after its authorizationEpoch changes, the membership is no longer ACTIVE, or the session cannot be refreshed."
@@ -63,14 +71,15 @@
       "eventType": "PRESENCE_CHANGED",
       "topicTemplate": "resource:{resourceId}:presence",
       "delivery": "presence",
-      "direction": "client-presence and server-to-client",
+      "direction": "server-mediated presence intent and server-to-client",
       "owner": "current ACTIVE membership for the resource owner",
       "presencePayload": {
         "allowedFields": ["state"],
         "stateValues": ["viewing", "editing"],
         "forbiddenFields": ["cursor", "keystroke", "body", "content", "token", "secret", "email", "phone"]
       },
-      "onEvent": "render ephemeral collaborator state only; never derive durable content or correctness"
+      "onEvent": "render ephemeral collaborator state only; never derive durable content or correctness",
+      "writeAuthority": "The browser sends the bounded intent only to the same-origin M3-T03 adapter. It has no direct INSERT authority on realtime.messages; the server validates and emits the canonical minimal presence state."
     }
   ],
   "excludedEventTypes": [
@@ -99,7 +108,8 @@
     "prohibitions": [
       "No public channel.",
       "No implicit Data API authority.",
-      "No browser-originated broadcast for publication, workflow, job progress or outbox state.",
+    "No browser-originated broadcast for publication, workflow, job progress or outbox state.",
+      "No browser direct write to realtime.messages, including Presence.",
       "No Realtime-only business state."
     ]
   },
@@ -110,7 +120,7 @@
     "REALTIME_STALE_DESCRIPTOR"
   ],
   "limitations": [
-    "This contract defines no migration, provider configuration, hosted Supabase project, browser hook, server adapter or live Realtime evidence.",
+    "This contract defines no provider configuration, hosted Supabase project, server signing key, browser hook, server adapter or live Realtime evidence.",
     "M3-DB01 alone owns realtime.messages policy DDL; M3-T03 only consumes that policy through adapters and conformance tests."
   ]
 }

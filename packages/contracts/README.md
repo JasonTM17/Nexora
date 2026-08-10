@@ -61,10 +61,15 @@ a vocabulary only; M3-DB01 owns the migration DDL and M3-T02/T03/T04/T05 own
 the runtime implementations and consumers.
 
 The companion [Realtime channel contract](./realtime/v1/channel-contract.json)
-freezes the private-only, server-issued subscription descriptors consumed by
-M3-T03. Its `tenant`/`resource` wire topics are the integrated M3 event-routing
-matrix; legacy `org/page/job` shapes are logical server references, never
-browser-constructed Realtime topics. It also specifies bounded reconnect,
+freezes private-only, server-issued subscription descriptors consumed by
+M3-T03. A normal browser session token is not a channel credential: the server
+must issue a short-lived scoped Realtime JWT that binds the exact topic, event
+route and current authorization epoch. Its `tenant`/`resource` wire topics are
+the integrated M3 event-routing matrix; legacy `org/page/job` shapes are logical
+server references, never browser-constructed Realtime topics. Browser code has
+no direct `realtime.messages` write authority, including Presence; its bounded
+presence intent goes to the same-origin M3-T03 adapter for server validation and
+canonical delivery. The contract also specifies bounded reconnect,
 token/membership invalidation, durable refetch and minimal presence behavior.
 
 Problem `details` are limited to short printable validation messages or codes.

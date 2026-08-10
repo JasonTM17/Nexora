@@ -13,6 +13,13 @@ test("freezes private Realtime channels to the integrated event-routing matrix",
   assert.equal(channelContract.privateChannel.required, true);
   assert.equal(channelContract.privateChannel.clientConfig.private, true);
   assert.equal(channelContract.privateChannel.publicChannelAllowed, false);
+  assert.deepEqual(channelContract.privateChannel.descriptor.transportToken.requiredClaims, [
+    "sub",
+    "nexora_realtime_topic",
+    "nexora_realtime_event_type",
+    "nexora_realtime_event_version",
+    "nexora_realtime_authorization_epoch",
+  ]);
   assert.deepEqual(channelContract.wireTopics.activeScopes, ["tenant", "resource"]);
   assert.match(channelContract.authority.wireTopicDecision, /tenant\/resource/i);
 
@@ -39,17 +46,26 @@ test("bounds reconnects and preserves durable truth across authorization changes
   assert.match(channelContract.lifecycle.onMembershipRemovalOrExpiry, /discard the descriptor/i);
   assert.ok(channelContract.safety.prohibitions.includes("No Realtime-only business state."));
   assert.ok(channelContract.safety.prohibitions.includes("No public channel."));
+  assert.ok(channelContract.safety.prohibitions.includes("No browser direct write to realtime.messages, including Presence."));
 });
 
 test("covers descriptor and presence denial cases without fabricating live authorization", () => {
   assert.equal(fixture.subjects.filter((subject) => subject.membershipStatus === "ACTIVE").length, 2);
   assert.equal(fixture.descriptors.length, 2);
-  assert.ok(fixture.descriptors.every((descriptor) => descriptor.private && descriptor.result === "ISSUED"));
+  assert.ok(fixture.descriptors.every((descriptor) => (
+    descriptor.private
+    && descriptor.result === "ISSUED"
+    && descriptor.transportTokenClaims.sub === descriptor.subjectId
+    && descriptor.transportTokenClaims.nexora_realtime_topic === descriptor.topic
+    && descriptor.transportTokenClaims.nexora_realtime_authorization_epoch === descriptor.authorizationEpoch
+  )));
   assert.ok(fixture.negativeCases.some((entry) => entry.name === "guessedCrossTenantTopic" && entry.result === "REALTIME_DESCRIPTOR_DENIED"));
   assert.ok(fixture.negativeCases.some((entry) => entry.name === "removedMembershipDescriptor" && entry.result === "REALTIME_STALE_DESCRIPTOR"));
   assert.ok(fixture.negativeCases.some((entry) => entry.name === "publicChannelAttempt" && entry.private === false));
   assert.ok(fixture.negativeCases.some((entry) => entry.name === "legacyLogicalTopicAttempt"));
-  assert.ok(fixture.negativeCases.some((entry) => entry.name === "unsafePresencePayload" && entry.result === "PAYLOAD_REJECTED"));
+  assert.ok(fixture.negativeCases.some((entry) => entry.name === "unsafePresencePayload" && entry.result === "REALTIME_DESCRIPTOR_DENIED"));
+  assert.ok(fixture.negativeCases.some((entry) => entry.name === "ordinarySessionTokenAttempt" && entry.result === "REALTIME_DESCRIPTOR_DENIED"));
+  assert.ok(fixture.negativeCases.some((entry) => entry.name === "staleAuthorizationEpoch" && entry.result === "REALTIME_STALE_DESCRIPTOR"));
   assert.deepEqual(fixture.negativeCases.find((entry) => entry.name === "reconnectExhausted").attempts, [1000, 2000, 5000, 10000]);
   assert.ok(fixture.negativeCases.some((entry) => entry.name === "tokenRefreshFailure" && entry.result === "REALTIME_AUTH_REFRESH_REQUIRED"));
 });
