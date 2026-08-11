@@ -47,6 +47,17 @@ type Authorization struct {
 	ExpiresAt      time.Time
 }
 
+// PublishReceipt is the local acknowledgement received after an event has
+// been accepted by the configured NATS transport. HTTP callers receive only
+// the event ID; the remaining fields are kept for local correlation and logs.
+type PublishReceipt struct {
+	EventID   string
+	Subject   string
+	Stream    string
+	Sequence  uint64
+	Duplicate bool
+}
+
 type Route struct {
 	Scope       string
 	Purpose     string

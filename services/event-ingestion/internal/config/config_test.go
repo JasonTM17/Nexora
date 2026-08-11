@@ -20,6 +20,9 @@ func TestLoadUsesBoundedLocalDefaults(t *testing.T) {
 	if settings.ReadHeaderTimeout != 2*time.Second || settings.ShutdownTimeout != 10*time.Second {
 		t.Fatalf("unexpected default timeouts: %#v", settings)
 	}
+	if settings.RateLimitPerMinute != 60 || settings.RateLimitKeys != 10_000 {
+		t.Fatalf("unexpected default rate limits: %#v", settings)
+	}
 }
 
 func TestLoadAcceptsLiteralLoopbackAddresses(t *testing.T) {
@@ -57,6 +60,10 @@ func TestLoadRejectsUnsafeOverrides(t *testing.T) {
 		{name: "small body", key: "NEXORA_EVENT_INGESTION_BODY_LIMIT_BYTES", value: "1023"},
 		{name: "large body", key: "NEXORA_EVENT_INGESTION_BODY_LIMIT_BYTES", value: "1048577"},
 		{name: "invalid timeout", key: "NEXORA_EVENT_INGESTION_READ_TIMEOUT", value: "0s"},
+		{name: "zero rate limit", key: "NEXORA_EVENT_INGESTION_RATE_LIMIT_PER_MINUTE", value: "0"},
+		{name: "large rate limit", key: "NEXORA_EVENT_INGESTION_RATE_LIMIT_PER_MINUTE", value: "10001"},
+		{name: "zero rate keys", key: "NEXORA_EVENT_INGESTION_RATE_LIMIT_KEYS", value: "0"},
+		{name: "large rate keys", key: "NEXORA_EVENT_INGESTION_RATE_LIMIT_KEYS", value: "100001"},
 	}
 
 	for _, test := range tests {

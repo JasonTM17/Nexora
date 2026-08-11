@@ -18,6 +18,12 @@ const (
 	defaultWriteTimeout  = 5 * time.Second
 	defaultIdleTimeout   = 30 * time.Second
 	defaultShutdown      = 10 * time.Second
+	defaultRateLimit     = 60
+	defaultRateLimitKeys = 10_000
+	minimumRateLimit     = 1
+	maximumRateLimit     = 10_000
+	minimumRateLimitKeys = 1
+	maximumRateLimitKeys = 100_000
 )
 
 // LookupEnv matches os.LookupEnv and keeps configuration parsing testable.
@@ -26,13 +32,15 @@ type LookupEnv func(string) (string, bool)
 // Config contains only bounded HTTP lifecycle settings. NATS and authentication
 // configuration are deliberately absent until their contract-owned packets.
 type Config struct {
-	Address           string
-	BodyLimitBytes    int64
-	ReadHeaderTimeout time.Duration
-	ReadTimeout       time.Duration
-	WriteTimeout      time.Duration
-	IdleTimeout       time.Duration
-	ShutdownTimeout   time.Duration
+	Address            string
+	BodyLimitBytes     int64
+	ReadHeaderTimeout  time.Duration
+	ReadTimeout        time.Duration
+	WriteTimeout       time.Duration
+	IdleTimeout        time.Duration
+	ShutdownTimeout    time.Duration
+	RateLimitPerMinute int
+	RateLimitKeys      int
 }
 
 // Load returns local-safe defaults and rejects invalid overrides before serving.
@@ -86,15 +94,25 @@ func Load(lookup LookupEnv) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	rateLimit, err := intValue(lookup, "NEXORA_EVENT_INGESTION_RATE_LIMIT_PER_MINUTE", defaultRateLimit)
+	if err != nil || rateLimit < minimumRateLimit || rateLimit > maximumRateLimit {
+		return Config{}, fmt.Errorf("NEXORA_EVENT_INGESTION_RATE_LIMIT_PER_MINUTE must be between %d and %d", minimumRateLimit, maximumRateLimit)
+	}
+	rateLimitKeys, err := intValue(lookup, "NEXORA_EVENT_INGESTION_RATE_LIMIT_KEYS", defaultRateLimitKeys)
+	if err != nil || rateLimitKeys < minimumRateLimitKeys || rateLimitKeys > maximumRateLimitKeys {
+		return Config{}, fmt.Errorf("NEXORA_EVENT_INGESTION_RATE_LIMIT_KEYS must be between %d and %d", minimumRateLimitKeys, maximumRateLimitKeys)
+	}
 
 	return Config{
-		Address:           address,
-		BodyLimitBytes:    bodyLimit,
-		ReadHeaderTimeout: headerTimeout,
-		ReadTimeout:       readTimeout,
-		WriteTimeout:      writeTimeout,
-		IdleTimeout:       idleTimeout,
-		ShutdownTimeout:   shutdownTimeout,
+		Address:            address,
+		BodyLimitBytes:     bodyLimit,
+		ReadHeaderTimeout:  headerTimeout,
+		ReadTimeout:        readTimeout,
+		WriteTimeout:       writeTimeout,
+		IdleTimeout:        idleTimeout,
+		ShutdownTimeout:    shutdownTimeout,
+		RateLimitPerMinute: rateLimit,
+		RateLimitKeys:      rateLimitKeys,
 	}, nil
 }
 
@@ -116,6 +134,18 @@ func int64Value(lookup LookupEnv, name string, fallback int64) (int64, error) {
 		return fallback, nil
 	}
 	parsed, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be an integer: %w", name, err)
+	}
+	return parsed, nil
+}
+
+func intValue(lookup LookupEnv, name string, fallback int) (int, error) {
+	value, ok := lookup(name)
+	if !ok {
+		return fallback, nil
+	}
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
 	if err != nil {
 		return 0, fmt.Errorf("%s must be an integer: %w", name, err)
 	}

@@ -30,6 +30,8 @@ All defaults are local-only and bounded:
 | `NEXORA_EVENT_INGESTION_WRITE_TIMEOUT` | `5s` | positive |
 | `NEXORA_EVENT_INGESTION_IDLE_TIMEOUT` | `30s` | positive |
 | `NEXORA_EVENT_INGESTION_SHUTDOWN_TIMEOUT` | `10s` | positive |
+| `NEXORA_EVENT_INGESTION_RATE_LIMIT_PER_MINUTE` | `60` | 1..10000 per trusted organization/subject |
+| `NEXORA_EVENT_INGESTION_RATE_LIMIT_KEYS` | `10000` | 1..100000 retained principals; saturation rejects new keys |
 
 Run the local checks from this directory:
 

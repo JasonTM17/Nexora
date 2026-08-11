@@ -85,7 +85,7 @@ func TestCollectorRejectsAuthorizationMismatchBeforeRateOrPublish(t *testing.T) 
 	}
 
 	_, err = collector.Ingest(context.Background(), "verified-credential", envelope)
-	if !errors.Is(err, ErrUnauthorized) {
+	if !errors.Is(err, domain.ErrUnauthorized) {
 		t.Fatalf("Ingest() error = %v", err)
 	}
 	if limiter.key != "" || publisher.subject != "" {
@@ -102,8 +102,8 @@ func TestCollectorRejectsRateLimitAndPublishFailure(t *testing.T) {
 		want       error
 		wantCalled bool
 	}{
-		{name: "rate limited", limiter: &limiterStub{allowed: false}, publisher: &publisherStub{}, want: ErrRateLimited},
-		{name: "publish failed", limiter: &limiterStub{allowed: true}, publisher: &publisherStub{err: errors.New("nats unavailable")}, want: ErrPublish, wantCalled: true},
+		{name: "rate limited", limiter: &limiterStub{allowed: false}, publisher: &publisherStub{}, want: domain.ErrRateLimited},
+		{name: "publish failed", limiter: &limiterStub{allowed: true}, publisher: &publisherStub{err: errors.New("nats unavailable")}, want: domain.ErrPublish, wantCalled: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
