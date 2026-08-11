@@ -30,6 +30,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 class DatabaseProfileIntegrationTests {
     private static final String RUNTIME_LOGIN = "nexora_runtime_login";
     private static final String RUNTIME_PASSWORD = "test-runtime-login";
+    private static final String REALTIME_JWT_SECRET = "test-realtime-descriptor-secret-for-database-profile";
     private static final PostgreSQLContainer<?> DATABASE = new PostgreSQLContainer<>("postgres:17.5-alpine")
             .withDatabaseName("nexora")
             .withUsername("postgres")
@@ -55,6 +56,7 @@ class DatabaseProfileIntegrationTests {
         registry.add("NEXORA_MIGRATION_DATABASE_USERNAME", DATABASE::getUsername);
         registry.add("NEXORA_MIGRATION_DATABASE_PASSWORD", DATABASE::getPassword);
         registry.add("NEXORA_MIGRATIONS_LOCATION", () -> testMigrationDirectory.toString());
+        registry.add("nexora.realtime.descriptor.jwt-secret", () -> REALTIME_JWT_SECRET);
     }
 
     private static void prepareOrderedMigrationDirectory() {

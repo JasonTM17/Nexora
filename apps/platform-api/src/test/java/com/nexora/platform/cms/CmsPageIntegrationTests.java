@@ -13,6 +13,8 @@ import com.nexora.platform.events.outbox.OutboxPublisher;
 import com.nexora.platform.events.outbox.OutboxPublisherProperties;
 import com.nexora.platform.events.outbox.OutboxTransport;
 import com.nexora.platform.tenant.TenantContext;
+import com.nimbusds.jose.crypto.MACVerifier;
+import com.nimbusds.jwt.SignedJWT;
 import io.nats.client.Nats;
 import io.nats.client.api.StorageType;
 import io.nats.client.api.StreamConfiguration;
@@ -49,6 +51,7 @@ import org.testcontainers.containers.GenericContainer;
 class CmsPageIntegrationTests {
     private static final String RUNTIME_LOGIN = "nexora_cms_runtime_login";
     private static final String RUNTIME_PASSWORD = "test-cms-runtime-login";
+    private static final String REALTIME_JWT_SECRET = "test-realtime-descriptor-secret-for-m3-t03";
     private static final LocalJwtIssuer ISSUER = new LocalJwtIssuer();
     private static final PostgreSQLContainer<?> DATABASE = new PostgreSQLContainer<>("postgres:17.5-alpine")
             .withDatabaseName("nexora_cms")
@@ -103,6 +106,8 @@ class CmsPageIntegrationTests {
         registry.add("nexora.outbox.publisher.subject", () -> OUTBOX_SUBJECT);
         registry.add("nexora.outbox.publisher.initial-delay-millis", () -> "600000");
         registry.add("nexora.outbox.publisher.poll-delay-millis", () -> "600000");
+        registry.add("nexora.realtime.descriptor.jwt-secret", () -> REALTIME_JWT_SECRET);
+        registry.add("nexora.realtime.descriptor.ttl-seconds", () -> "120");
     }
 
     @AfterAll
@@ -386,6 +391,34 @@ class CmsPageIntegrationTests {
                 .isEqualTo(1);
     }
 
+    @Test
+    void issuesScopedRealtimeDescriptorsOnlyAfterServerAuthorization() throws Exception {
+        CmsFixture alpha = seedTenant();
+        CmsFixture beta = seedTenant();
+        CmsPageService.PageView page = pages.create(alpha.ownerContext(), create(alpha, "presence-page"),
+                "cms-realtime-presence-1");
+
+        HttpResponse<String> publication = descriptor(alpha.organizationId(), alpha.ownerSubjectId(),
+                "{\"eventType\":\"PUBLICATION_INVALIDATED\"}");
+        HttpResponse<String> presence = descriptor(alpha.organizationId(), alpha.ownerSubjectId(),
+                "{\"eventType\":\"PRESENCE_CHANGED\",\"resourceId\":\"" + page.pageId() + "\"}");
+        HttpResponse<String> missingResource = descriptor(alpha.organizationId(), alpha.ownerSubjectId(),
+                "{\"eventType\":\"PRESENCE_CHANGED\"}");
+        HttpResponse<String> crossTenantGuess = descriptor(beta.organizationId(), alpha.ownerSubjectId(),
+                "{\"eventType\":\"PUBLICATION_INVALIDATED\"}");
+        SignedJWT ordinarySessionToken = SignedJWT.parse(ISSUER.token(alpha.ownerSubjectId(), Instant.now().plusSeconds(60)));
+
+        assertDescriptor(publication, "tenant:" + alpha.organizationId() + ":publication",
+                "PUBLICATION_INVALIDATED", "broadcast", alpha.ownerSubjectId());
+        assertDescriptor(presence, "resource:" + page.pageId() + ":presence",
+                "PRESENCE_CHANGED", "presence", alpha.ownerSubjectId());
+        assertThat(missingResource.statusCode()).isEqualTo(403);
+        assertThat(json.readTree(missingResource.body()).path("code").asText()).isEqualTo("REALTIME_DESCRIPTOR_DENIED");
+        assertThat(crossTenantGuess.statusCode()).isEqualTo(403);
+        assertThat(json.readTree(crossTenantGuess.body()).path("code").asText()).isEqualTo("PERMISSION_DENIED");
+        assertThat(ordinarySessionToken.getJWTClaimsSet().getClaim("nexora_realtime_topic")).isNull();
+    }
+
     private CmsPageService.CreateCommand create(CmsFixture tenant, String slug) {
         return new CmsPageService.CreateCommand(tenant.siteId(), slug, "Welcome", "1.0.0", digest('a'),
                 tenant.themeVersionId(), seo());
@@ -421,6 +454,48 @@ class CmsPageIntegrationTests {
             builder.header("X-Trace-Id", traceId);
         }
         return http.send(builder.DELETE().build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> descriptor(UUID organizationId, UUID subjectId, String body) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(URI.create(
+                        "http://127.0.0.1:" + port + "/api/v1/realtime/descriptors"))
+                .header("Authorization", "Bearer " + ISSUER.token(subjectId, Instant.now().plusSeconds(60)))
+                .header("X-Nexora-Organization-Id", organizationId.toString())
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        return http.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private void assertDescriptor(
+            HttpResponse<String> response,
+            String topic,
+            String eventType,
+            String delivery,
+            UUID subjectId) throws Exception {
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode descriptor = json.readTree(response.body());
+        assertThat(descriptor.path("topic").asText()).isEqualTo(topic);
+        assertThat(descriptor.path("eventType").asText()).isEqualTo(eventType);
+        assertThat(descriptor.path("eventVersion").asLong()).isEqualTo(1);
+        assertThat(descriptor.path("authorizationEpoch").asLong()).isGreaterThan(0);
+        assertThat(descriptor.path("privateChannel").asBoolean()).isTrue();
+        assertThat(descriptor.path("delivery").asText()).isEqualTo(delivery);
+        assertThat(descriptor.path("reconnectBackoffMs").isArray()).isTrue();
+        assertThat(descriptor.path("reconnectBackoffMs")).hasSize(4);
+        SignedJWT token = SignedJWT.parse(descriptor.path("transportToken").asText());
+        assertThat(token.verify(new MACVerifier(REALTIME_JWT_SECRET))).isTrue();
+        assertThat(token.getJWTClaimsSet().getIssueTime()).isNotNull();
+        assertThat(token.getJWTClaimsSet().getExpirationTime()).isNotNull();
+        long descriptorLifetimeSeconds = token.getJWTClaimsSet().getExpirationTime().toInstant().getEpochSecond()
+                - token.getJWTClaimsSet().getIssueTime().toInstant().getEpochSecond();
+        assertThat(descriptorLifetimeSeconds).isBetween(30L, 300L);
+        assertThat(token.getJWTClaimsSet().getSubject()).isEqualTo(subjectId.toString());
+        assertThat(token.getJWTClaimsSet().getStringClaim("nexora_realtime_topic")).isEqualTo(topic);
+        assertThat(token.getJWTClaimsSet().getStringClaim("nexora_realtime_event_type")).isEqualTo(eventType);
+        assertThat(token.getJWTClaimsSet().getLongClaim("nexora_realtime_event_version")).isEqualTo(1L);
+        assertThat(token.getJWTClaimsSet().getLongClaim("nexora_realtime_authorization_epoch"))
+                .isEqualTo(descriptor.path("authorizationEpoch").asLong());
     }
 
     private void publish(CmsFixture actor, UUID pageId) throws Exception {
@@ -494,7 +569,7 @@ class CmsPageIntegrationTests {
         try {
             migrationDirectory = Files.createTempDirectory("nexora-cms-flyway-");
             Path source = Path.of("..", "..", "database", "migrations").toAbsolutePath().normalize();
-            for (int version = 1; version <= 14; version++) {
+            for (int version = 1; version <= 19; version++) {
                 String prefix = "V%03d__".formatted(version);
                 try (Stream<Path> candidates = Files.list(source)) {
                     Path migration = candidates.filter(path -> path.getFileName().toString().startsWith(prefix))

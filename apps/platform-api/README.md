@@ -49,6 +49,7 @@ $env:NEXORA_MIGRATION_DATABASE_URL = $env:NEXORA_RUNTIME_DATABASE_URL
 $env:NEXORA_MIGRATION_DATABASE_USERNAME = '<approved migrator login>'
 $env:NEXORA_MIGRATION_DATABASE_PASSWORD = '<migrator credential>'
 $env:NEXORA_MIGRATIONS_LOCATION = 'C:/absolute/path/to/ordered-flyway-migrations'
+$env:NEXORA_REALTIME_JWT_SECRET = '<at least 32 random characters from secret storage>'
 mvn spring-boot:run
 ```
 
@@ -56,6 +57,10 @@ mvn spring-boot:run
 `VNNN__description.sql` migration files. The repository's disposable
 verification fixture is intentionally outside that runtime scan path; the
 application keeps Flyway filename validation enabled.
+
+`NEXORA_REALTIME_JWT_SECRET` signs short-lived private-channel descriptors. It
+has no repository or runtime fallback and must come from approved secret
+storage. The default `local` profile does not load this database-only adapter.
 
 In this profile, readiness includes the database check. The integration test
 uses a disposable local PostgreSQL container to prove this configuration only;

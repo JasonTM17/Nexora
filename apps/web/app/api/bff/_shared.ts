@@ -6,13 +6,21 @@ const SAFE_MESSAGES: Readonly<Record<string, string>> = {
   AUTHENTICATION_REQUIRED: "Your session has expired. Sign in again to continue.",
   MEMBERSHIP_REQUIRED: "An active organization membership is required.",
   PERMISSION_DENIED: "That organization is not available to your current account.",
+  REALTIME_AUTH_REFRESH_REQUIRED: "Realtime authorization needs a fresh sign-in.",
+  REALTIME_DEGRADED_REFETCH_REQUIRED: "Realtime updates are degraded. Refresh durable data before continuing.",
+  REALTIME_DESCRIPTOR_DENIED: "Realtime updates are not available for that channel.",
+  REALTIME_STALE_DESCRIPTOR: "Realtime authorization changed. Refresh the page before reconnecting.",
   TENANT_SELECTION_REQUIRED: "Choose one active organization to continue.",
   VERSION_CONFLICT: "This profile changed elsewhere. Reload it before trying again.",
 };
 
+export function platformApiBaseUrl() {
+  return process.env.NEXORA_PLATFORM_API_URL ?? "http://127.0.0.1:8080";
+}
+
 function apiClient(token: string | undefined) {
   return new PlatformApiClient({
-    baseUrl: process.env.NEXORA_PLATFORM_API_URL ?? "http://127.0.0.1:8080",
+    baseUrl: platformApiBaseUrl(),
     accessToken: token,
   });
 }
@@ -20,6 +28,20 @@ function apiClient(token: string | undefined) {
 export async function authenticatedClient() {
   const session = await serverSession();
   return { client: apiClient(session.accessToken), applyCookies: session.applyCookies };
+}
+
+export async function authenticatedPlatformSession() {
+  const session = await serverSession();
+  return { accessToken: session.accessToken, baseUrl: platformApiBaseUrl(), applyCookies: session.applyCookies };
+}
+
+export function safeProblemResponse(status: number, problem: unknown) {
+  const body = problem && typeof problem === "object" && !Array.isArray(problem) ? problem as Record<string, unknown> : {};
+  const requestedCode = typeof body.code === "string" ? body.code : "REQUEST_FAILED";
+  const code = SAFE_MESSAGES[requestedCode] ? requestedCode : "REQUEST_FAILED";
+  const message = SAFE_MESSAGES[code] ?? "We could not complete that request.";
+  const traceId = typeof body.traceId === "string" ? body.traceId : null;
+  return NextResponse.json({ code, message, traceId }, { status, headers: { "Cache-Control": "private, no-store" } });
 }
 
 export function problemResponse(error: unknown) {
@@ -30,10 +52,10 @@ export function problemResponse(error: unknown) {
     );
   }
   if (error instanceof NexoraApiError) {
-    const requestedCode = error.problem?.code ?? (error.status === 401 ? "AUTHENTICATION_REQUIRED" : "REQUEST_FAILED");
-    const code = SAFE_MESSAGES[requestedCode] ? requestedCode : "REQUEST_FAILED";
-    const message = SAFE_MESSAGES[code] ?? "We could not complete that request.";
-    return NextResponse.json({ code, message, traceId: error.traceId }, { status: error.status });
+    return safeProblemResponse(error.status, error.problem ?? {
+      code: error.status === 401 ? "AUTHENTICATION_REQUIRED" : "REQUEST_FAILED",
+      traceId: error.traceId,
+    });
   }
   return NextResponse.json(
     { code: "REQUEST_FAILED", message: "We could not reach Nexora. Try again.", traceId: null },
