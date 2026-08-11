@@ -15,6 +15,7 @@
       "eventId",
       "eventType",
       "eventVersion",
+      "schemaVersion",
       "organizationId",
       "subjectId",
       "resourceType",
@@ -28,20 +29,30 @@
       "occurredAt"
     ],
     "rules": [
-      "eventId is a UUID and idempotencyKeyDigest/payloadDigest use the exact SHA-256 wire format; neither is authorization proof.",
+      "eventId is a UUID; schemaVersion selects the wire contract and idempotencyKeyDigest/payloadDigest use the exact SHA-256 wire format. Neither digest is authorization proof.",
       "organizationId, subjectId, actorId, resourceType and resourceId are server-derived from trusted context, not browser input.",
       "topic follows scope:tenant-or-resource-id:purpose and is only a routing candidate.",
       "safePayload contains allowlisted IDs, versions, job state and safe display metadata only.",
       "No body, prompt, token, secret, raw provider output, unbounded PII or cross-tenant identifier may appear in the envelope or payload.",
-      "A safeDisplay value is a fixed catalog key, status and variant only; it is never user-authored display text."
+      "A safeDisplay value is an exact fixed catalog label, status and variant tuple only; it is never user-authored display text.",
+      "operation is derived only from the eventType routing matrix. A client may never select or override it."
     ],
     "digest": {
       "algorithm": "SHA-256",
       "wireFormat": "sha256:<64 lowercase hexadecimal characters>",
       "pattern": "^sha256:[a-f0-9]{64}$",
+      "payloadDigest": {
+        "canonicalBytes": "UTF-8 bytes of nexora:event-payload:1.1\\n followed by RFC 8785 JCS canonical JSON for safePayload.",
+        "verification": "The receiver recomputes this digest from the received safePayload and rejects a mismatch before accepting or publishing the envelope."
+      },
+      "idempotencyKeyDigest": {
+        "canonicalBytes": "UTF-8 bytes of nexora:event-idempotency:1.1\\n<operation>\\n<organizationId>\\n<topic>\\n<eventType>\\n<resourceType>\\n<resourceId>\\n<opaqueIdempotencyKey>.",
+        "verification": "The producer computes it from the server-derived routing scope plus the opaque request key. The raw opaque key is never emitted; receivers validate the exact wire format, envelope immutability and scope rather than reconstructing it."
+      },
       "rules": [
-        "The digest input is server-derived canonical bytes and is never a user name, email, token or arbitrary opaque string.",
-        "A producer must reject a value that fails the exact wire format before creating an outbox row or publishing."
+        "Digest inputs are server-derived canonical bytes and are never a user name, email, token or arbitrary opaque string.",
+        "A producer must reject a value that fails the exact wire format before creating an outbox row or publishing.",
+        "Known-answer vectors in the M3-T01 fixture bind canonical inputs to both digest fields; a format-valid digest with a different preimage is rejected."
       ]
     }
   },
@@ -57,50 +68,56 @@
     "matrix": [
       {
         "eventType": "PUBLICATION_INVALIDATED",
+        "operation": "publication.invalidate",
         "scope": "tenant",
         "purpose": "publication",
         "ownership": "current ACTIVE membership for the tenant"
       },
       {
         "eventType": "WORKFLOW_TRANSITIONED",
+        "operation": "workflow.transition",
         "scope": "tenant",
         "purpose": "workflow",
         "ownership": "current ACTIVE membership for the tenant"
       },
       {
         "eventType": "JOB_PROGRESS_CHANGED",
+        "operation": "job.progress",
         "scope": "resource",
         "purpose": "job-progress",
         "ownership": "current ACTIVE membership for the resource owner"
       },
       {
         "eventType": "NOTIFICATION_ENQUEUED",
+        "operation": "notification.enqueue",
         "scope": "tenant",
         "purpose": "notification",
         "ownership": "current ACTIVE membership for the tenant"
       },
       {
         "eventType": "PRESENCE_CHANGED",
+        "operation": "presence.change",
         "scope": "resource",
         "purpose": "presence",
         "ownership": "current ACTIVE membership for the resource owner"
       },
       {
         "eventType": "OUTBOX_RECORDED",
+        "operation": "outbox.record",
         "scope": "tenant",
         "purpose": "outbox",
         "ownership": "current ACTIVE membership for the tenant"
       }
     ],
     "rules": [
-      "The server chooses scope, tenant/resource identifier and purpose from current ownership facts and event type.",
+      "The server chooses operation, scope, tenant/resource identifier and purpose from current ownership facts and event type.",
       "Clients may not invent a scope or purpose outside this matrix.",
       "The identifier alone never grants access or publish rights."
     ]
   },
   "topicVocabulary": {
     "pattern": "scope:tenant-or-resource-id:purpose",
-    "scopes": ["tenant", "resource", "job"],
+    "scopes": ["tenant", "resource"],
     "purposes": ["publication", "workflow", "job-progress", "notification", "presence", "outbox"],
     "ownership": "The owner id encoded in the topic is derived from current server-authorized tenant or resource identity and current ACTIVE membership; guessing it never grants access.",
     "examples": [
@@ -149,7 +166,7 @@
     ]
   },
   "idempotency": {
-    "requestKey": "A publish or job submission carries one opaque idempotency key digest scoped to organizationId, topic and operation.",
+    "requestKey": "A publish or job submission carries one opaque idempotency key digest scoped to organizationId, topic, eventType, resource identity and the operation derived from eventRouting.matrix.",
     "sameRequest": "A retried request with the same fingerprint reuses the original terminal receipt without creating another outbox row.",
     "differentRequest": "A reused key with a different fingerprint fails closed with IDEMPOTENCY_KEY_REUSED.",
     "retention": "Reuse safety after expiry is a future persistence policy; the contract does not promise it."
@@ -188,12 +205,12 @@
     "nestedShapes": {
       "safeDisplay": {
         "type": "object",
-        "requiredFields": ["label", "status"],
+        "requiredFields": ["label", "status", "variant"],
         "allowedFields": ["label", "status", "variant"],
         "valueRules": {
           "label": { "type": "string", "catalog": "safeDisplayCatalog.label" },
-          "status": { "type": "string", "catalog": "safeDisplayCatalog.statuses" },
-          "variant": { "type": "string", "enum": ["neutral", "success", "warning", "danger", "info"] }
+          "status": { "type": "string", "catalog": "safeDisplayCatalog.statusVariants.status" },
+          "variant": { "type": "string", "catalog": "safeDisplayCatalog.statusVariants.variant" }
         },
         "forbiddenFields": [
           "body",
@@ -213,19 +230,26 @@
         "rules": [
           "No nested objects or arrays.",
           "No free-form text, user identifier, content excerpt, localized copy or arbitrary status is permitted.",
-          "label and status must match the envelope eventType entry in safeDisplayCatalog.",
+          "label, status and variant must match one exact statusVariants tuple for the envelope eventType entry in safeDisplayCatalog.",
           "Clients map the fixed catalog keys to locally reviewed copy after durable authorization; the catalog value itself is not display copy."
         ]
       }
     },
     "safeDisplayCatalog": [
-      { "eventType": "PUBLICATION_INVALIDATED", "label": "PUBLICATION_INVALIDATED", "statuses": ["QUEUED", "PUBLISHED", "ARCHIVED", "INVALIDATED"] },
-      { "eventType": "WORKFLOW_TRANSITIONED", "label": "WORKFLOW_TRANSITIONED", "statuses": ["PENDING", "IN_REVIEW", "PUBLISHED", "ARCHIVED", "FAILED"] },
-      { "eventType": "JOB_PROGRESS_CHANGED", "label": "JOB_PROGRESS_CHANGED", "statuses": ["QUEUED", "RUNNING", "COMPLETED", "FAILED", "CANCELED"] },
-      { "eventType": "NOTIFICATION_ENQUEUED", "label": "NOTIFICATION_ENQUEUED", "statuses": ["QUEUED", "DELIVERED", "FAILED"] },
-      { "eventType": "PRESENCE_CHANGED", "label": "PRESENCE_CHANGED", "statuses": ["ACTIVE", "INACTIVE"] },
-      { "eventType": "OUTBOX_RECORDED", "label": "OUTBOX_RECORDED", "statuses": ["PENDING", "CLAIMED", "PUBLISHED", "FAILED", "DEAD_LETTER"] }
+      { "eventType": "PUBLICATION_INVALIDATED", "label": "PUBLICATION_INVALIDATED", "statusVariants": [{ "status": "QUEUED", "variant": "warning" }, { "status": "PUBLISHED", "variant": "success" }, { "status": "ARCHIVED", "variant": "neutral" }, { "status": "INVALIDATED", "variant": "danger" }] },
+      { "eventType": "WORKFLOW_TRANSITIONED", "label": "WORKFLOW_TRANSITIONED", "statusVariants": [{ "status": "PENDING", "variant": "info" }, { "status": "IN_REVIEW", "variant": "warning" }, { "status": "PUBLISHED", "variant": "success" }, { "status": "ARCHIVED", "variant": "neutral" }, { "status": "FAILED", "variant": "danger" }] },
+      { "eventType": "JOB_PROGRESS_CHANGED", "label": "JOB_PROGRESS_CHANGED", "statusVariants": [{ "status": "QUEUED", "variant": "info" }, { "status": "RUNNING", "variant": "warning" }, { "status": "COMPLETED", "variant": "success" }, { "status": "FAILED", "variant": "danger" }, { "status": "CANCELED", "variant": "neutral" }] },
+      { "eventType": "NOTIFICATION_ENQUEUED", "label": "NOTIFICATION_ENQUEUED", "statusVariants": [{ "status": "QUEUED", "variant": "info" }, { "status": "DELIVERED", "variant": "success" }, { "status": "FAILED", "variant": "danger" }] },
+      { "eventType": "PRESENCE_CHANGED", "label": "PRESENCE_CHANGED", "statusVariants": [{ "status": "ACTIVE", "variant": "success" }, { "status": "INACTIVE", "variant": "neutral" }] },
+      { "eventType": "OUTBOX_RECORDED", "label": "OUTBOX_RECORDED", "statusVariants": [{ "status": "PENDING", "variant": "info" }, { "status": "CLAIMED", "variant": "warning" }, { "status": "PUBLISHED", "variant": "success" }, { "status": "FAILED", "variant": "danger" }, { "status": "DEAD_LETTER", "variant": "danger" }] }
     ]
+  },
+  "compatibility": {
+    "minimumAcceptedSchemaVersion": "1.1.0",
+    "legacySchemaVersionPolicy": "Ingress and consumers reject 1.0.0 envelopes fail closed because their free-form safeDisplay shape cannot establish this contract's PII boundary.",
+    "producerPolicy": "New producers emit schemaVersion 1.1.0 only.",
+    "persistenceHandoff": "M3-DB01 must quarantine or dead-letter legacy rows rather than silently reserializing them as 1.1.0; M3 runtime owners must record explicit conversion evidence before accepting older inputs.",
+    "eventVersionRule": "eventVersion is business-event evolution and does not substitute for schemaVersion."
   },
   "errors": [
     "INVALID_EVENT_VERSION",

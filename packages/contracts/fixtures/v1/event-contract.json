@@ -53,18 +53,19 @@
     }
   ],
   "routingMatrix": [
-    { "eventType": "PUBLICATION_INVALIDATED", "scope": "tenant", "purpose": "publication" },
-    { "eventType": "WORKFLOW_TRANSITIONED", "scope": "tenant", "purpose": "workflow" },
-    { "eventType": "JOB_PROGRESS_CHANGED", "scope": "resource", "purpose": "job-progress" },
-    { "eventType": "NOTIFICATION_ENQUEUED", "scope": "tenant", "purpose": "notification" },
-    { "eventType": "PRESENCE_CHANGED", "scope": "resource", "purpose": "presence" },
-    { "eventType": "OUTBOX_RECORDED", "scope": "tenant", "purpose": "outbox" }
+    { "eventType": "PUBLICATION_INVALIDATED", "operation": "publication.invalidate", "scope": "tenant", "purpose": "publication" },
+    { "eventType": "WORKFLOW_TRANSITIONED", "operation": "workflow.transition", "scope": "tenant", "purpose": "workflow" },
+    { "eventType": "JOB_PROGRESS_CHANGED", "operation": "job.progress", "scope": "resource", "purpose": "job-progress" },
+    { "eventType": "NOTIFICATION_ENQUEUED", "operation": "notification.enqueue", "scope": "tenant", "purpose": "notification" },
+    { "eventType": "PRESENCE_CHANGED", "operation": "presence.change", "scope": "resource", "purpose": "presence" },
+    { "eventType": "OUTBOX_RECORDED", "operation": "outbox.record", "scope": "tenant", "purpose": "outbox" }
   ],
   "events": [
     {
       "eventId": "70000000-0000-4000-8000-000000000001",
       "eventType": "PUBLICATION_INVALIDATED",
       "eventVersion": 1,
+      "schemaVersion": "1.1.0",
       "topic": "tenant:10000000-0000-4000-8000-000000000001:publication",
       "organizationId": "10000000-0000-4000-8000-000000000001",
       "subjectId": "90000000-0000-4000-8000-000000000001",
@@ -72,8 +73,8 @@
       "resourceId": "30000000-0000-4000-8000-000000000001",
       "actorId": "80000000-0000-4000-8000-000000000001",
       "traceId": "trace-event-alpha-publication",
-      "idempotencyKeyDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "payloadDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "idempotencyKeyDigest": "sha256:6985bfe99184f46eccd9a99937455ffda0c217f751dbce8e54e4795698910436",
+      "payloadDigest": "sha256:4325a8cda39c632de9923d92d447a73432fa4ffb709ed4c590ece96f6ef9597e",
       "occurredAt": "2026-08-10T00:00:00Z",
       "safePayload": {
         "resourceId": "30000000-0000-4000-8000-000000000001",
@@ -99,6 +100,7 @@
       "eventId": "70000000-0000-4000-8000-000000000002",
       "eventType": "JOB_PROGRESS_CHANGED",
       "eventVersion": 1,
+      "schemaVersion": "1.1.0",
       "topic": "resource:50000000-0000-4000-8000-000000000001:job-progress",
       "organizationId": "10000000-0000-4000-8000-000000000001",
       "subjectId": "90000000-0000-4000-8000-000000000001",
@@ -106,8 +108,8 @@
       "resourceId": "50000000-0000-4000-8000-000000000001",
       "actorId": "80000000-0000-4000-8000-000000000001",
       "traceId": "trace-event-alpha-job",
-      "idempotencyKeyDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      "payloadDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "idempotencyKeyDigest": "sha256:0c185bf946743a0684153932a58a62a8cbfd910c00cc891187d5132bba081190",
+      "payloadDigest": "sha256:c7f2df282a18c1a6fc0fd049414583a80c24b3b52d33d0c5c67ca3a87b5cb994",
       "occurredAt": "2026-08-10T00:05:00Z",
       "safePayload": {
         "resourceId": "50000000-0000-4000-8000-000000000001",
@@ -124,10 +126,135 @@
         "schemaVersion": "1.1.0",
         "safeDisplay": {
           "label": "JOB_PROGRESS_CHANGED",
-          "status": "RUNNING"
+          "status": "RUNNING",
+          "variant": "warning"
         }
       }
+    },
+    {
+      "eventId": "70000000-0000-4000-8000-000000000003",
+      "eventType": "WORKFLOW_TRANSITIONED",
+      "eventVersion": 1,
+      "schemaVersion": "1.1.0",
+      "topic": "tenant:10000000-0000-4000-8000-000000000001:workflow",
+      "organizationId": "10000000-0000-4000-8000-000000000001",
+      "subjectId": "90000000-0000-4000-8000-000000000001",
+      "resourceType": "page",
+      "resourceId": "30000000-0000-4000-8000-000000000001",
+      "actorId": "80000000-0000-4000-8000-000000000001",
+      "traceId": "trace-event-alpha-workflow",
+      "idempotencyKeyDigest": "sha256:2cdf8b769943dfca079080c17d2c356ce3dfe14aaf5e93ea2ad11a4bfb54c2b9",
+      "payloadDigest": "sha256:c7a4afb12b5307c5613d679ba2c1a42061f36b6559e65c0d5fb417ea6b6fd744",
+      "occurredAt": "2026-08-10T00:10:00Z",
+      "safePayload": {
+        "resourceId": "30000000-0000-4000-8000-000000000001",
+        "resourceType": "page",
+        "organizationId": "10000000-0000-4000-8000-000000000001",
+        "subjectId": "90000000-0000-4000-8000-000000000001",
+        "actorId": "80000000-0000-4000-8000-000000000001",
+        "eventVersion": 1,
+        "correlationId": "corr-alpha-003",
+        "traceId": "trace-event-alpha-workflow",
+        "receiptId": "receipt-alpha-workflow-001",
+        "schemaVersion": "1.1.0",
+        "safeDisplay": { "label": "WORKFLOW_TRANSITIONED", "status": "IN_REVIEW", "variant": "warning" }
+      }
+    },
+    {
+      "eventId": "70000000-0000-4000-8000-000000000004",
+      "eventType": "NOTIFICATION_ENQUEUED",
+      "eventVersion": 1,
+      "schemaVersion": "1.1.0",
+      "topic": "tenant:10000000-0000-4000-8000-000000000001:notification",
+      "organizationId": "10000000-0000-4000-8000-000000000001",
+      "subjectId": "90000000-0000-4000-8000-000000000001",
+      "resourceType": "notification",
+      "resourceId": "40000000-0000-4000-8000-000000000001",
+      "actorId": "80000000-0000-4000-8000-000000000001",
+      "traceId": "trace-event-alpha-notification",
+      "idempotencyKeyDigest": "sha256:5b0a37654035babf7137e48236d6e8f623104d836621cc6a60e8201c1ec54a23",
+      "payloadDigest": "sha256:67bbfded7e1ada9ec885514f05513bc2a2c84b7c52feb6202335634e56f024eb",
+      "occurredAt": "2026-08-10T00:15:00Z",
+      "safePayload": {
+        "resourceId": "40000000-0000-4000-8000-000000000001",
+        "resourceType": "notification",
+        "organizationId": "10000000-0000-4000-8000-000000000001",
+        "subjectId": "90000000-0000-4000-8000-000000000001",
+        "actorId": "80000000-0000-4000-8000-000000000001",
+        "eventVersion": 1,
+        "correlationId": "corr-alpha-004",
+        "traceId": "trace-event-alpha-notification",
+        "receiptId": "receipt-alpha-notification-001",
+        "schemaVersion": "1.1.0",
+        "safeDisplay": { "label": "NOTIFICATION_ENQUEUED", "status": "QUEUED", "variant": "info" }
+      }
+    },
+    {
+      "eventId": "70000000-0000-4000-8000-000000000005",
+      "eventType": "PRESENCE_CHANGED",
+      "eventVersion": 1,
+      "schemaVersion": "1.1.0",
+      "topic": "resource:60000000-0000-4000-8000-000000000001:presence",
+      "organizationId": "10000000-0000-4000-8000-000000000001",
+      "subjectId": "90000000-0000-4000-8000-000000000001",
+      "resourceType": "collaboration_session",
+      "resourceId": "60000000-0000-4000-8000-000000000001",
+      "actorId": "80000000-0000-4000-8000-000000000001",
+      "traceId": "trace-event-alpha-presence",
+      "idempotencyKeyDigest": "sha256:b6c0d6543d60a1eef89174d7245af34d15944924c96b8275a5dd63fbd2547aa7",
+      "payloadDigest": "sha256:4e7e61eb8463957b012e8f48ed0e2848bb6066522b66e9277d6b3bdbb1e373f0",
+      "occurredAt": "2026-08-10T00:20:00Z",
+      "safePayload": {
+        "resourceId": "60000000-0000-4000-8000-000000000001",
+        "resourceType": "collaboration_session",
+        "organizationId": "10000000-0000-4000-8000-000000000001",
+        "subjectId": "90000000-0000-4000-8000-000000000001",
+        "actorId": "80000000-0000-4000-8000-000000000001",
+        "eventVersion": 1,
+        "correlationId": "corr-alpha-005",
+        "traceId": "trace-event-alpha-presence",
+        "receiptId": "receipt-alpha-presence-001",
+        "schemaVersion": "1.1.0",
+        "safeDisplay": { "label": "PRESENCE_CHANGED", "status": "ACTIVE", "variant": "success" }
+      }
+    },
+    {
+      "eventId": "70000000-0000-4000-8000-000000000006",
+      "eventType": "OUTBOX_RECORDED",
+      "eventVersion": 1,
+      "schemaVersion": "1.1.0",
+      "topic": "tenant:10000000-0000-4000-8000-000000000001:outbox",
+      "organizationId": "10000000-0000-4000-8000-000000000001",
+      "subjectId": "90000000-0000-4000-8000-000000000001",
+      "resourceType": "outbox",
+      "resourceId": "61000000-0000-4000-8000-000000000001",
+      "actorId": "80000000-0000-4000-8000-000000000001",
+      "traceId": "trace-event-alpha-outbox",
+      "idempotencyKeyDigest": "sha256:b995d7122119651e1ad657cdf07e5e4d5464b7a61532f93d63c7ec97136c8d07",
+      "payloadDigest": "sha256:8b135eb4e011ad1939e3c6711dd29cf4a8075024ad12155771af520c556788c8",
+      "occurredAt": "2026-08-10T00:25:00Z",
+      "safePayload": {
+        "resourceId": "61000000-0000-4000-8000-000000000001",
+        "resourceType": "outbox",
+        "organizationId": "10000000-0000-4000-8000-000000000001",
+        "subjectId": "90000000-0000-4000-8000-000000000001",
+        "actorId": "80000000-0000-4000-8000-000000000001",
+        "eventVersion": 1,
+        "correlationId": "corr-alpha-006",
+        "traceId": "trace-event-alpha-outbox",
+        "receiptId": "receipt-alpha-outbox-001",
+        "schemaVersion": "1.1.0",
+        "safeDisplay": { "label": "OUTBOX_RECORDED", "status": "PENDING", "variant": "info" }
+      }
     }
+  ],
+  "digestTestVectors": [
+    { "eventId": "70000000-0000-4000-8000-000000000001", "opaqueIdempotencyKey": "fixture-publication-key-v1" },
+    { "eventId": "70000000-0000-4000-8000-000000000002", "opaqueIdempotencyKey": "fixture-job-key-v1" },
+    { "eventId": "70000000-0000-4000-8000-000000000003", "opaqueIdempotencyKey": "fixture-workflow-key-v1" },
+    { "eventId": "70000000-0000-4000-8000-000000000004", "opaqueIdempotencyKey": "fixture-notification-key-v1" },
+    { "eventId": "70000000-0000-4000-8000-000000000005", "opaqueIdempotencyKey": "fixture-presence-key-v1" },
+    { "eventId": "70000000-0000-4000-8000-000000000006", "opaqueIdempotencyKey": "fixture-outbox-key-v1" }
   ],
   "outbox": {
     "states": ["PENDING", "CLAIMED", "PUBLISHED", "FAILED", "DEAD_LETTER"],
@@ -179,7 +306,7 @@
       {
         "name": "freeFormSafeDisplayRejected",
         "safeDisplay": {
-          "label": "alice-smith",
+          "label": "alice@example.test",
           "status": "QUEUED"
         },
         "result": "PII_REJECTED"
@@ -188,6 +315,31 @@
         "name": "nonSha256DigestRejected",
         "idempotencyKeyDigest": "sk_live_abcdefghijklmnop",
         "result": "PII_REJECTED"
+      },
+      {
+        "name": "formatValidWrongPayloadDigestRejected",
+        "payloadDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "result": "PAYLOAD_REJECTED"
+      },
+      {
+        "name": "wrongRouteForEventTypeRejected",
+        "eventType": "PUBLICATION_INVALIDATED",
+        "topic": "tenant:10000000-0000-4000-8000-000000000001:outbox",
+        "result": "INVALID_TOPIC"
+      },
+      {
+        "name": "wrongSafeDisplayVariantRejected",
+        "safeDisplay": {
+          "label": "PUBLICATION_INVALIDATED",
+          "status": "QUEUED",
+          "variant": "success"
+        },
+        "result": "PII_REJECTED"
+      },
+      {
+        "name": "legacySchemaRejected",
+        "schemaVersion": "1.0.0",
+        "result": "INVALID_EVENT_VERSION"
       },
       {
         "name": "unownedSubjectDenied",
