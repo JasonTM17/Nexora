@@ -1,14 +1,35 @@
 package transport
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/jasontm17/nexora/services/event-ingestion/internal/domain"
 )
 
 type readinessStub bool
 
 func (stub readinessStub) IsReady() bool { return bool(stub) }
+
+type ingestorStub struct {
+	credential string
+	envelope   domain.EventEnvelope
+	receipt    domain.PublishReceipt
+	err        error
+}
+
+func (stub *ingestorStub) Ingest(_ context.Context, credential string, envelope domain.EventEnvelope) (domain.PublishReceipt, error) {
+	stub.credential = credential
+	stub.envelope = envelope
+	return stub.receipt, stub.err
+}
 
 func TestHealthAndReadinessEndpoints(t *testing.T) {
 	tests := []struct {
@@ -35,5 +56,123 @@ func TestHealthAndReadinessEndpoints(t *testing.T) {
 				t.Fatalf("Cache-Control = %q", response.Header().Get("Cache-Control"))
 			}
 		})
+	}
+}
+
+func TestEventIngestionAcceptsOnlyBoundedBearerJSON(t *testing.T) {
+	ingestor := &ingestorStub{receipt: domain.PublishReceipt{EventID: "70000000-0000-4000-8000-000000000099"}}
+	handler := NewHandler(readinessStub(true), WithEventIngestion(ingestor, 4096))
+	body, err := json.Marshal(transportEnvelope())
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(string(body)))
+	request.Header.Set("Content-Type", "application/json; charset=utf-8")
+	request.Header.Set("Authorization", "Bearer verified-local-credential")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if ingestor.credential != "verified-local-credential" || ingestor.envelope.EventID == "" {
+		t.Fatalf("ingestor inputs = %q %#v", ingestor.credential, ingestor.envelope)
+	}
+	if response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("Cache-Control = %q", response.Header().Get("Cache-Control"))
+	}
+	if !strings.Contains(response.Body.String(), `"eventId":"70000000-0000-4000-8000-000000000001"`) {
+		t.Fatalf("response did not retain request event ID: %s", response.Body.String())
+	}
+}
+
+func TestEventIngestionRejectsUnsafeRequestBeforeCollector(t *testing.T) {
+	tests := []struct {
+		name        string
+		header      string
+		body        string
+		contentType string
+		bodyLimit   int64
+		wantStatus  int
+	}{
+		{name: "missing bearer", body: `{}`, contentType: "application/json", bodyLimit: 4096, wantStatus: http.StatusUnauthorized},
+		{name: "unknown field", header: "Bearer valid", body: `{"eventId":"x","unknown":true}`, contentType: "application/json", bodyLimit: 4096, wantStatus: http.StatusBadRequest},
+		{name: "unsupported content type", header: "Bearer valid", body: `{}`, contentType: "text/plain", bodyLimit: 4096, wantStatus: http.StatusBadRequest},
+		{name: "body too large", header: "Bearer valid", body: fmt.Sprintf(`{"data":"%s"}`, strings.Repeat("x", 2048)), contentType: "application/json", bodyLimit: 1024, wantStatus: http.StatusRequestEntityTooLarge},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ingestor := &ingestorStub{}
+			handler := NewHandler(readinessStub(true), WithEventIngestion(ingestor, test.bodyLimit))
+			request := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(test.body))
+			request.Header.Set("Content-Type", test.contentType)
+			if test.header != "" {
+				request.Header.Set("Authorization", test.header)
+			}
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != test.wantStatus {
+				t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+			}
+			if ingestor.credential != "" {
+				t.Fatalf("collector was called with %q", ingestor.credential)
+			}
+		})
+	}
+}
+
+func TestEventIngestionMapsCollectorFailuresWithoutLeakingDetails(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantCode   string
+	}{
+		{name: "unauthorized", err: fmt.Errorf("%w: stale membership", domain.ErrUnauthorized), wantStatus: http.StatusUnauthorized, wantCode: "UNAUTHORIZED"},
+		{name: "rate limited", err: domain.ErrRateLimited, wantStatus: http.StatusTooManyRequests, wantCode: "RATE_LIMITED"},
+		{name: "invalid", err: domain.ErrInvalidEnvelope, wantStatus: http.StatusUnprocessableEntity, wantCode: "INVALID_EVENT"},
+		{name: "publisher", err: fmt.Errorf("%w: nats unavailable", domain.ErrPublish), wantStatus: http.StatusServiceUnavailable, wantCode: "INGESTION_UNAVAILABLE"},
+		{name: "unexpected", err: errors.New("database password leaked"), wantStatus: http.StatusServiceUnavailable, wantCode: "INGESTION_UNAVAILABLE"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ingestor := &ingestorStub{err: test.err}
+			handler := NewHandler(readinessStub(true), WithEventIngestion(ingestor, 4096))
+			body, err := json.Marshal(transportEnvelope())
+			if err != nil {
+				t.Fatalf("Marshal() error = %v", err)
+			}
+			request := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(string(body)))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Authorization", "Bearer valid")
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != test.wantStatus || !strings.Contains(response.Body.String(), test.wantCode) || strings.Contains(response.Body.String(), "password") {
+				t.Fatalf("status/body = %d %s", response.Code, response.Body.String())
+			}
+		})
+	}
+}
+
+func transportEnvelope() domain.EventEnvelope {
+	now := time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC)
+	return domain.EventEnvelope{
+		EventID:              "70000000-0000-4000-8000-000000000001",
+		EventType:            domain.EventTypePublicationInvalidated,
+		EventVersion:         1,
+		OrganizationID:       "10000000-0000-4000-8000-000000000001",
+		SubjectID:            "90000000-0000-4000-8000-000000000001",
+		ResourceType:         "page",
+		ResourceID:           "30000000-0000-4000-8000-000000000001",
+		Topic:                "tenant:10000000-0000-4000-8000-000000000001:publication",
+		ActorID:              "80000000-0000-4000-8000-000000000001",
+		TraceID:              "trace-event-alpha-publication",
+		IdempotencyKeyDigest: "sha256:event-contract-alpha-publication",
+		PayloadDigest:        "sha256:1111111111111111111111111111111111111111111111111111111111",
+		SafePayload: map[string]any{
+			"safeDisplay": map[string]any{"label": "Publication invalidated", "status": "queued"},
+		},
+		OccurredAt:    now,
+		SchemaVersion: domain.SchemaVersion,
 	}
 }
