@@ -65,18 +65,56 @@ type PublishAck struct {
 }
 
 type Route struct {
-	Scope       string
-	Purpose     string
-	NATSSubject string
+	Operation     string
+	ResourceTypes map[string]struct{}
+	Scope         string
+	Purpose       string
+	NATSSubject   string
 }
 
 var routes = map[EventType]Route{
-	EventTypePublicationInvalidated: {Scope: "tenant", Purpose: "publication", NATSSubject: "nexora.events.publication"},
-	EventTypeWorkflowTransitioned:   {Scope: "tenant", Purpose: "workflow", NATSSubject: "nexora.events.workflow"},
-	EventTypeJobProgressChanged:     {Scope: "resource", Purpose: "job-progress", NATSSubject: "nexora.events.job-progress"},
-	EventTypeNotificationEnqueued:   {Scope: "tenant", Purpose: "notification", NATSSubject: "nexora.events.notification"},
-	EventTypePresenceChanged:        {Scope: "resource", Purpose: "presence", NATSSubject: "nexora.events.presence"},
-	EventTypeOutboxRecorded:         {Scope: "tenant", Purpose: "outbox", NATSSubject: "nexora.events.outbox"},
+	EventTypePublicationInvalidated: {
+		Operation:     "publication.invalidate",
+		ResourceTypes: map[string]struct{}{"page": {}},
+		Scope:         "tenant",
+		Purpose:       "publication",
+		NATSSubject:   "nexora.events.publication",
+	},
+	EventTypeWorkflowTransitioned: {
+		Operation:     "workflow.transition",
+		ResourceTypes: map[string]struct{}{"page": {}},
+		Scope:         "tenant",
+		Purpose:       "workflow",
+		NATSSubject:   "nexora.events.workflow",
+	},
+	EventTypeJobProgressChanged: {
+		Operation:     "job.progress",
+		ResourceTypes: map[string]struct{}{"job": {}},
+		Scope:         "resource",
+		Purpose:       "job-progress",
+		NATSSubject:   "nexora.events.job-progress",
+	},
+	EventTypeNotificationEnqueued: {
+		Operation:     "notification.enqueue",
+		ResourceTypes: map[string]struct{}{"notification": {}},
+		Scope:         "tenant",
+		Purpose:       "notification",
+		NATSSubject:   "nexora.events.notification",
+	},
+	EventTypePresenceChanged: {
+		Operation:     "presence.change",
+		ResourceTypes: map[string]struct{}{"collaboration_session": {}},
+		Scope:         "resource",
+		Purpose:       "presence",
+		NATSSubject:   "nexora.events.presence",
+	},
+	EventTypeOutboxRecorded: {
+		Operation:     "outbox.record",
+		ResourceTypes: map[string]struct{}{"outbox": {}},
+		Scope:         "tenant",
+		Purpose:       "outbox",
+		NATSSubject:   "nexora.events.outbox",
+	},
 }
 
 func (eventType EventType) Route() (Route, bool) {
