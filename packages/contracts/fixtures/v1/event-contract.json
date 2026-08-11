@@ -1,5 +1,5 @@
 {
-  "fixtureVersion": "1.0.0",
+  "fixtureVersion": "1.1.0",
   "authority": "M3-T01 contract fixture only; it is not a broker topic list, outbox table or runtime publish record.",
   "tenants": [
     {
@@ -72,7 +72,7 @@
       "resourceId": "30000000-0000-4000-8000-000000000001",
       "actorId": "80000000-0000-4000-8000-000000000001",
       "traceId": "trace-event-alpha-publication",
-      "idempotencyKeyDigest": "sha256:event-contract-alpha-publication",
+      "idempotencyKeyDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "payloadDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "occurredAt": "2026-08-10T00:00:00Z",
       "safePayload": {
@@ -87,11 +87,10 @@
         "correlationId": "corr-alpha-001",
         "traceId": "trace-event-alpha-publication",
         "receiptId": "receipt-alpha-publication-001",
-        "schemaVersion": "1.0.0",
+        "schemaVersion": "1.1.0",
         "safeDisplay": {
-          "label": "Alpha publication invalidated",
-          "status": "queued",
-          "hint": "Awaiting durable publication",
+          "label": "PUBLICATION_INVALIDATED",
+          "status": "QUEUED",
           "variant": "warning"
         }
       }
@@ -107,7 +106,7 @@
       "resourceId": "50000000-0000-4000-8000-000000000001",
       "actorId": "80000000-0000-4000-8000-000000000001",
       "traceId": "trace-event-alpha-job",
-      "idempotencyKeyDigest": "sha256:event-contract-alpha-job",
+      "idempotencyKeyDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "payloadDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
       "occurredAt": "2026-08-10T00:05:00Z",
       "safePayload": {
@@ -122,12 +121,10 @@
         "correlationId": "corr-alpha-002",
         "traceId": "trace-event-alpha-job",
         "receiptId": "receipt-alpha-job-001",
-        "schemaVersion": "1.0.0",
+        "schemaVersion": "1.1.0",
         "safeDisplay": {
-          "label": "Alpha job progress",
-          "status": "running",
-          "state": "RUNNING",
-          "progressText": "45%"
+          "label": "JOB_PROGRESS_CHANGED",
+          "status": "RUNNING"
         }
       }
     }
@@ -174,10 +171,23 @@
       {
         "name": "unsafeSafeDisplayRejected",
         "safeDisplay": {
-          "label": "Alpha publication invalidated",
+          "label": "PUBLICATION_INVALIDATED",
           "body": "secret"
         },
         "result": "REJECTED"
+      },
+      {
+        "name": "freeFormSafeDisplayRejected",
+        "safeDisplay": {
+          "label": "alice-smith",
+          "status": "QUEUED"
+        },
+        "result": "PII_REJECTED"
+      },
+      {
+        "name": "nonSha256DigestRejected",
+        "idempotencyKeyDigest": "sk_live_abcdefghijklmnop",
+        "result": "PII_REJECTED"
       },
       {
         "name": "unownedSubjectDenied",

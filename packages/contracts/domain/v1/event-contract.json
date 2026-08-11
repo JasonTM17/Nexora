@@ -1,5 +1,5 @@
 {
-  "contractVersion": "1.0.0",
+  "contractVersion": "1.1.0",
   "task": "M3-T01",
   "status": "frozen-contract-only",
   "authority": {
@@ -10,7 +10,7 @@
     "apiProjection": "packages/contracts/fixtures/v1/event-contract.json"
   },
   "eventEnvelope": {
-    "version": "1.0.0",
+    "version": "1.1.0",
     "requiredFields": [
       "eventId",
       "eventType",
@@ -28,12 +28,22 @@
       "occurredAt"
     ],
     "rules": [
-      "eventId and payloadDigest are opaque digests, not authorization proof.",
+      "eventId is a UUID and idempotencyKeyDigest/payloadDigest use the exact SHA-256 wire format; neither is authorization proof.",
       "organizationId, subjectId, actorId, resourceType and resourceId are server-derived from trusted context, not browser input.",
       "topic follows scope:tenant-or-resource-id:purpose and is only a routing candidate.",
       "safePayload contains allowlisted IDs, versions, job state and safe display metadata only.",
-      "No body, prompt, token, secret, raw provider output, unbounded PII or cross-tenant identifier may appear in the envelope or payload."
-    ]
+      "No body, prompt, token, secret, raw provider output, unbounded PII or cross-tenant identifier may appear in the envelope or payload.",
+      "A safeDisplay value is a fixed catalog key, status and variant only; it is never user-authored display text."
+    ],
+    "digest": {
+      "algorithm": "SHA-256",
+      "wireFormat": "sha256:<64 lowercase hexadecimal characters>",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "rules": [
+        "The digest input is server-derived canonical bytes and is never a user name, email, token or arbitrary opaque string.",
+        "A producer must reject a value that fails the exact wire format before creating an outbox row or publishing."
+      ]
+    }
   },
   "eventTypes": [
     "PUBLICATION_INVALIDATED",
@@ -179,14 +189,11 @@
       "safeDisplay": {
         "type": "object",
         "requiredFields": ["label", "status"],
-        "allowedFields": ["label", "status", "hint", "state", "variant", "progressText"],
+        "allowedFields": ["label", "status", "variant"],
         "valueRules": {
-          "label": { "type": "string", "minimumLength": 1, "maximumLength": 80 },
-          "status": { "type": "string", "minimumLength": 1, "maximumLength": 32 },
-          "hint": { "type": "string", "minimumLength": 0, "maximumLength": 120 },
-          "state": { "type": "string", "minimumLength": 1, "maximumLength": 32 },
-          "variant": { "type": "string", "enum": ["neutral", "success", "warning", "danger", "info"] },
-          "progressText": { "type": "string", "minimumLength": 0, "maximumLength": 40 }
+          "label": { "type": "string", "catalog": "safeDisplayCatalog.label" },
+          "status": { "type": "string", "catalog": "safeDisplayCatalog.statuses" },
+          "variant": { "type": "string", "enum": ["neutral", "success", "warning", "danger", "info"] }
         },
         "forbiddenFields": [
           "body",
@@ -205,11 +212,20 @@
         ],
         "rules": [
           "No nested objects or arrays.",
-          "All string values are printable and length-bounded.",
-          "Safe display metadata may summarize state only."
+          "No free-form text, user identifier, content excerpt, localized copy or arbitrary status is permitted.",
+          "label and status must match the envelope eventType entry in safeDisplayCatalog.",
+          "Clients map the fixed catalog keys to locally reviewed copy after durable authorization; the catalog value itself is not display copy."
         ]
       }
-    }
+    },
+    "safeDisplayCatalog": [
+      { "eventType": "PUBLICATION_INVALIDATED", "label": "PUBLICATION_INVALIDATED", "statuses": ["QUEUED", "PUBLISHED", "ARCHIVED", "INVALIDATED"] },
+      { "eventType": "WORKFLOW_TRANSITIONED", "label": "WORKFLOW_TRANSITIONED", "statuses": ["PENDING", "IN_REVIEW", "PUBLISHED", "ARCHIVED", "FAILED"] },
+      { "eventType": "JOB_PROGRESS_CHANGED", "label": "JOB_PROGRESS_CHANGED", "statuses": ["QUEUED", "RUNNING", "COMPLETED", "FAILED", "CANCELED"] },
+      { "eventType": "NOTIFICATION_ENQUEUED", "label": "NOTIFICATION_ENQUEUED", "statuses": ["QUEUED", "DELIVERED", "FAILED"] },
+      { "eventType": "PRESENCE_CHANGED", "label": "PRESENCE_CHANGED", "statuses": ["ACTIVE", "INACTIVE"] },
+      { "eventType": "OUTBOX_RECORDED", "label": "OUTBOX_RECORDED", "statuses": ["PENDING", "CLAIMED", "PUBLISHED", "FAILED", "DEAD_LETTER"] }
+    ]
   },
   "errors": [
     "INVALID_EVENT_VERSION",
