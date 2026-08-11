@@ -485,6 +485,11 @@ class CmsPageIntegrationTests {
         assertThat(descriptor.path("reconnectBackoffMs")).hasSize(4);
         SignedJWT token = SignedJWT.parse(descriptor.path("transportToken").asText());
         assertThat(token.verify(new MACVerifier(REALTIME_JWT_SECRET))).isTrue();
+        assertThat(token.getJWTClaimsSet().getIssueTime()).isNotNull();
+        assertThat(token.getJWTClaimsSet().getExpirationTime()).isNotNull();
+        long descriptorLifetimeSeconds = token.getJWTClaimsSet().getExpirationTime().toInstant().getEpochSecond()
+                - token.getJWTClaimsSet().getIssueTime().toInstant().getEpochSecond();
+        assertThat(descriptorLifetimeSeconds).isBetween(30L, 300L);
         assertThat(token.getJWTClaimsSet().getSubject()).isEqualTo(subjectId.toString());
         assertThat(token.getJWTClaimsSet().getStringClaim("nexora_realtime_topic")).isEqualTo(topic);
         assertThat(token.getJWTClaimsSet().getStringClaim("nexora_realtime_event_type")).isEqualTo(eventType);

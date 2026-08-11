@@ -7,6 +7,8 @@ import { AppShell, PageGrid } from "../../../../packages/ui-core/src/app-shell";
 import { ActionButton } from "../../../../packages/ui-core/src/action-button";
 import { StatusLabel } from "../../../../packages/ui-core/src/status-label";
 import {
+  nextRealtimeDescriptorRenewalDelayMs,
+  nextRealtimeReconnectDelayMs,
   requestRealtimeDescriptor,
   subscribeToRealtimeDescriptor,
   type RealtimeLifecycleState,
@@ -65,38 +67,94 @@ export function AccountAccess() {
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { statusHeading.current?.focus(); }, [state, problem]);
   useEffect(() => {
-    realtimeHandle.current?.close();
-    realtimeHandle.current = null;
-    if (state !== "ready" || !access || !selected) {
+    if (state !== "ready" || !selected) {
+      realtimeHandle.current?.close();
+      realtimeHandle.current = null;
       setRealtimeState("idle");
       return;
     }
     let cancelled = false;
-    setRealtimeState("connecting");
-    void requestRealtimeDescriptor({ organizationId: selected, eventType: "PUBLICATION_INVALIDATED" })
-      .then((descriptor) => {
-        if (cancelled) return;
-        realtimeHandle.current = subscribeToRealtimeDescriptor(descriptor, {
-          markState: (next) => setRealtimeState(next),
-          refetchDurableState: () => { void load({ showLoading: false }); },
-        });
-        setRealtimeState("SUBSCRIBED");
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        const next = error && typeof error === "object" ? error as Problem : { code: "REQUEST_FAILED", message: "We could not complete that request." };
-        if (next.code === "REALTIME_AUTH_REFRESH_REQUIRED" || next.code === "REALTIME_DEGRADED_REFETCH_REQUIRED" || next.code === "REALTIME_STALE_DESCRIPTOR") {
-          setRealtimeState(next.code);
-          return;
-        }
-        setRealtimeState("idle");
-      });
-    return () => {
-      cancelled = true;
+    let reconnectAttempt = 0;
+    let activeGeneration = 0;
+    let renewalTimer: ReturnType<typeof setTimeout> | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const closeChannel = () => {
+      activeGeneration += 1;
       realtimeHandle.current?.close();
       realtimeHandle.current = null;
     };
-  }, [access, load, selected, state]);
+    const refetchDurableState = () => { void load({ showLoading: false }); };
+    const clearTimers = () => {
+      if (renewalTimer) clearTimeout(renewalTimer);
+      if (retryTimer) clearTimeout(retryTimer);
+      renewalTimer = null;
+      retryTimer = null;
+    };
+    const connect = () => {
+      clearTimers();
+      closeChannel();
+      const generation = activeGeneration;
+      setRealtimeState("connecting");
+      void requestRealtimeDescriptor({ organizationId: selected, eventType: "PUBLICATION_INVALIDATED" })
+        .then((descriptor) => {
+          if (cancelled || generation !== activeGeneration) return;
+          const renewalDelay = nextRealtimeDescriptorRenewalDelayMs(descriptor);
+          if (renewalDelay === null) {
+            setRealtimeState("REALTIME_STALE_DESCRIPTOR");
+            refetchDurableState();
+            return;
+          }
+          const subscription = subscribeToRealtimeDescriptor(descriptor, {
+            markState: (next) => {
+              if (cancelled || generation !== activeGeneration) return;
+              if (next !== "DEGRADED_REFETCH_REQUIRED") {
+                setRealtimeState(next);
+                return;
+              }
+              closeChannel();
+              refetchDurableState();
+              const retryDelay = nextRealtimeReconnectDelayMs(reconnectAttempt++, descriptor);
+              if (retryDelay === null) {
+                setRealtimeState("DEGRADED_REFETCH_REQUIRED");
+                return;
+              }
+              setRealtimeState("connecting");
+              retryTimer = setTimeout(connect, retryDelay);
+            },
+            refetchDurableState,
+          });
+          if (cancelled || generation !== activeGeneration) {
+            subscription.close();
+            return;
+          }
+          realtimeHandle.current = subscription;
+          renewalTimer = setTimeout(() => {
+            if (cancelled || generation !== activeGeneration) return;
+            setRealtimeState("AUTH_REFRESH_REQUIRED");
+            refetchDurableState();
+            reconnectAttempt = 0;
+            connect();
+          }, renewalDelay);
+        })
+        .catch((error) => {
+          if (cancelled || generation !== activeGeneration) return;
+          const next = error && typeof error === "object" ? error as Problem : { code: "REQUEST_FAILED", message: "We could not complete that request." };
+          if (next.code === "REALTIME_AUTH_REFRESH_REQUIRED" || next.code === "REALTIME_DEGRADED_REFETCH_REQUIRED" || next.code === "REALTIME_STALE_DESCRIPTOR") {
+            setRealtimeState(next.code);
+            refetchDurableState();
+            return;
+          }
+          setRealtimeState("idle");
+        });
+    };
+    connect();
+    return () => {
+      cancelled = true;
+      clearTimers();
+      closeChannel();
+    };
+  }, [load, selected, state]);
 
   function handleProblem(error: unknown) {
     const next = (error && typeof error === "object" ? error : {}) as Problem;

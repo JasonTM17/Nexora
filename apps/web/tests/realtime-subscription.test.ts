@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
+  nextRealtimeDescriptorRenewalDelayMs,
   nextRealtimeReconnectDelayMs,
   subscribeToRealtimeDescriptor,
   type RealtimeDescriptor,
@@ -75,12 +76,31 @@ describe("Realtime subscription lifecycle", () => {
     const account = app("app/account/account-access.tsx");
 
     expect(account).toContain("options?.showLoading !== false");
-    expect(account).toContain("refetchDurableState: () => { void load({ showLoading: false }); }");
+    expect(account).toContain("const refetchDurableState = () => { void load({ showLoading: false }); };");
+    expect(account).toContain("}, [load, selected, state]);");
+    expect(account).not.toContain("}, [access, load, selected, state]);");
   });
 
   it("bounds reconnect attempts and stops after the contract sequence", () => {
     expect(nextRealtimeReconnectDelayMs(0, descriptor)).toBe(1000);
     expect(nextRealtimeReconnectDelayMs(3, descriptor)).toBe(10000);
     expect(nextRealtimeReconnectDelayMs(4, descriptor)).toBeNull();
+  });
+
+  it("renews a descriptor before expiry and refuses an invalid expiry", () => {
+    expect(nextRealtimeDescriptorRenewalDelayMs(descriptor, Date.parse("2026-08-10T00:59:00Z"))).toBe(50_000);
+    expect(nextRealtimeDescriptorRenewalDelayMs({ ...descriptor, expiresAt: "not-a-date" })).toBeNull();
+    expect(nextRealtimeDescriptorRenewalDelayMs(descriptor, Date.parse("2026-08-10T01:00:00Z"))).toBeNull();
+    expect(nextRealtimeDescriptorRenewalDelayMs(descriptor, Date.parse("2026-08-10T00:59:49.500Z"))).toBeNull();
+  });
+
+  it("uses descriptor renewal and the bounded reconnect sequence in the account lifecycle", () => {
+    const account = app("app/account/account-access.tsx");
+
+    expect(account).toContain("nextRealtimeDescriptorRenewalDelayMs(descriptor)");
+    expect(account).toContain("nextRealtimeReconnectDelayMs(reconnectAttempt++, descriptor)");
+    expect(account).toContain("retryTimer = setTimeout(connect, retryDelay)");
+    expect(account).toContain("renewalTimer = setTimeout(() => {");
+    expect(account).toContain("if (retryDelay === null)");
   });
 });

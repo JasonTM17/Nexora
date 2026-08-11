@@ -1,5 +1,6 @@
 package com.nexora.platform.realtime;
 
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -12,7 +13,7 @@ import org.springframework.validation.annotation.Validated;
 public record RealtimeDescriptorProperties(
         @NotBlank String issuer,
         @NotBlank @Size(min = 32) String jwtSecret,
-        @Min(30) long ttlSeconds) {
+        @Min(30) @Max(300) long ttlSeconds) {
 
     public RealtimeDescriptorProperties {
         issuer = issuer == null || issuer.isBlank() ? "nexora-platform-realtime" : issuer;

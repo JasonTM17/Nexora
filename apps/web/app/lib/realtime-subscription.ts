@@ -36,6 +36,14 @@ export function nextRealtimeReconnectDelayMs(attempt: number, descriptor: Realti
   return descriptor.reconnectBackoffMs[attempt] ?? null;
 }
 
+export function nextRealtimeDescriptorRenewalDelayMs(descriptor: RealtimeDescriptor, now = Date.now()) {
+  const expiresAt = Date.parse(descriptor.expiresAt);
+  if (!Number.isFinite(expiresAt)) return null;
+  // Discard stale/near-expiry credentials instead of briefly joining with them.
+  const renewalDelay = expiresAt - now - 10_000;
+  return renewalDelay >= 1000 ? renewalDelay : null;
+}
+
 export async function requestRealtimeDescriptor(input: {
   organizationId: string;
   eventType: RealtimeDescriptor["eventType"];
