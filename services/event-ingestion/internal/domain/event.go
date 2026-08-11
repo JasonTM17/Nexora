@@ -5,11 +5,22 @@ package domain
 
 import "time"
 
+type EventType string
+
+const (
+	EventTypePublicationInvalidated EventType = "PUBLICATION_INVALIDATED"
+	EventTypeWorkflowTransitioned   EventType = "WORKFLOW_TRANSITIONED"
+	EventTypeJobProgressChanged     EventType = "JOB_PROGRESS_CHANGED"
+	EventTypeNotificationEnqueued   EventType = "NOTIFICATION_ENQUEUED"
+	EventTypePresenceChanged        EventType = "PRESENCE_CHANGED"
+	EventTypeOutboxRecorded         EventType = "OUTBOX_RECORDED"
+)
+
 // EventEnvelope mirrors the M3-T01 canonical event fields without adding a
 // second shared contract source.
 type EventEnvelope struct {
 	EventID              string         `json:"eventId"`
-	EventType            string         `json:"eventType"`
+	EventType            EventType      `json:"eventType"`
 	EventVersion         int64          `json:"eventVersion"`
 	OrganizationID       string         `json:"organizationId"`
 	SubjectID            string         `json:"subjectId"`
@@ -23,4 +34,35 @@ type EventEnvelope struct {
 	SafePayload          map[string]any `json:"safePayload"`
 	OccurredAt           time.Time      `json:"occurredAt"`
 	SchemaVersion        string         `json:"schemaVersion"`
+}
+
+type Authorization struct {
+	OrganizationID string
+	SubjectID      string
+	ActorID        string
+	ResourceType   string
+	ResourceID     string
+	EventType      EventType
+	IssuedAt       time.Time
+	ExpiresAt      time.Time
+}
+
+type Route struct {
+	Scope       string
+	Purpose     string
+	NATSSubject string
+}
+
+var routes = map[EventType]Route{
+	EventTypePublicationInvalidated: {Scope: "tenant", Purpose: "publication", NATSSubject: "nexora.events.publication"},
+	EventTypeWorkflowTransitioned:   {Scope: "tenant", Purpose: "workflow", NATSSubject: "nexora.events.workflow"},
+	EventTypeJobProgressChanged:     {Scope: "resource", Purpose: "job-progress", NATSSubject: "nexora.events.job-progress"},
+	EventTypeNotificationEnqueued:   {Scope: "tenant", Purpose: "notification", NATSSubject: "nexora.events.notification"},
+	EventTypePresenceChanged:        {Scope: "resource", Purpose: "presence", NATSSubject: "nexora.events.presence"},
+	EventTypeOutboxRecorded:         {Scope: "tenant", Purpose: "outbox", NATSSubject: "nexora.events.outbox"},
+}
+
+func (eventType EventType) Route() (Route, bool) {
+	route, ok := routes[eventType]
+	return route, ok
 }
