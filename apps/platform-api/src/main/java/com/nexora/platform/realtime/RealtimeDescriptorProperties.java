@@ -6,9 +6,11 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Profile;
 import org.springframework.validation.annotation.Validated;
 
 @Validated
+@Profile("database")
 @ConfigurationProperties("nexora.realtime.descriptor")
 public record RealtimeDescriptorProperties(
         @NotBlank String issuer,
