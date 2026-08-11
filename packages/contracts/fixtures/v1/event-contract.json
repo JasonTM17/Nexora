@@ -53,12 +53,12 @@
     }
   ],
   "routingMatrix": [
-    { "eventType": "PUBLICATION_INVALIDATED", "operation": "publication.invalidate", "scope": "tenant", "purpose": "publication" },
-    { "eventType": "WORKFLOW_TRANSITIONED", "operation": "workflow.transition", "scope": "tenant", "purpose": "workflow" },
-    { "eventType": "JOB_PROGRESS_CHANGED", "operation": "job.progress", "scope": "resource", "purpose": "job-progress" },
-    { "eventType": "NOTIFICATION_ENQUEUED", "operation": "notification.enqueue", "scope": "tenant", "purpose": "notification" },
-    { "eventType": "PRESENCE_CHANGED", "operation": "presence.change", "scope": "resource", "purpose": "presence" },
-    { "eventType": "OUTBOX_RECORDED", "operation": "outbox.record", "scope": "tenant", "purpose": "outbox" }
+    { "eventType": "PUBLICATION_INVALIDATED", "operation": "publication.invalidate", "resourceTypes": ["page"], "scope": "tenant", "purpose": "publication" },
+    { "eventType": "WORKFLOW_TRANSITIONED", "operation": "workflow.transition", "resourceTypes": ["page"], "scope": "tenant", "purpose": "workflow" },
+    { "eventType": "JOB_PROGRESS_CHANGED", "operation": "job.progress", "resourceTypes": ["job"], "scope": "resource", "purpose": "job-progress" },
+    { "eventType": "NOTIFICATION_ENQUEUED", "operation": "notification.enqueue", "resourceTypes": ["notification"], "scope": "tenant", "purpose": "notification" },
+    { "eventType": "PRESENCE_CHANGED", "operation": "presence.change", "resourceTypes": ["collaboration_session"], "scope": "resource", "purpose": "presence" },
+    { "eventType": "OUTBOX_RECORDED", "operation": "outbox.record", "resourceTypes": ["outbox"], "scope": "tenant", "purpose": "outbox" }
   ],
   "events": [
     {
@@ -74,7 +74,7 @@
       "actorId": "80000000-0000-4000-8000-000000000001",
       "traceId": "00000000000000000000000000000001",
       "idempotencyKeyDigest": "sha256:6fb55c56873b994eb10bd194e65b098681d86ab4f57d100ab32d79fa0abc7a7a",
-      "payloadDigest": "sha256:20e817b51c4eeeaee8d9fd2c213b5518c725c329c3b5f8bde92a8f67c94f2774",
+      "payloadDigest": "sha256:5757d2decc21af6e904697887c476532756da2d79bd132fe70ef14d0dfbc60f1",
       "occurredAt": "2026-08-10T00:00:00Z",
       "safePayload": {
         "resourceId": "30000000-0000-4000-8000-000000000001",
@@ -83,8 +83,6 @@
         "subjectId": "90000000-0000-4000-8000-000000000001",
         "actorId": "80000000-0000-4000-8000-000000000001",
         "eventVersion": 1,
-        "jobState": "PENDING",
-        "progress": 0,
         "correlationId": "10000000000000000000000000000001",
         "traceId": "00000000000000000000000000000001",
         "receiptId": "a1000000-0000-4000-8000-000000000001",

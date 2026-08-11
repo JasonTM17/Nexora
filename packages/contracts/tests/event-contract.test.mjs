@@ -7,10 +7,9 @@ const domain = JSON.parse(await readFile(new URL("../domain/v1/event-contract.js
 const fixture = JSON.parse(await readFile(new URL("../fixtures/v1/event-contract.json", import.meta.url), "utf8"));
 const digestPattern = new RegExp(domain.eventEnvelope.digest.pattern);
 const uuidPattern = new RegExp(domain.fieldRules.uuid.pattern);
-const resourceTypePattern = new RegExp(domain.fieldRules.resourceType.pattern);
 const traceIdPattern = new RegExp(domain.fieldRules.traceId.pattern);
 const topicPattern = new RegExp(domain.fieldRules.topic.pattern);
-const jobStatePattern = new RegExp(domain.safePayload.valueRules.jobState);
+const jobStates = new Set(domain.safePayload.valueRules.jobState.enum);
 const routingByType = new Map(domain.eventRouting.matrix.map((entry) => [entry.eventType, entry]));
 const catalogByType = new Map(domain.safePayload.safeDisplayCatalog.map((entry) => [entry.eventType, entry]));
 const vectorByEventId = new Map(fixture.digestTestVectors.map((entry) => [entry.eventId, entry]));
@@ -18,6 +17,10 @@ const vectorByEventId = new Map(fixture.digestTestVectors.map((entry) => [entry.
 function canonicalJson(value) {
   if (typeof value === "string") {
     assert.equal(hasLoneSurrogate(value), false, "RFC 8785 input must be an I-JSON string");
+    return JSON.stringify(value);
+  }
+  if (typeof value === "number") {
+    assert.equal(Number.isFinite(value), true, "RFC 8785 input must contain finite JSON numbers");
     return JSON.stringify(value);
   }
   if (value === null || typeof value !== "object") return JSON.stringify(value);
@@ -77,16 +80,20 @@ function hasLoneSurrogate(value) {
 
 function isSafePayload(event) {
   const payload = event.safePayload;
+  const routing = routingByType.get(event.eventType);
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
   if (!domain.safePayload.requiredFields.every((field) => field in payload)) return false;
   if (Object.keys(payload).some((field) => !domain.safePayload.allowedFields.includes(field))) return false;
   if (domain.safePayload.valueRules.uuidFields.some((field) => field in payload && (typeof payload[field] !== "string" || !uuidPattern.test(payload[field])))) return false;
-  if (typeof payload.resourceType !== "string" || !resourceTypePattern.test(payload.resourceType)) return false;
+  if (!routing || !routing.resourceTypes.includes(payload.resourceType)) return false;
   if (typeof payload.traceId !== "string" || !traceIdPattern.test(payload.traceId)) return false;
   if ("correlationId" in payload && (typeof payload.correlationId !== "string" || !traceIdPattern.test(payload.correlationId))) return false;
   if (!Number.isInteger(payload.eventVersion) || payload.eventVersion < 1) return false;
-  if ("jobState" in payload && (typeof payload.jobState !== "string" || !jobStatePattern.test(payload.jobState))) return false;
-  if ("progress" in payload && (!Number.isInteger(payload.progress) || payload.progress < 0 || payload.progress > 100)) return false;
+  if (event.eventType === "JOB_PROGRESS_CHANGED") {
+    if (!jobStates.has(payload.jobState) || !Number.isInteger(payload.progress) || payload.progress < 0 || payload.progress > 100) return false;
+  } else if ("jobState" in payload || "progress" in payload) {
+    return false;
+  }
   if (payload.schemaVersion !== domain.eventEnvelope.version) return false;
   if (payload.resourceId !== event.resourceId || payload.resourceType !== event.resourceType
       || payload.organizationId !== event.organizationId || payload.subjectId !== event.subjectId
@@ -95,14 +102,29 @@ function isSafePayload(event) {
   return isExactSafeDisplay(event);
 }
 
-function isCanonicalEnvelope(event) {
+function isUtcInstant(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z$/.exec(value);
+  if (!match) return false;
+  const instant = new Date(value);
+  return !Number.isNaN(instant.valueOf())
+    && instant.getUTCFullYear() === Number(match[1])
+    && instant.getUTCMonth() + 1 === Number(match[2])
+    && instant.getUTCDate() === Number(match[3])
+    && instant.getUTCHours() === Number(match[4])
+    && instant.getUTCMinutes() === Number(match[5])
+    && instant.getUTCSeconds() === Number(match[6]);
+}
+
+function isCanonicalEnvelope(event, opaqueIdempotencyKey) {
   if (!domain.eventEnvelope.requiredFields.every((field) => field in event)) return false;
+  if (Object.keys(event).some((field) => !domain.eventEnvelope.allowedFields.includes(field))) return false;
   if (!uuidPattern.test(event.eventId) || !uuidPattern.test(event.organizationId) || !uuidPattern.test(event.subjectId) || !uuidPattern.test(event.actorId) || !uuidPattern.test(event.resourceId)) return false;
-  if (!routingByType.has(event.eventType) || !resourceTypePattern.test(event.resourceType) || !traceIdPattern.test(event.traceId) || !topicPattern.test(event.topic)) return false;
+  if (!routingByType.has(event.eventType) || !routingByType.get(event.eventType).resourceTypes.includes(event.resourceType) || !traceIdPattern.test(event.traceId) || !topicPattern.test(event.topic)) return false;
   if (!Number.isInteger(event.eventVersion) || event.eventVersion < 1 || event.schemaVersion !== domain.eventEnvelope.version) return false;
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(event.occurredAt) || Number.isNaN(Date.parse(event.occurredAt))) return false;
+  if (!digestPattern.test(event.idempotencyKeyDigest) || !digestPattern.test(event.payloadDigest) || !isUtcInstant(event.occurredAt)) return false;
   if (event.topic !== expectedTopic(event)) return false;
-  return isSafePayload(event);
+  if (!isSafePayload(event) || event.payloadDigest !== payloadDigest(event.safePayload)) return false;
+  return opaqueIdempotencyKey === undefined || event.idempotencyKeyDigest === idempotencyKeyDigest(event, opaqueIdempotencyKey);
 }
 
 test("freezes one versioned, operation-bound route and display catalog for every event type", () => {
@@ -120,6 +142,7 @@ test("freezes one versioned, operation-bound route and display catalog for every
   assert.deepEqual([...routingByType.keys()], domain.eventTypes);
   assert.ok([...routingByType.values()].every((entry) => /^[a-z]+\.[a-z]+$/.test(entry.operation)));
   assert.ok([...routingByType.values()].every((entry) => entry.ownership.includes("current ACTIVE membership")));
+  assert.ok([...routingByType.values()].every((entry) => entry.resourceTypes.every((resourceType) => domain.fieldRules.resourceType.enum.includes(resourceType))));
 
   assert.equal(catalogByType.size, domain.eventTypes.length);
   assert.deepEqual([...catalogByType.keys()], domain.eventTypes);
@@ -147,7 +170,7 @@ test("binds fixture payload and idempotency digests to canonical preimages", () 
     assert.match(event.payloadDigest, digestPattern);
     assert.equal(event.payloadDigest, payloadDigest(event.safePayload), `${event.eventType} payload digest`);
     assert.equal(event.idempotencyKeyDigest, idempotencyKeyDigest(event, vector.opaqueIdempotencyKey), `${event.eventType} idempotency digest`);
-    assert.ok(isCanonicalEnvelope(event), `${event.eventType} canonical scalar fields`);
+    assert.ok(isCanonicalEnvelope(event, vector.opaqueIdempotencyKey), `${event.eventType} canonical scalar fields`);
 
     const mutatedPayload = structuredClone(event.safePayload);
     mutatedPayload.safeDisplay.status = "TAMPERED";
@@ -180,6 +203,15 @@ test("canonical fixture enforces exact routing, ownership, display tuples and fa
   unsafeCorrelation.safePayload.correlationId = "alice@example.test";
   assert.equal(isSafePayload(unsafeCorrelation), false, "PII-shaped text cannot hide in an allowed metadata field");
 
+  const unsafeResourceType = structuredClone(publication);
+  unsafeResourceType.safePayload.resourceType = "alice_smith";
+  unsafeResourceType.resourceType = "alice_smith";
+  assert.equal(isCanonicalEnvelope(unsafeResourceType, vectorByEventId.get(publication.eventId).opaqueIdempotencyKey), false, "resource type must be a route-controlled vocabulary token");
+
+  const unsafeJobState = structuredClone(fixture.events.find((event) => event.eventType === "JOB_PROGRESS_CHANGED"));
+  unsafeJobState.safePayload.jobState = "ALICE_SMITH";
+  assert.equal(isSafePayload(unsafeJobState), false, "job state must be a finite server-controlled vocabulary token");
+
   const invalidUnicode = structuredClone(publication);
   invalidUnicode.safePayload.correlationId = "\ud800";
   assert.equal(isSafePayload(invalidUnicode), false, "lone surrogate is not I-JSON");
@@ -192,6 +224,28 @@ test("canonical fixture enforces exact routing, ownership, display tuples and fa
   const wrongRoute = structuredClone(publication);
   wrongRoute.topic = `tenant:${publication.organizationId}:outbox`;
   assert.notEqual(wrongRoute.topic, expectedTopic(wrongRoute), "event type may not select another route purpose");
+
+  const unexpectedEnvelopeField = structuredClone(publication);
+  unexpectedEnvelopeField.correlationId = "alice@example.test";
+  assert.equal(isCanonicalEnvelope(unexpectedEnvelopeField, vectorByEventId.get(publication.eventId).opaqueIdempotencyKey), false, "envelope rejects unallowlisted top-level metadata");
+
+  const malformedDigest = structuredClone(publication);
+  malformedDigest.payloadDigest = "sha256:not-a-valid-digest";
+  assert.equal(isCanonicalEnvelope(malformedDigest, vectorByEventId.get(publication.eventId).opaqueIdempotencyKey), false, "envelope rejects malformed digest fields");
+
+  const stalePayloadDigest = structuredClone(publication);
+  stalePayloadDigest.safePayload.safeDisplay.status = "INVALIDATED";
+  stalePayloadDigest.safePayload.safeDisplay.variant = "danger";
+  assert.equal(isCanonicalEnvelope(stalePayloadDigest, vectorByEventId.get(publication.eventId).opaqueIdempotencyKey), false, "payload digest is recomputed before accepting a catalog-valid mutation");
+
+  const staleIdempotencyDigest = structuredClone(publication);
+  staleIdempotencyDigest.resourceId = "30000000-0000-4000-8000-000000000009";
+  staleIdempotencyDigest.safePayload.resourceId = staleIdempotencyDigest.resourceId;
+  assert.equal(isCanonicalEnvelope(staleIdempotencyDigest, vectorByEventId.get(publication.eventId).opaqueIdempotencyKey), false, "idempotency digest is recomputed against resource scope in known-answer verification");
+
+  const impossibleDate = structuredClone(publication);
+  impossibleDate.occurredAt = "2026-02-29T00:00:00Z";
+  assert.equal(isCanonicalEnvelope(impossibleDate, vectorByEventId.get(publication.eventId).opaqueIdempotencyKey), false, "UTC calendar instant must exist");
 
   const formatValidWrongDigest = `sha256:${"a".repeat(64)}`;
   assert.match(formatValidWrongDigest, digestPattern);

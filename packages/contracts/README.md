@@ -61,7 +61,8 @@ binds the server-derived routing operation and resource scope to the opaque key
 without emitting that raw key. The contract fixture contains known-answer
 vectors for both digests. All allowed scalar metadata is grammar-bounded:
 UUID identity fields, lowercase resource types, fixed-width opaque trace and
-correlation identifiers, tokenized job states, and integer progress only;
+correlation identifiers, route-specific finite resource types and job states,
+and integer progress only;
 free-form identifiers and invalid I-JSON text are rejected before digesting.
 New producers emit schema `1.1.0`; ingress and
 consumers reject legacy `1.0.0` free-form-display envelopes fail closed until a

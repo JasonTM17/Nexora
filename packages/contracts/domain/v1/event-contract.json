@@ -28,6 +28,23 @@
       "safePayload",
       "occurredAt"
     ],
+    "allowedFields": [
+      "eventId",
+      "eventType",
+      "eventVersion",
+      "schemaVersion",
+      "organizationId",
+      "subjectId",
+      "resourceType",
+      "resourceId",
+      "topic",
+      "actorId",
+      "traceId",
+      "idempotencyKeyDigest",
+      "payloadDigest",
+      "safePayload",
+      "occurredAt"
+    ],
     "rules": [
       "eventId is a UUID; schemaVersion selects the wire contract and idempotencyKeyDigest/payloadDigest use the exact SHA-256 wire format. Neither digest is authorization proof.",
       "organizationId, subjectId, actorId, resourceType and resourceId are server-derived from trusted context, not browser input.",
@@ -66,7 +83,7 @@
   ],
   "fieldRules": {
     "uuid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-    "resourceType": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+    "resourceType": { "type": "string", "enum": ["page", "job", "notification", "collaboration_session", "outbox"] },
     "traceId": { "type": "string", "pattern": "^[a-f0-9]{32}$" },
     "topic": { "type": "string", "pattern": "^(tenant|resource):[0-9a-f-]{36}:[a-z][a-z0-9-]{0,31}$" },
     "eventVersion": { "type": "integer", "minimum": 1 },
@@ -78,6 +95,7 @@
       {
         "eventType": "PUBLICATION_INVALIDATED",
         "operation": "publication.invalidate",
+        "resourceTypes": ["page"],
         "scope": "tenant",
         "purpose": "publication",
         "ownership": "current ACTIVE membership for the tenant"
@@ -85,6 +103,7 @@
       {
         "eventType": "WORKFLOW_TRANSITIONED",
         "operation": "workflow.transition",
+        "resourceTypes": ["page"],
         "scope": "tenant",
         "purpose": "workflow",
         "ownership": "current ACTIVE membership for the tenant"
@@ -92,6 +111,7 @@
       {
         "eventType": "JOB_PROGRESS_CHANGED",
         "operation": "job.progress",
+        "resourceTypes": ["job"],
         "scope": "resource",
         "purpose": "job-progress",
         "ownership": "current ACTIVE membership for the resource owner"
@@ -99,6 +119,7 @@
       {
         "eventType": "NOTIFICATION_ENQUEUED",
         "operation": "notification.enqueue",
+        "resourceTypes": ["notification"],
         "scope": "tenant",
         "purpose": "notification",
         "ownership": "current ACTIVE membership for the tenant"
@@ -106,6 +127,7 @@
       {
         "eventType": "PRESENCE_CHANGED",
         "operation": "presence.change",
+        "resourceTypes": ["collaboration_session"],
         "scope": "resource",
         "purpose": "presence",
         "ownership": "current ACTIVE membership for the resource owner"
@@ -113,6 +135,7 @@
       {
         "eventType": "OUTBOX_RECORDED",
         "operation": "outbox.record",
+        "resourceTypes": ["outbox"],
         "scope": "tenant",
         "purpose": "outbox",
         "ownership": "current ACTIVE membership for the tenant"
@@ -120,7 +143,7 @@
     ],
     "rules": [
       "The server chooses operation, scope, tenant/resource identifier and purpose from current ownership facts and event type.",
-      "Clients may not invent a scope or purpose outside this matrix.",
+      "Clients may not invent an operation, resource type, scope or purpose outside this matrix.",
       "The identifier alone never grants access or publish rights."
     ]
   },
@@ -214,11 +237,11 @@
     ],
     "valueRules": {
       "uuidFields": ["resourceId", "organizationId", "subjectId", "actorId", "receiptId"],
-      "resourceType": "^[a-z][a-z0-9_-]{0,63}$",
+      "resourceType": "must match the eventRouting.matrix resourceTypes entry for envelope eventType",
       "traceId": "^[a-f0-9]{32}$",
       "correlationId": "^[a-f0-9]{32}$",
       "eventVersion": "positive integer",
-      "jobState": "^[A-Z][A-Z0-9_]{1,63}$",
+      "jobState": { "enum": ["QUEUED", "RUNNING", "COMPLETED", "FAILED", "CANCELED"] },
       "progress": "integer between 0 and 100 inclusive",
       "schemaVersion": "exactly 1.1.0",
       "unicode": "All strings are valid I-JSON strings; lone UTF-16 surrogates are rejected before RFC 8785 canonicalization."
@@ -263,6 +286,10 @@
       { "eventType": "NOTIFICATION_ENQUEUED", "label": "NOTIFICATION_ENQUEUED", "statusVariants": [{ "status": "QUEUED", "variant": "info" }, { "status": "DELIVERED", "variant": "success" }, { "status": "FAILED", "variant": "danger" }] },
       { "eventType": "PRESENCE_CHANGED", "label": "PRESENCE_CHANGED", "statusVariants": [{ "status": "ACTIVE", "variant": "success" }, { "status": "INACTIVE", "variant": "neutral" }] },
       { "eventType": "OUTBOX_RECORDED", "label": "OUTBOX_RECORDED", "statusVariants": [{ "status": "PENDING", "variant": "info" }, { "status": "CLAIMED", "variant": "warning" }, { "status": "PUBLISHED", "variant": "success" }, { "status": "FAILED", "variant": "danger" }, { "status": "DEAD_LETTER", "variant": "danger" }] }
+    ],
+    "rules": [
+      "jobState and progress appear together only for JOB_PROGRESS_CHANGED; both are required for that event type and forbidden for every other event type.",
+      "Every safePayload scalar must match valueRules and exactly mirror the equivalent server-derived envelope field where one exists."
     ]
   },
   "compatibility": {
