@@ -1,0 +1,32 @@
+{
+  "eventId": "70000000-0000-4000-8000-000000000001",
+  "eventType": "PUBLICATION_INVALIDATED",
+  "eventVersion": 1,
+  "organizationId": "10000000-0000-4000-8000-000000000001",
+  "subjectId": "90000000-0000-4000-8000-000000000001",
+  "resourceType": "page",
+  "resourceId": "30000000-0000-4000-8000-000000000001",
+  "topic": "tenant:10000000-0000-4000-8000-000000000001:publication",
+  "actorId": "80000000-0000-4000-8000-000000000001",
+  "traceId": "trace-event-alpha-publication",
+  "idempotencyKeyDigest": "sha256:event-contract-alpha-publication",
+  "payloadDigest": "sha256:1111111111111111111111111111111111111111111111111111111111",
+  "safePayload": {
+    "resourceId": "30000000-0000-4000-8000-000000000001",
+    "resourceType": "page",
+    "organizationId": "10000000-0000-4000-8000-000000000001",
+    "subjectId": "90000000-0000-4000-8000-000000000001",
+    "actorId": "80000000-0000-4000-8000-000000000001",
+    "eventVersion": 1,
+    "traceId": "trace-event-alpha-publication",
+    "schemaVersion": "1.0.0",
+    "safeDisplay": {
+      "label": "Alpha publication invalidated",
+      "status": "queued",
+      "hint": "Awaiting durable publication",
+      "variant": "warning"
+    }
+  },
+  "occurredAt": "2026-08-10T23:59:59Z",
+  "schemaVersion": "1.0.0"
+}
