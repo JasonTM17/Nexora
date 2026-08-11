@@ -18,13 +18,7 @@ type Limiter interface {
 }
 
 type Publisher interface {
-	Publish(context.Context, string, domain.EventEnvelope) (PublishAck, error)
-}
-
-type PublishAck struct {
-	Stream    string
-	Sequence  uint64
-	Duplicate bool
+	Publish(context.Context, string, domain.EventEnvelope) (domain.PublishAck, error)
 }
 
 type Collector struct {

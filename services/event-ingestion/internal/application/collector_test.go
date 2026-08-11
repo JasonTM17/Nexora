@@ -33,11 +33,11 @@ func (stub *limiterStub) Allow(key string, _ time.Time) bool {
 type publisherStub struct {
 	subject  string
 	envelope domain.EventEnvelope
-	ack      PublishAck
+	ack      domain.PublishAck
 	err      error
 }
 
-func (stub *publisherStub) Publish(_ context.Context, subject string, envelope domain.EventEnvelope) (PublishAck, error) {
+func (stub *publisherStub) Publish(_ context.Context, subject string, envelope domain.EventEnvelope) (domain.PublishAck, error) {
 	stub.subject = subject
 	stub.envelope = envelope
 	return stub.ack, stub.err
@@ -46,7 +46,7 @@ func (stub *publisherStub) Publish(_ context.Context, subject string, envelope d
 func TestCollectorPublishesOnlyAuthorizedValidatedEnvelope(t *testing.T) {
 	envelope := validEnvelope()
 	limiter := &limiterStub{allowed: true}
-	publisher := &publisherStub{ack: PublishAck{Stream: "EVENTS", Sequence: 12}}
+	publisher := &publisherStub{ack: domain.PublishAck{Stream: "EVENTS", Sequence: 12}}
 	collector, err := NewCollector(
 		authorizerStub{authorization: validAuthorization(envelope)},
 		limiter,

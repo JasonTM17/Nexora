@@ -58,6 +58,12 @@ type PublishReceipt struct {
 	Duplicate bool
 }
 
+type PublishAck struct {
+	Stream    string
+	Sequence  uint64
+	Duplicate bool
+}
+
 type Route struct {
 	Scope       string
 	Purpose     string
