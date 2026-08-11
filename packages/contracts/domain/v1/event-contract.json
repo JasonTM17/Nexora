@@ -59,11 +59,11 @@
       "wireFormat": "sha256:<64 lowercase hexadecimal characters>",
       "pattern": "^sha256:[a-f0-9]{64}$",
       "payloadDigest": {
-        "canonicalBytes": "UTF-8 bytes of nexora:event-payload:1.1\\n followed by RFC 8785 JCS canonical JSON for safePayload.",
+        "canonicalBytes": "UTF-8 bytes of nexora:event-payload:1.1 followed by one ASCII LF (U+000A), then RFC 8785 JCS canonical JSON for safePayload.",
         "verification": "The receiver recomputes this digest from the received safePayload and rejects a mismatch before accepting or publishing the envelope."
       },
       "idempotencyKeyDigest": {
-        "canonicalBytes": "UTF-8 bytes of nexora:event-idempotency:1.1\\n followed by RFC 8785 JCS canonical JSON for {operation, organizationId, topic, eventType, resourceType, resourceId, opaqueIdempotencyKey}; no delimiter ambiguity is permitted.",
+        "canonicalBytes": "UTF-8 bytes of nexora:event-idempotency:1.1 followed by one ASCII LF (U+000A), then RFC 8785 JCS canonical JSON for {operation, organizationId, topic, eventType, resourceType, resourceId, opaqueIdempotencyKey}; no delimiter ambiguity is permitted.",
         "verification": "The producer computes it from the server-derived routing scope plus the opaque request key. The raw opaque key is never emitted; receivers validate the exact wire format, envelope immutability and scope rather than reconstructing it."
       },
       "rules": [
