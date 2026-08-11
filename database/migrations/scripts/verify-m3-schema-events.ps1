@@ -59,8 +59,8 @@ try {
 
     $migrationFiles = Get-ChildItem -LiteralPath $migrationDirectory -File -Filter 'V*__*.sql' |
         Sort-Object Name
-    if ($migrationFiles.Count -ne 19) {
-        throw "Expected exactly nineteen ordered migrations through scoped M3-DB01; found $($migrationFiles.Count)"
+    if ($migrationFiles.Count -ne 20) {
+        throw "Expected exactly twenty ordered migrations through scoped M3-DB01; found $($migrationFiles.Count)"
     }
 
     $env:NEXORA_POSTGRES_PORT = $PostgresPort
@@ -151,7 +151,8 @@ GRANT SELECT, INSERT ON realtime.messages TO authenticated;
         'V016__realtime_presence_resource_projection.sql',
         'V017__realtime_projection_trigger_privileges.sql',
         'V018__realtime_descriptor_event_versions.sql',
-        'V019__realtime_descriptor_epoch_lookup.sql'
+        'V019__realtime_descriptor_epoch_lookup.sql',
+        'V020__event_contract_v1_1_and_consumer_ledger.sql'
     ))
     $preM3Migrations = @($migrationFiles | Where-Object Name -notin @(
         'V014__outbox_events_and_private_realtime_policy.sql',
@@ -159,10 +160,11 @@ GRANT SELECT, INSERT ON realtime.messages TO authenticated;
         'V016__realtime_presence_resource_projection.sql',
         'V017__realtime_projection_trigger_privileges.sql',
         'V018__realtime_descriptor_event_versions.sql',
-        'V019__realtime_descriptor_epoch_lookup.sql'
+        'V019__realtime_descriptor_epoch_lookup.sql',
+        'V020__event_contract_v1_1_and_consumer_ledger.sql'
     ))
-    if ($m3Migrations.Count -ne 6) {
-        throw 'Expected ordered V014 through V019 M3-DB01 migrations.'
+    if ($m3Migrations.Count -ne 7) {
+        throw 'Expected ordered V014 through V020 M3-DB01 migrations.'
     }
 
     foreach ($migration in $preM3Migrations) {

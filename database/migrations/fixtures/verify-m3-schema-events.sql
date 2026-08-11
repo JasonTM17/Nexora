@@ -25,6 +25,20 @@ BEGIN
   END IF;
 
   IF NOT EXISTS (
+    SELECT 1 FROM pg_class relation
+    JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+    WHERE namespace.nspname = 'nexora'
+      AND relation.relname = 'event_ledger_entries'
+      AND relation.relrowsecurity
+      AND relation.relforcerowsecurity
+  ) OR has_table_privilege('nexora_runtime', 'nexora.event_ledger_entries', 'SELECT')
+     OR has_table_privilege('nexora_runtime', 'nexora.event_ledger_entries', 'INSERT')
+     OR has_table_privilege('nexora_runtime', 'nexora.event_ledger_entries', 'UPDATE')
+     OR has_table_privilege('nexora_runtime', 'nexora.event_ledger_entries', 'DELETE') THEN
+    RAISE EXCEPTION 'runtime must have function-only private event-ledger access';
+  END IF;
+
+  IF NOT EXISTS (
     SELECT 1 FROM pg_policy
     WHERE polrelid = 'realtime.messages'::regclass
       AND polname = 'realtime_messages_select_scoped_private_channels'
@@ -77,7 +91,7 @@ BEGIN
     JOIN pg_namespace namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'nexora'
       AND procedure.proname IN (
-        'record_outbox_event', 'claim_outbox_events',
+        'record_outbox_event', 'record_event_ledger_entry', 'claim_outbox_events',
         'publish_claimed_outbox_event', 'fail_claimed_outbox_event',
         'dead_letter_failed_outbox_event',
         'realtime_private_channel_authorized', 'realtime_current_channel_authorized',
@@ -101,6 +115,13 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     NULL;
   END;
+
+  BEGIN
+    PERFORM count(*) FROM nexora.event_ledger_entries;
+    RAISE EXCEPTION 'runtime directly read the private event ledger';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
 END
 $$;
 
@@ -121,7 +142,9 @@ DECLARE
   retry_floor interval;
   retry_ceiling interval;
 BEGIN
-  IF NOT nexora.outbox_safe_payload_is_allowed(
+  IF NOT nexora.outbox_safe_payload_v1_1_is_allowed(
+    'PUBLICATION_INVALIDATED',
+    'page',
     '{
       "resourceId":"30000000-0000-4000-8000-000000000001",
       "resourceType":"page",
@@ -129,27 +152,23 @@ BEGIN
       "subjectId":"20000000-0000-4000-8000-000000000007",
       "actorId":"20000000-0000-4000-8000-000000000007",
       "eventVersion":1,
-      "correlationId":"corr-alpha-001",
-      "traceId":"trace-outbox-alpha-001",
-      "receiptId":"receipt-alpha-001",
-      "schemaVersion":"1.0.0",
+      "correlationId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "traceId":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "receiptId":"50000000-0000-4000-8000-0000000000aa",
+      "schemaVersion":"1.1.0",
       "safeDisplay":{
-        "label":"Alpha publication invalidated",
-        "status":"queued",
-        "hint":"Awaiting durable publication",
-        "variant":"warning"
+        "label":"PUBLICATION_INVALIDATED",
+        "status":"ARCHIVED",
+        "variant":"neutral"
       }
     }'::jsonb
   ) THEN
     RAISE EXCEPTION 'valid safe payload was rejected';
   END IF;
 
-  IF nexora.outbox_safe_payload_is_allowed('{"body":"secret content"}'::jsonb)
-     OR nexora.outbox_safe_payload_is_allowed('{"safeDisplay":{"label":"Bearer leaked-token","status":"queued"}}'::jsonb)
-     OR nexora.outbox_safe_payload_is_allowed('{"safeDisplay":{}}'::jsonb)
-     OR nexora.outbox_safe_payload_is_allowed('{"safeDisplay":{"label":"Alpha","status":{"nested":"queued"}}}'::jsonb)
-     OR nexora.outbox_safe_payload_is_allowed('{"safeDisplay":{"label":"Alpha","status":"queued","variant":"purple"}}'::jsonb)
-     OR nexora.outbox_safe_payload_is_allowed('{"traceId":"Bearer token should not survive"}'::jsonb) THEN
+  IF nexora.outbox_safe_payload_v1_1_is_allowed('PUBLICATION_INVALIDATED', 'page', '{"body":"secret content"}'::jsonb)
+     OR nexora.outbox_safe_payload_v1_1_is_allowed('PUBLICATION_INVALIDATED', 'page', '{"safeDisplay":{"label":"PUBLICATION_INVALIDATED","status":"ARCHIVED","variant":"neutral"}}'::jsonb)
+     OR nexora.outbox_safe_payload_v1_1_is_allowed('PUBLICATION_INVALIDATED', 'page', '{"resourceId":"30000000-0000-4000-8000-000000000001","resourceType":"page","organizationId":"10000000-0000-4000-8000-000000000001","subjectId":"20000000-0000-4000-8000-000000000007","actorId":"20000000-0000-4000-8000-000000000007","eventVersion":1,"traceId":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","schemaVersion":"1.1.0","safeDisplay":{"label":"PUBLICATION_INVALIDATED","status":"ARCHIVED","variant":"purple"}}'::jsonb) THEN
     RAISE EXCEPTION 'unsafe payload or sensitive display value passed';
   END IF;
 
@@ -163,9 +182,9 @@ BEGIN
     'PUBLICATION_INVALIDATED',
     1,
     'tenant:10000000-0000-4000-8000-000000000001:publication',
-    '1.0.0',
-    'sha256:event-contract-alpha-publication',
-    'sha256:event-contract-alpha-publication-fingerprint',
+    '1.1.0',
+    'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     'sha256:1111111111111111111111111111111111111111111111111111111111111111',
     '{
       "resourceId":"30000000-0000-4000-8000-000000000001",
@@ -174,15 +193,14 @@ BEGIN
       "subjectId":"20000000-0000-4000-8000-000000000007",
       "actorId":"20000000-0000-4000-8000-000000000007",
       "eventVersion":1,
-      "correlationId":"corr-alpha-001",
-      "traceId":"trace-outbox-alpha-001",
-      "receiptId":"receipt-alpha-001",
-      "schemaVersion":"1.0.0",
+      "correlationId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "traceId":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "receiptId":"50000000-0000-4000-8000-0000000000aa",
+      "schemaVersion":"1.1.0",
       "safeDisplay":{
-        "label":"Alpha publication invalidated",
-        "status":"queued",
-        "hint":"Awaiting durable publication",
-        "variant":"warning"
+        "label":"PUBLICATION_INVALIDATED",
+        "status":"ARCHIVED",
+        "variant":"neutral"
       }
     }'::jsonb,
     '2026-08-10T00:10:00Z'
@@ -198,9 +216,9 @@ BEGIN
     'PUBLICATION_INVALIDATED',
     1,
     'tenant:10000000-0000-4000-8000-000000000001:publication',
-    '1.0.0',
-    'sha256:event-contract-alpha-publication',
-    'sha256:event-contract-alpha-publication-fingerprint',
+    '1.1.0',
+    'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     'sha256:1111111111111111111111111111111111111111111111111111111111111111',
     '{
       "resourceId":"30000000-0000-4000-8000-000000000001",
@@ -209,15 +227,14 @@ BEGIN
       "subjectId":"20000000-0000-4000-8000-000000000007",
       "actorId":"20000000-0000-4000-8000-000000000007",
       "eventVersion":1,
-      "correlationId":"corr-alpha-001",
-      "traceId":"trace-outbox-alpha-001",
-      "receiptId":"receipt-alpha-001",
-      "schemaVersion":"1.0.0",
+      "correlationId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "traceId":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "receiptId":"50000000-0000-4000-8000-0000000000aa",
+      "schemaVersion":"1.1.0",
       "safeDisplay":{
-        "label":"Alpha publication invalidated",
-        "status":"queued",
-        "hint":"Awaiting durable publication",
-        "variant":"warning"
+        "label":"PUBLICATION_INVALIDATED",
+        "status":"ARCHIVED",
+        "variant":"neutral"
       }
     }'::jsonb,
     '2026-08-10T00:10:00Z'
@@ -238,11 +255,11 @@ BEGIN
       'PUBLICATION_INVALIDATED',
       1,
       'tenant:10000000-0000-4000-8000-000000000001:publication',
-      '1.0.0',
-      'sha256:event-contract-alpha-publication',
-      'sha256:different-request-fingerprint',
+      '1.1.0',
+      'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
       'sha256:1111111111111111111111111111111111111111111111111111111111111111',
-      '{}'::jsonb,
+      '{"resourceId":"30000000-0000-4000-8000-000000000001","resourceType":"page","organizationId":"10000000-0000-4000-8000-000000000001","subjectId":"20000000-0000-4000-8000-000000000007","actorId":"20000000-0000-4000-8000-000000000007","eventVersion":1,"correlationId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","traceId":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","receiptId":"50000000-0000-4000-8000-0000000000aa","schemaVersion":"1.1.0","safeDisplay":{"label":"PUBLICATION_INVALIDATED","status":"ARCHIVED","variant":"neutral"}}'::jsonb,
       '2026-08-10T00:10:00Z'
     );
     RAISE EXCEPTION 'changed request reused an idempotency key';
@@ -261,11 +278,11 @@ BEGIN
       'PUBLICATION_INVALIDATED',
       1,
       'tenant:10000000-0000-4000-8000-000000000001:presence',
-      '1.0.0',
-      'sha256:event-contract-alpha-misrouted',
-      'sha256:event-contract-alpha-misrouted-fingerprint',
+      '1.1.0',
+      'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+      'sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
       'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      '{}'::jsonb,
+      '{"resourceId":"30000000-0000-4000-8000-000000000001","resourceType":"page","organizationId":"10000000-0000-4000-8000-000000000001","subjectId":"20000000-0000-4000-8000-000000000007","actorId":"20000000-0000-4000-8000-000000000007","eventVersion":1,"traceId":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","schemaVersion":"1.1.0","safeDisplay":{"label":"PUBLICATION_INVALIDATED","status":"ARCHIVED","variant":"neutral"}}'::jsonb,
       '2026-08-10T00:10:00Z'
     );
     RAISE EXCEPTION 'event type accepted a mismatched topic purpose';
@@ -283,9 +300,9 @@ BEGIN
       '30000000-0000-4000-8000-000000000001',
       'PUBLICATION_INVALIDATED', 1,
       'tenant:10000000-0000-4000-8000-000000000002:publication',
-      '1.0.0', 'sha256:cross-tenant-key-0001',
-      'sha256:cross-tenant-fingerprint-0001',
-      'sha256:cross-tenant-payload-0001', '{}'::jsonb
+      '1.1.0', 'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+      'sha256:abababababababababababababababababababababababababababababababab',
+      'sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd', '{}'::jsonb
     );
     RAISE EXCEPTION 'cross-tenant outbox record unexpectedly succeeded';
   EXCEPTION WHEN insufficient_privilege THEN
@@ -302,9 +319,9 @@ BEGIN
     'JOB_PROGRESS_CHANGED',
     1,
     'resource:50000000-0000-4000-8000-000000000010:job-progress',
-    '1.0.0',
-    'sha256:event-contract-alpha-job-0001',
-    'sha256:event-contract-alpha-job-fingerprint-0001',
+    '1.1.0',
+    'sha256:1111111111111111111111111111111111111111111111111111111111111111',
+    'sha256:2222222222222222222222222222222222222222222222222222222222222222',
     'sha256:2222222222222222222222222222222222222222222222222222222222222222',
     '{
       "resourceId":"50000000-0000-4000-8000-000000000010",
@@ -315,12 +332,12 @@ BEGIN
       "eventVersion":1,
       "jobState":"RUNNING",
       "progress":45,
-      "schemaVersion":"1.0.0",
+      "traceId":"cccccccccccccccccccccccccccccccc",
+      "schemaVersion":"1.1.0",
       "safeDisplay":{
-        "label":"Alpha job progress",
-        "status":"running",
-        "state":"RUNNING",
-        "progressText":"45%"
+        "label":"JOB_PROGRESS_CHANGED",
+        "status":"RUNNING",
+        "variant":"warning"
       }
     }'::jsonb
   );
@@ -436,6 +453,111 @@ END
 $$;
 COMMIT;
 
+-- The consumer ledger is function-only and records an exact 1.1 envelope once.
+-- M3-T05 must recompute the JCS payload digest before this function is called;
+-- this database fixture verifies structural/identity replay safety only.
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000007', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000007', true);
+DO $$
+DECLARE
+  ledger_id uuid;
+  duplicate_seen boolean;
+  payload jsonb := jsonb_build_object(
+    'resourceId', '30000000-0000-4000-8000-000000000001',
+    'resourceType', 'page',
+    'organizationId', '10000000-0000-4000-8000-000000000001',
+    'subjectId', '20000000-0000-4000-8000-000000000007',
+    'actorId', '20000000-0000-4000-8000-000000000007',
+    'eventVersion', 1,
+    'traceId', 'dddddddddddddddddddddddddddddddd',
+    'schemaVersion', '1.1.0',
+    'safeDisplay', jsonb_build_object(
+      'label', 'PUBLICATION_INVALIDATED', 'status', 'ARCHIVED', 'variant', 'neutral'
+    )
+  );
+BEGIN
+  SELECT result.event_id, result.duplicate INTO ledger_id, duplicate_seen
+  FROM nexora.record_event_ledger_entry(
+    '50000000-0000-4000-8000-0000000000b1',
+    '10000000-0000-4000-8000-000000000001',
+    '20000000-0000-4000-8000-000000000007',
+    '20000000-0000-4000-8000-000000000007',
+    'page', '30000000-0000-4000-8000-000000000001',
+    'PUBLICATION_INVALIDATED', 1,
+    'tenant:10000000-0000-4000-8000-000000000001:publication',
+    '1.1.0',
+    'sha256:3333333333333333333333333333333333333333333333333333333333333333',
+    'sha256:4444444444444444444444444444444444444444444444444444444444444444',
+    payload, '2026-08-11T00:00:00Z'
+  ) AS result;
+
+  IF ledger_id <> '50000000-0000-4000-8000-0000000000b1' OR duplicate_seen THEN
+    RAISE EXCEPTION 'first consumer ledger persistence did not create the exact receipt';
+  END IF;
+
+  SELECT result.event_id, result.duplicate INTO ledger_id, duplicate_seen
+  FROM nexora.record_event_ledger_entry(
+    '50000000-0000-4000-8000-0000000000b1',
+    '10000000-0000-4000-8000-000000000001',
+    '20000000-0000-4000-8000-000000000007',
+    '20000000-0000-4000-8000-000000000007',
+    'page', '30000000-0000-4000-8000-000000000001',
+    'PUBLICATION_INVALIDATED', 1,
+    'tenant:10000000-0000-4000-8000-000000000001:publication',
+    '1.1.0',
+    'sha256:3333333333333333333333333333333333333333333333333333333333333333',
+    'sha256:4444444444444444444444444444444444444444444444444444444444444444',
+    payload, '2026-08-11T00:00:00Z'
+  ) AS result;
+
+  IF ledger_id <> '50000000-0000-4000-8000-0000000000b1' OR NOT duplicate_seen THEN
+    RAISE EXCEPTION 'exact consumer replay did not reuse the durable receipt';
+  END IF;
+
+  BEGIN
+    PERFORM nexora.record_event_ledger_entry(
+      '50000000-0000-4000-8000-0000000000b2',
+      '10000000-0000-4000-8000-000000000001',
+      '20000000-0000-4000-8000-000000000007',
+      '20000000-0000-4000-8000-000000000007',
+      'page', '30000000-0000-4000-8000-000000000001',
+      'PUBLICATION_INVALIDATED', 1,
+      'tenant:10000000-0000-4000-8000-000000000001:publication',
+      '1.1.0',
+      'sha256:3333333333333333333333333333333333333333333333333333333333333333',
+      'sha256:5555555555555555555555555555555555555555555555555555555555555555',
+      payload, '2026-08-11T00:00:00Z'
+    );
+    RAISE EXCEPTION 'reused consumer idempotency key accepted a different envelope';
+  EXCEPTION WHEN unique_violation THEN
+    NULL;
+  END;
+
+  BEGIN
+    PERFORM nexora.record_event_ledger_entry(
+      '50000000-0000-4000-8000-0000000000b3',
+      '10000000-0000-4000-8000-000000000001',
+      '20000000-0000-4000-8000-000000000007',
+      '20000000-0000-4000-8000-000000000007',
+      'page', '30000000-0000-4000-8000-000000000001',
+      'PUBLICATION_INVALIDATED', 1,
+      'tenant:10000000-0000-4000-8000-000000000001:publication',
+      '1.0.0',
+      'sha256:6666666666666666666666666666666666666666666666666666666666666666',
+      'sha256:7777777777777777777777777777777777777777777777777777777777777777',
+      payload, '2026-08-11T00:00:00Z'
+    );
+    RAISE EXCEPTION 'legacy consumer envelope was not rejected';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    NULL;
+  END;
+END
+$$;
+COMMIT;
+
 BEGIN;
 SET LOCAL ROLE nexora_migrator;
 DO $$
@@ -444,6 +566,9 @@ BEGIN
      OR (SELECT count(*) FROM nexora.outbox_events WHERE state = 'PUBLISHED') <> 1
      OR (SELECT count(*) FROM nexora.outbox_events WHERE state = 'DEAD_LETTER') <> 1 THEN
     RAISE EXCEPTION 'final outbox projection does not retain both terminal outcomes';
+  END IF;
+  IF (SELECT count(*) FROM nexora.event_ledger_entries) <> 1 THEN
+    RAISE EXCEPTION 'event ledger did not retain one durable logical receipt';
   END IF;
 END
 $$;

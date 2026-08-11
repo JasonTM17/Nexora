@@ -189,9 +189,27 @@ to execute arbitrary SQL as `nexora_runtime` could already forge that tuple
 against every runtime RLS policy. V019 therefore accepts only the four frozen
 route shapes and never accepts caller-selected subject identity.
 
+`V020__event_contract_v1_1_and_consumer_ledger.sql` is the forward-only
+contract-boundary expansion for M3-T01 `1.1.0`. It replaces the runtime outbox
+record path with exact route, digest-wire-format, finite resource-type and
+fixed `safeDisplay` catalog checks. The payload digest remains a runtime
+canonical-JCS obligation: M3-T05 must recompute it before invoking the record
+function; the database checks its exact wire shape, identity mirrors and the
+durable receipt boundary but never pretends to implement RFC 8785.
+
+Outstanding `1.0.0` rows are never reserialized. The migration preserves
+terminal historical rows and moves only active legacy rows to `DEAD_LETTER`
+with `LEGACY_SCHEMA_REJECTED` plus bounded retention. New producers must emit
+only `1.1.0`; M3-T02 owns that application upgrade. `event_ledger_entries` is
+the private, forced-RLS, function-only receipt ledger for M3-T05. Its record
+function requires the established transaction-local ACTIVE
+subject/organization/membership context, returns an exact duplicate receipt,
+and rejects changed event-ID or idempotency reuse. It is not an analytics,
+browser, Data API, provider or hosted-product surface.
+
 The M3 proof script creates a disposable local stand-in for `auth.uid()`,
 `auth.jwt()`, `realtime.topic()`, and `realtime.messages`, applies `V001`
-through `V019`, reruns the M2 tenant/CMS fixtures, then executes the actual
+through `V020`, reruns the M2 tenant/CMS fixtures, then executes the actual
 private-channel RLS expression plus the outbox fixture. The stand-in is torn
 down with the Compose project; it is policy-conformance evidence, not hosted
 Supabase proof.
