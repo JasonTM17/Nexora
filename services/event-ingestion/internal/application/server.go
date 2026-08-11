@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -18,6 +19,7 @@ type Server struct {
 	config     config.Config
 	logger     *slog.Logger
 	readiness  *infrastructure.Readiness
+	listen     func(network, address string) (net.Listener, error)
 	httpServer *http.Server
 }
 
@@ -30,6 +32,7 @@ func NewServer(settings config.Config, logger *slog.Logger) *Server {
 		config:    settings,
 		logger:    logger,
 		readiness: readiness,
+		listen:    net.Listen,
 		httpServer: &http.Server{
 			Addr:              settings.Address,
 			Handler:           transport.NewHandler(readiness),
@@ -48,10 +51,14 @@ func (server *Server) Run(ctx context.Context) error {
 	if ctx == nil {
 		return fmt.Errorf("run context is required")
 	}
+	listener, err := server.listen("tcp", server.config.Address)
+	if err != nil {
+		return fmt.Errorf("listen on %s: %w", server.config.Address, err)
+	}
 	errorsFromServer := make(chan error, 1)
 	go func() {
 		server.logger.Info("event ingestion server listening", "address", server.config.Address)
-		errorsFromServer <- server.httpServer.ListenAndServe()
+		errorsFromServer <- server.httpServer.Serve(listener)
 	}()
 
 	select {
