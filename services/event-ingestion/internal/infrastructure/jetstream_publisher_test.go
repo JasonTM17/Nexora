@@ -11,19 +11,22 @@ import (
 )
 
 type jetStreamStub struct {
-	message *nats.Msg
-	ack     *nats.PubAck
-	err     error
+	message     *nats.Msg
+	ack         *nats.PubAck
+	err         error
+	deadline    time.Time
+	hasDeadline bool
 }
 
-func (stub *jetStreamStub) PublishMsg(message *nats.Msg, _ ...nats.PubOpt) (*nats.PubAck, error) {
+func (stub *jetStreamStub) Publish(context context.Context, message *nats.Msg) (*nats.PubAck, error) {
 	stub.message = message
+	stub.deadline, stub.hasDeadline = context.Deadline()
 	return stub.ack, stub.err
 }
 
 func TestJetStreamPublisherMarshalsCanonicalEnvelopeAndWaitsForAck(t *testing.T) {
 	stub := &jetStreamStub{ack: &nats.PubAck{Stream: "NEXORA_EVENTS", Sequence: 17}}
-	publisher, err := NewJetStreamPublisher(stub)
+	publisher, err := newJetStreamPublisher(stub, time.Second)
 	if err != nil {
 		t.Fatalf("NewJetStreamPublisher() error = %v", err)
 	}
@@ -32,7 +35,7 @@ func TestJetStreamPublisherMarshalsCanonicalEnvelopeAndWaitsForAck(t *testing.T)
 	if err != nil {
 		t.Fatalf("Publish() error = %v", err)
 	}
-	if stub.message == nil || stub.message.Header.Get(nats.MsgIdHdr) != envelope.EventID || stub.message.Header.Get("Nexora-Schema-Version") != domain.SchemaVersion {
+	if stub.message == nil || !stub.hasDeadline || stub.message.Header.Get(nats.MsgIdHdr) != envelope.EventID || stub.message.Header.Get("Nexora-Schema-Version") != domain.SchemaVersion {
 		t.Fatalf("published message = %#v", stub.message)
 	}
 	if ack.Stream != "NEXORA_EVENTS" || ack.Sequence != 17 || ack.Duplicate {
@@ -53,7 +56,7 @@ func TestJetStreamPublisherRejectsWrongRouteOrIncompleteAck(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			publisher, err := NewJetStreamPublisher(test.stub)
+			publisher, err := newJetStreamPublisher(test.stub, time.Second)
 			if err != nil {
 				t.Fatalf("NewJetStreamPublisher() error = %v", err)
 			}
@@ -65,9 +68,35 @@ func TestJetStreamPublisherRejectsWrongRouteOrIncompleteAck(t *testing.T) {
 }
 
 func TestJetStreamPublisherRejectsNilDependency(t *testing.T) {
-	if publisher, err := NewJetStreamPublisher(nil); err == nil || publisher != nil {
-		t.Fatalf("NewJetStreamPublisher(nil) = %#v, %v", publisher, err)
+	if publisher, err := newJetStreamPublisher(nil, time.Second); err == nil || publisher != nil {
+		t.Fatalf("newJetStreamPublisher(nil) = %#v, %v", publisher, err)
 	}
+}
+
+func TestJetStreamPublisherBoundsSlowAcknowledgementAndHonorsCancellation(t *testing.T) {
+	slow := jetStreamFunc(func(ctx context.Context, _ *nats.Msg) (*nats.PubAck, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	})
+	publisher, err := newJetStreamPublisher(slow, 5*time.Millisecond)
+	if err != nil {
+		t.Fatalf("newJetStreamPublisher() error = %v", err)
+	}
+	if _, err := publisher.Publish(context.Background(), "nexora.events.publication", publisherEnvelope()); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("slow Publish() error = %v", err)
+	}
+
+	contextCanceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := publisher.Publish(contextCanceled, "nexora.events.publication", publisherEnvelope()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled Publish() error = %v", err)
+	}
+}
+
+type jetStreamFunc func(context.Context, *nats.Msg) (*nats.PubAck, error)
+
+func (function jetStreamFunc) Publish(ctx context.Context, message *nats.Msg) (*nats.PubAck, error) {
+	return function(ctx, message)
 }
 
 func publisherEnvelope() domain.EventEnvelope {

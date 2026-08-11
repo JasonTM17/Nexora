@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/jasontm17/nexora/services/event-ingestion/internal/domain"
 	"github.com/nats-io/nats.go"
@@ -13,18 +14,34 @@ import (
 // The caller must provide a connection configured by the later runtime-wiring
 // packet; this package neither opens a network connection nor carries secrets.
 type JetStreamPublisher struct {
-	jetStream jetStream
+	jetStream      jetStream
+	publishTimeout time.Duration
 }
 
 type jetStream interface {
-	PublishMsg(*nats.Msg, ...nats.PubOpt) (*nats.PubAck, error)
+	Publish(context.Context, *nats.Msg) (*nats.PubAck, error)
 }
 
-func NewJetStreamPublisher(jetStream jetStream) (*JetStreamPublisher, error) {
-	if jetStream == nil {
+type natsJetStream struct {
+	client nats.JetStreamContext
+}
+
+func (client natsJetStream) Publish(ctx context.Context, message *nats.Msg) (*nats.PubAck, error) {
+	return client.client.PublishMsg(message, nats.Context(ctx))
+}
+
+func NewJetStreamPublisher(client nats.JetStreamContext, publishTimeout time.Duration) (*JetStreamPublisher, error) {
+	if client == nil {
 		return nil, fmt.Errorf("jetstream publisher is required")
 	}
-	return &JetStreamPublisher{jetStream: jetStream}, nil
+	return newJetStreamPublisher(natsJetStream{client: client}, publishTimeout)
+}
+
+func newJetStreamPublisher(jetStream jetStream, publishTimeout time.Duration) (*JetStreamPublisher, error) {
+	if jetStream == nil || publishTimeout < time.Millisecond || publishTimeout > 30*time.Second {
+		return nil, fmt.Errorf("valid jetstream publisher and bounded timeout are required")
+	}
+	return &JetStreamPublisher{jetStream: jetStream, publishTimeout: publishTimeout}, nil
 }
 
 func (publisher *JetStreamPublisher) Publish(ctx context.Context, subject string, envelope domain.EventEnvelope) (domain.PublishAck, error) {
@@ -43,7 +60,9 @@ func (publisher *JetStreamPublisher) Publish(ctx context.Context, subject string
 	message.Data = payload
 	message.Header.Set(nats.MsgIdHdr, envelope.EventID)
 	message.Header.Set("Nexora-Schema-Version", envelope.SchemaVersion)
-	ack, err := publisher.jetStream.PublishMsg(message, nats.Context(ctx))
+	publishContext, cancel := context.WithTimeout(ctx, publisher.publishTimeout)
+	defer cancel()
+	ack, err := publisher.jetStream.Publish(publishContext, message)
 	if err != nil {
 		return domain.PublishAck{}, fmt.Errorf("jetstream publish: %w", err)
 	}

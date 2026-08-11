@@ -24,6 +24,7 @@ var (
 	uuidPattern         = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 	resourceTypePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 	traceIDPattern      = regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`)
+	digestPattern       = regexp.MustCompile(`^[A-Za-z0-9:_-]{16,160}$`)
 	forbiddenValue      = regexp.MustCompile(`(?i)(authorization|bearer|token|secret|password|cookie|provider|prompt|private[ _-]?key|access[ _-]?token|api[ _-]?key|pii|email|phone|body|raw|html|document)`)
 )
 
@@ -88,8 +89,7 @@ func ValidateEnvelope(envelope EventEnvelope) error {
 	if envelope.SchemaVersion != SchemaVersion {
 		return invalid("schemaVersion")
 	}
-	if !boundedPrintable(envelope.IdempotencyKeyDigest, 16, 160) ||
-		!boundedPrintable(envelope.PayloadDigest, 16, 160) {
+	if !safeDigest(envelope.IdempotencyKeyDigest) || !safeDigest(envelope.PayloadDigest) {
 		return invalid("digest")
 	}
 	if !traceIDPattern.MatchString(envelope.TraceID) || forbiddenValue.MatchString(envelope.TraceID) {
@@ -256,6 +256,10 @@ func safeString(value string, minimum, maximum int) bool {
 
 func boundedPrintable(value string, minimum, maximum int) bool {
 	return len(value) >= minimum && len(value) <= maximum && printable(value)
+}
+
+func safeDigest(value string) bool {
+	return digestPattern.MatchString(value) && !forbiddenValue.MatchString(value)
 }
 
 func printable(value string) bool {

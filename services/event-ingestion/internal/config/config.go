@@ -9,21 +9,24 @@ import (
 )
 
 const (
-	defaultAddress       = "127.0.0.1:18080"
-	defaultBodyLimit     = int64(64 * 1024)
-	minimumBodyLimit     = int64(1024)
-	maximumBodyLimit     = int64(1024 * 1024)
-	defaultHeaderTimeout = 2 * time.Second
-	defaultReadTimeout   = 5 * time.Second
-	defaultWriteTimeout  = 5 * time.Second
-	defaultIdleTimeout   = 30 * time.Second
-	defaultShutdown      = 10 * time.Second
-	defaultRateLimit     = 60
-	defaultRateLimitKeys = 10_000
-	minimumRateLimit     = 1
-	maximumRateLimit     = 10_000
-	minimumRateLimitKeys = 1
-	maximumRateLimitKeys = 100_000
+	defaultAddress        = "127.0.0.1:18080"
+	defaultBodyLimit      = int64(64 * 1024)
+	minimumBodyLimit      = int64(1024)
+	maximumBodyLimit      = int64(1024 * 1024)
+	defaultHeaderTimeout  = 2 * time.Second
+	defaultReadTimeout    = 5 * time.Second
+	defaultWriteTimeout   = 5 * time.Second
+	defaultIdleTimeout    = 30 * time.Second
+	defaultShutdown       = 10 * time.Second
+	defaultPublishTimeout = 2 * time.Second
+	minimumPublishTimeout = time.Millisecond
+	maximumPublishTimeout = 30 * time.Second
+	defaultRateLimit      = 60
+	defaultRateLimitKeys  = 10_000
+	minimumRateLimit      = 1
+	maximumRateLimit      = 10_000
+	minimumRateLimitKeys  = 1
+	maximumRateLimitKeys  = 100_000
 )
 
 // LookupEnv matches os.LookupEnv and keeps configuration parsing testable.
@@ -39,6 +42,7 @@ type Config struct {
 	WriteTimeout       time.Duration
 	IdleTimeout        time.Duration
 	ShutdownTimeout    time.Duration
+	PublishTimeout     time.Duration
 	RateLimitPerMinute int
 	RateLimitKeys      int
 }
@@ -94,6 +98,10 @@ func Load(lookup LookupEnv) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	publishTimeout, err := durationValue(lookup, "NEXORA_EVENT_INGESTION_PUBLISH_TIMEOUT", defaultPublishTimeout)
+	if err != nil || publishTimeout < minimumPublishTimeout || publishTimeout > maximumPublishTimeout {
+		return Config{}, fmt.Errorf("NEXORA_EVENT_INGESTION_PUBLISH_TIMEOUT must be between %s and %s", minimumPublishTimeout, maximumPublishTimeout)
+	}
 	rateLimit, err := intValue(lookup, "NEXORA_EVENT_INGESTION_RATE_LIMIT_PER_MINUTE", defaultRateLimit)
 	if err != nil || rateLimit < minimumRateLimit || rateLimit > maximumRateLimit {
 		return Config{}, fmt.Errorf("NEXORA_EVENT_INGESTION_RATE_LIMIT_PER_MINUTE must be between %d and %d", minimumRateLimit, maximumRateLimit)
@@ -111,6 +119,7 @@ func Load(lookup LookupEnv) (Config, error) {
 		WriteTimeout:       writeTimeout,
 		IdleTimeout:        idleTimeout,
 		ShutdownTimeout:    shutdownTimeout,
+		PublishTimeout:     publishTimeout,
 		RateLimitPerMinute: rateLimit,
 		RateLimitKeys:      rateLimitKeys,
 	}, nil

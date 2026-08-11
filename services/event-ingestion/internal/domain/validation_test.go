@@ -33,6 +33,14 @@ func TestValidateEnvelopeRejectsUnsafePayloadAndRouting(t *testing.T) {
 			event.SafePayload["progress"] = json.Number("101")
 			return event
 		}},
+		{name: "secret in idempotency digest", mutate: func(event EventEnvelope) EventEnvelope {
+			event.IdempotencyKeyDigest = "Bearer-secret-value-0001"
+			return event
+		}},
+		{name: "email in payload digest", mutate: func(event EventEnvelope) EventEnvelope {
+			event.PayloadDigest = "alice@example.com-digest"
+			return event
+		}},
 	}
 
 	for _, test := range tests {
