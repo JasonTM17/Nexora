@@ -44,6 +44,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 class IdentityTenancyIntegrationTests {
     private static final String RUNTIME_LOGIN = "nexora_identity_runtime_login";
     private static final String RUNTIME_PASSWORD = "test-identity-runtime-login";
+    private static final String REALTIME_JWT_SECRET = "test-realtime-descriptor-secret-for-identity-profile";
     private static final LocalJwtIssuer ISSUER = new LocalJwtIssuer();
     private static final PostgreSQLContainer<?> DATABASE = new PostgreSQLContainer<>("postgres:17.5-alpine")
             .withDatabaseName("nexora_identity")
@@ -80,6 +81,7 @@ class IdentityTenancyIntegrationTests {
         registry.add("NEXORA_MIGRATIONS_LOCATION", () -> migrationDirectory.toString());
         registry.add("NEXORA_AUTH_ISSUER", ISSUER::issuer);
         registry.add("NEXORA_AUTH_JWKS_URI", ISSUER::jwksUri);
+        registry.add("nexora.realtime.descriptor.jwt-secret", () -> REALTIME_JWT_SECRET);
         registry.add("spring.datasource.hikari.maximum-pool-size", () -> "1");
         registry.add("spring.datasource.hikari.minimum-idle", () -> "1");
     }
