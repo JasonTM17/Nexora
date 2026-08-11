@@ -46,7 +46,7 @@
         "verification": "The receiver recomputes this digest from the received safePayload and rejects a mismatch before accepting or publishing the envelope."
       },
       "idempotencyKeyDigest": {
-        "canonicalBytes": "UTF-8 bytes of nexora:event-idempotency:1.1\\n<operation>\\n<organizationId>\\n<topic>\\n<eventType>\\n<resourceType>\\n<resourceId>\\n<opaqueIdempotencyKey>.",
+        "canonicalBytes": "UTF-8 bytes of nexora:event-idempotency:1.1\\n followed by RFC 8785 JCS canonical JSON for {operation, organizationId, topic, eventType, resourceType, resourceId, opaqueIdempotencyKey}; no delimiter ambiguity is permitted.",
         "verification": "The producer computes it from the server-derived routing scope plus the opaque request key. The raw opaque key is never emitted; receivers validate the exact wire format, envelope immutability and scope rather than reconstructing it."
       },
       "rules": [
@@ -64,6 +64,15 @@
     "PRESENCE_CHANGED",
     "OUTBOX_RECORDED"
   ],
+  "fieldRules": {
+    "uuid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "resourceType": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+    "traceId": { "type": "string", "pattern": "^[a-f0-9]{32}$" },
+    "topic": { "type": "string", "pattern": "^(tenant|resource):[0-9a-f-]{36}:[a-z][a-z0-9-]{0,31}$" },
+    "eventVersion": { "type": "integer", "minimum": 1 },
+    "schemaVersion": { "type": "string", "enum": ["1.1.0"] },
+    "occurredAt": { "type": "string", "format": "date-time" }
+  },
   "eventRouting": {
     "matrix": [
       {
@@ -172,6 +181,7 @@
     "retention": "Reuse safety after expiry is a future persistence policy; the contract does not promise it."
   },
   "safePayload": {
+    "requiredFields": ["resourceId", "resourceType", "organizationId", "subjectId", "actorId", "eventVersion", "traceId", "schemaVersion", "safeDisplay"],
     "allowedFields": [
       "resourceId",
       "resourceType",
@@ -202,6 +212,17 @@
       "email",
       "phone"
     ],
+    "valueRules": {
+      "uuidFields": ["resourceId", "organizationId", "subjectId", "actorId", "receiptId"],
+      "resourceType": "^[a-z][a-z0-9_-]{0,63}$",
+      "traceId": "^[a-f0-9]{32}$",
+      "correlationId": "^[a-f0-9]{32}$",
+      "eventVersion": "positive integer",
+      "jobState": "^[A-Z][A-Z0-9_]{1,63}$",
+      "progress": "integer between 0 and 100 inclusive",
+      "schemaVersion": "exactly 1.1.0",
+      "unicode": "All strings are valid I-JSON strings; lone UTF-16 surrogates are rejected before RFC 8785 canonicalization."
+    },
     "nestedShapes": {
       "safeDisplay": {
         "type": "object",

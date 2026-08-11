@@ -59,7 +59,11 @@ free-form bag or user-authored display copy. Event digests use the exact
 domain-separated RFC 8785 canonical safe payload, while `idempotencyKeyDigest`
 binds the server-derived routing operation and resource scope to the opaque key
 without emitting that raw key. The contract fixture contains known-answer
-vectors for both digests. New producers emit schema `1.1.0`; ingress and
+vectors for both digests. All allowed scalar metadata is grammar-bounded:
+UUID identity fields, lowercase resource types, fixed-width opaque trace and
+correlation identifiers, tokenized job states, and integer progress only;
+free-form identifiers and invalid I-JSON text are rejected before digesting.
+New producers emit schema `1.1.0`; ingress and
 consumers reject legacy `1.0.0` free-form-display envelopes fail closed until a
 later persistence owner records an explicit quarantine or conversion path. No
 bodies, prompts, tokens, secrets, raw provider output, unowned tenant data, or

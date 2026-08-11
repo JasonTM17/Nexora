@@ -6,11 +6,20 @@ import test from "node:test";
 const domain = JSON.parse(await readFile(new URL("../domain/v1/event-contract.json", import.meta.url), "utf8"));
 const fixture = JSON.parse(await readFile(new URL("../fixtures/v1/event-contract.json", import.meta.url), "utf8"));
 const digestPattern = new RegExp(domain.eventEnvelope.digest.pattern);
+const uuidPattern = new RegExp(domain.fieldRules.uuid.pattern);
+const resourceTypePattern = new RegExp(domain.fieldRules.resourceType.pattern);
+const traceIdPattern = new RegExp(domain.fieldRules.traceId.pattern);
+const topicPattern = new RegExp(domain.fieldRules.topic.pattern);
+const jobStatePattern = new RegExp(domain.safePayload.valueRules.jobState);
 const routingByType = new Map(domain.eventRouting.matrix.map((entry) => [entry.eventType, entry]));
 const catalogByType = new Map(domain.safePayload.safeDisplayCatalog.map((entry) => [entry.eventType, entry]));
 const vectorByEventId = new Map(fixture.digestTestVectors.map((entry) => [entry.eventId, entry]));
 
 function canonicalJson(value) {
+  if (typeof value === "string") {
+    assert.equal(hasLoneSurrogate(value), false, "RFC 8785 input must be an I-JSON string");
+    return JSON.stringify(value);
+  }
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
@@ -26,7 +35,16 @@ function payloadDigest(safePayload) {
 
 function idempotencyKeyDigest(event, opaqueIdempotencyKey) {
   const routing = routingByType.get(event.eventType);
-  return sha256Wire(`nexora:event-idempotency:1.1\n${routing.operation}\n${event.organizationId}\n${event.topic}\n${event.eventType}\n${event.resourceType}\n${event.resourceId}\n${opaqueIdempotencyKey}`);
+  const input = {
+    operation: routing.operation,
+    organizationId: event.organizationId,
+    topic: event.topic,
+    eventType: event.eventType,
+    resourceType: event.resourceType,
+    resourceId: event.resourceId,
+    opaqueIdempotencyKey,
+  };
+  return sha256Wire(`nexora:event-idempotency:1.1\n${canonicalJson(input)}`);
 }
 
 function expectedTopic(event) {
@@ -44,11 +62,57 @@ function isExactSafeDisplay(event) {
   return catalog.statusVariants.some((tuple) => tuple.status === display.status && tuple.variant === display.variant);
 }
 
+function hasLoneSurrogate(value) {
+  for (let index = 0; index < value.length; index += 1) {
+    const codePoint = value.charCodeAt(index);
+    if (codePoint >= 0xd800 && codePoint <= 0xdbff) {
+      if (index + 1 >= value.length || value.charCodeAt(index + 1) < 0xdc00 || value.charCodeAt(index + 1) > 0xdfff) return true;
+      index += 1;
+    } else if (codePoint >= 0xdc00 && codePoint <= 0xdfff) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isSafePayload(event) {
+  const payload = event.safePayload;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+  if (!domain.safePayload.requiredFields.every((field) => field in payload)) return false;
+  if (Object.keys(payload).some((field) => !domain.safePayload.allowedFields.includes(field))) return false;
+  if (domain.safePayload.valueRules.uuidFields.some((field) => field in payload && (typeof payload[field] !== "string" || !uuidPattern.test(payload[field])))) return false;
+  if (typeof payload.resourceType !== "string" || !resourceTypePattern.test(payload.resourceType)) return false;
+  if (typeof payload.traceId !== "string" || !traceIdPattern.test(payload.traceId)) return false;
+  if ("correlationId" in payload && (typeof payload.correlationId !== "string" || !traceIdPattern.test(payload.correlationId))) return false;
+  if (!Number.isInteger(payload.eventVersion) || payload.eventVersion < 1) return false;
+  if ("jobState" in payload && (typeof payload.jobState !== "string" || !jobStatePattern.test(payload.jobState))) return false;
+  if ("progress" in payload && (!Number.isInteger(payload.progress) || payload.progress < 0 || payload.progress > 100)) return false;
+  if (payload.schemaVersion !== domain.eventEnvelope.version) return false;
+  if (payload.resourceId !== event.resourceId || payload.resourceType !== event.resourceType
+      || payload.organizationId !== event.organizationId || payload.subjectId !== event.subjectId
+      || payload.actorId !== event.actorId || payload.eventVersion !== event.eventVersion
+      || payload.traceId !== event.traceId) return false;
+  return isExactSafeDisplay(event);
+}
+
+function isCanonicalEnvelope(event) {
+  if (!domain.eventEnvelope.requiredFields.every((field) => field in event)) return false;
+  if (!uuidPattern.test(event.eventId) || !uuidPattern.test(event.organizationId) || !uuidPattern.test(event.subjectId) || !uuidPattern.test(event.actorId) || !uuidPattern.test(event.resourceId)) return false;
+  if (!routingByType.has(event.eventType) || !resourceTypePattern.test(event.resourceType) || !traceIdPattern.test(event.traceId) || !topicPattern.test(event.topic)) return false;
+  if (!Number.isInteger(event.eventVersion) || event.eventVersion < 1 || event.schemaVersion !== domain.eventEnvelope.version) return false;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(event.occurredAt) || Number.isNaN(Date.parse(event.occurredAt))) return false;
+  if (event.topic !== expectedTopic(event)) return false;
+  return isSafePayload(event);
+}
+
 test("freezes one versioned, operation-bound route and display catalog for every event type", () => {
   assert.equal(domain.task, "M3-T01");
   assert.equal(domain.status, "frozen-contract-only");
   assert.equal(domain.contractVersion, "1.1.0");
   assert.deepEqual(domain.topicVocabulary.scopes, ["tenant", "resource"]);
+  assert.equal(domain.eventEnvelope.digest.idempotencyKeyDigest.canonicalBytes.includes("JCS canonical JSON"), true);
+  assert.equal(domain.fieldRules.schemaVersion.enum.length, 1);
+  assert.equal(domain.fieldRules.schemaVersion.enum[0], "1.1.0");
   assert.ok(domain.eventEnvelope.requiredFields.includes("schemaVersion"));
   assert.ok(domain.eventEnvelope.requiredFields.includes("idempotencyKeyDigest"));
 
@@ -83,6 +147,7 @@ test("binds fixture payload and idempotency digests to canonical preimages", () 
     assert.match(event.payloadDigest, digestPattern);
     assert.equal(event.payloadDigest, payloadDigest(event.safePayload), `${event.eventType} payload digest`);
     assert.equal(event.idempotencyKeyDigest, idempotencyKeyDigest(event, vector.opaqueIdempotencyKey), `${event.eventType} idempotency digest`);
+    assert.ok(isCanonicalEnvelope(event), `${event.eventType} canonical scalar fields`);
 
     const mutatedPayload = structuredClone(event.safePayload);
     mutatedPayload.safeDisplay.status = "TAMPERED";
@@ -111,6 +176,15 @@ test("canonical fixture enforces exact routing, ownership, display tuples and fa
   unsafeLabel.safePayload.safeDisplay.label = "alice@example.test";
   assert.equal(isExactSafeDisplay(unsafeLabel), false, "free-form identifier is not a catalog key");
 
+  const unsafeCorrelation = structuredClone(publication);
+  unsafeCorrelation.safePayload.correlationId = "alice@example.test";
+  assert.equal(isSafePayload(unsafeCorrelation), false, "PII-shaped text cannot hide in an allowed metadata field");
+
+  const invalidUnicode = structuredClone(publication);
+  invalidUnicode.safePayload.correlationId = "\ud800";
+  assert.equal(isSafePayload(invalidUnicode), false, "lone surrogate is not I-JSON");
+  assert.throws(() => payloadDigest(invalidUnicode.safePayload), /I-JSON string/);
+
   const unsafeTuple = structuredClone(publication);
   unsafeTuple.safePayload.safeDisplay.variant = "success";
   assert.equal(isExactSafeDisplay(unsafeTuple), false, "status and variant must be an exact tuple");
@@ -123,9 +197,22 @@ test("canonical fixture enforces exact routing, ownership, display tuples and fa
   assert.match(formatValidWrongDigest, digestPattern);
   assert.notEqual(formatValidWrongDigest, payloadDigest(publication.safePayload), "wire syntax is insufficient without preimage verification");
 
+  const resourceA = structuredClone(publication);
+  resourceA.resourceType = "page\nchild";
+  resourceA.resourceId = "record";
+  const resourceB = structuredClone(publication);
+  resourceB.resourceType = "page";
+  resourceB.resourceId = "child\nrecord";
+  const vector = vectorByEventId.get(publication.eventId);
+  assert.equal(isCanonicalEnvelope(resourceA), false, "newline resource type is outside the grammar");
+  assert.equal(isCanonicalEnvelope(resourceB), false, "newline resource id is outside the grammar");
+  assert.notEqual(idempotencyKeyDigest(resourceA, vector.opaqueIdempotencyKey), idempotencyKeyDigest(resourceB, vector.opaqueIdempotencyKey), "JCS object framing cannot collide through field delimiters");
+
   const legacy = structuredClone(publication);
   legacy.schemaVersion = "1.0.0";
-  assert.notEqual(legacy.schemaVersion, domain.compatibility.minimumAcceptedSchemaVersion, "legacy free-form display schema is fail-closed");
+  const acceptedSchemaVersions = new Set(domain.fieldRules.schemaVersion.enum);
+  assert.equal(acceptedSchemaVersions.has(legacy.schemaVersion), false, "legacy free-form display schema is fail-closed");
+  assert.equal(acceptedSchemaVersions.has("1.1.1"), false, "unknown schema versions are fail-closed");
 
   for (const name of ["unsafeSafeDisplayRejected", "freeFormSafeDisplayRejected", "nonSha256DigestRejected", "formatValidWrongPayloadDigestRejected", "wrongRouteForEventTypeRejected", "wrongSafeDisplayVariantRejected", "legacySchemaRejected", "crossTenantGuessDenied", "unownedSubjectDenied", "reusedKeyDifferentFingerprintDenied", "terminalOutboxFailureVisible"]) {
     assert.ok(fixture.idempotency.negativeCases.some((entry) => entry.name === name), name);
