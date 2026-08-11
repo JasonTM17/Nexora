@@ -50,6 +50,7 @@ export function AccountAccess() {
   const [realtimeState, setRealtimeState] = useState<RealtimeState>("idle");
   const statusHeading = useRef<HTMLHeadingElement>(null);
   const realtimeHandle = useRef<{ close(): void } | null>(null);
+  const confirmedOrganization = useRef<string>("");
 
   const load = useCallback(async (options?: { showLoading?: boolean }) => {
     if (options?.showLoading !== false) setState("loading");
@@ -58,8 +59,20 @@ export function AccountAccess() {
       const context = await readJson<AccessContextResponse>("/api/bff/access-context");
       setAccess(context);
       if (context.memberships.length === 0) { setState("empty"); return; }
-      setSelected((current) => current || (context.tenantSelectionRequired ? "" : context.memberships[0].organizationId));
-      setState(context.tenantSelectionRequired ? "selection" : "ready");
+      const confirmedStillActive = context.memberships.some(
+        membership => membership.organizationId === confirmedOrganization.current,
+      );
+      if (context.tenantSelectionRequired && !confirmedStillActive) {
+        setSelected(current => context.memberships.some(membership => membership.organizationId === current) ? current : "");
+        setState("selection");
+      } else {
+        const organizationId = confirmedStillActive
+          ? confirmedOrganization.current
+          : context.memberships[0].organizationId;
+        confirmedOrganization.current = organizationId;
+        setSelected(organizationId);
+        setState("ready");
+      }
       try { setProfile(await readJson<UserProfile>("/api/bff/profile")); } catch (error) { handleProblem(error); }
     } catch (error) { handleProblem(error); }
   }, []);
@@ -165,7 +178,7 @@ export function AccountAccess() {
   async function switchOrganization() {
     if (!selected) return;
     setSaving(true); setProblem(null);
-    try { await readJson("/api/bff/tenant-context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId: selected }) }); setState("ready"); }
+    try { await readJson("/api/bff/tenant-context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId: selected }) }); confirmedOrganization.current = selected; setState("ready"); }
     catch (error) { handleProblem(error); }
     finally { setSaving(false); }
   }

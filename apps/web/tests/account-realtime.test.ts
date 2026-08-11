@@ -1,4 +1,4 @@
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -113,6 +113,37 @@ describe("account realtime lifecycle", () => {
     await new Promise(resolve => setTimeout(resolve, 20));
     expect(realtime.subscribe).toHaveBeenCalledTimes(5);
     expect(realtime.retryDelay).toHaveBeenLastCalledWith(4, descriptor);
+
+    view.unmount();
+  });
+
+  it("keeps the selected organization subscribed after a multi-membership refetch", async () => {
+    const secondMembership = {
+      ...context.memberships[0],
+      organizationId: "55555555-5555-5555-5555-555555555555",
+      membershipId: "66666666-6666-6666-6666-666666666666",
+      role: "EDITOR",
+    };
+    fetchMock.mockImplementation(async (path: string) => ({
+      ok: true,
+      json: async () => path.includes("access-context")
+        ? { ...context, memberships: [...context.memberships, secondMembership], tenantSelectionRequired: true }
+        : { displayName: "Nexora User", locale: "en", reducedMotion: false, highContrast: false, version: 1 },
+    }));
+    const view = render(createElement(AccountAccess));
+
+    const secondOption = await screen.findByRole("radio", { name: /Organization 55555555/i });
+    fireEvent.click(secondOption);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(realtime.subscribe).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(fetchMock.mock.calls
+      .filter(([path]) => path === "/api/bff/access-context")).toHaveLength(2));
+    expect(screen.queryByRole("heading", { name: "Choose your organization" })).toBeNull();
+    expect(realtime.request).toHaveBeenCalledWith({
+      organizationId: secondMembership.organizationId,
+      eventType: "PUBLICATION_INVALIDATED",
+    });
+    expect(realtime.subscribe).toHaveBeenCalledTimes(1);
 
     view.unmount();
   });
