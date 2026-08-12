@@ -1,5 +1,14 @@
 .git
 .gitignore
+.env
+.env.*
+**/*.env
+**/*.env.*
+**/*.pem
+**/*.key
+**/*.crt
+**/*credentials*
+**/*secret*
 **/*_test.go
 testdata
 README.md

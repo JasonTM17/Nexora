@@ -50,3 +50,20 @@ func TestCheckHealthRequiresClient(t *testing.T) {
 		t.Fatal("checkHealth() error = nil, want non-nil")
 	}
 }
+
+func TestCheckHealthDoesNotFollowRedirects(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.RedirectHandler("/other", http.StatusFound))
+	defer server.Close()
+	serverURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse server URL: %v", err)
+	}
+	client := server.Client()
+	client.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	if err := checkHealth(config.Config{Address: serverURL.Host}, client); err == nil {
+		t.Fatal("checkHealth() error = nil, want redirect rejection")
+	}
+}

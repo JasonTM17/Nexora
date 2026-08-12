@@ -43,7 +43,12 @@ func healthcheck() {
 	if err != nil {
 		os.Exit(1)
 	}
-	client := http.Client{Timeout: time.Second}
+	client := http.Client{
+		Timeout: time.Second,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	if err := checkHealth(settings, &client); err != nil {
 		os.Exit(1)
 	}
