@@ -77,6 +77,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.DockerClientFactory;
 
 @ActiveProfiles("database")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -799,6 +800,48 @@ class CmsPageIntegrationTests {
     }
 
     @Test
+    void boundsGoIngressWhenJetStreamAcknowledgementStallsWithoutPersistingTheEnvelope() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "go-joint-slow-nats"),
+                "cms-go-joint-slow-nats-create");
+        publish(tenant, page.pageId());
+        ObjectNode envelope = publicationInvalidationEnvelope(tenant, page, "go-joint-nats-stall");
+        GenericContainer<?> isolatedNats = new GenericContainer<>("nats:2.11.0-alpine")
+                .withCommand("-js", "-sd", "/data")
+                .withExposedPorts(4222);
+        GoIngestionRuntime go = null;
+        boolean paused = false;
+        try {
+            isolatedNats.start();
+            String isolatedNatsUrl = "nats://" + isolatedNats.getHost() + ":" + isolatedNats.getMappedPort(4222);
+            prepareGoIngestionStream(isolatedNatsUrl);
+            go = startGoIngestion(60, isolatedNatsUrl);
+            DockerClientFactory.instance().client().pauseContainerCmd(isolatedNats.getContainerId()).exec();
+            paused = true;
+
+            Instant started = Instant.now();
+            HttpResponse<String> response = http.send(HttpRequest.newBuilder(URI.create(go.baseUrl() + "/v1/events"))
+                    .header("Authorization", "Bearer " + ISSUER.token(tenant.ownerSubjectId(), Instant.now().plusSeconds(60)))
+                    .header("Content-Type", "application/json")
+                    .timeout(Duration.ofSeconds(5))
+                    .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(envelope)))
+                    .build(), HttpResponse.BodyHandlers.ofString());
+
+            assertThat(response.statusCode()).isEqualTo(503);
+            assertThat(json.readTree(response.body()).path("code").asText()).isEqualTo("INGESTION_UNAVAILABLE");
+            assertThat(Duration.between(started, Instant.now())).isBetween(Duration.ofSeconds(1), Duration.ofSeconds(4));
+            assertThat(count("SELECT count(*) FROM nexora.event_ledger_entries WHERE event_id = '"
+                    + envelope.path("eventId").asText() + "'")).isZero();
+        } finally {
+            if (paused) {
+                DockerClientFactory.instance().client().unpauseContainerCmd(isolatedNats.getContainerId()).exec();
+            }
+            stopGoIngestion(go);
+            isolatedNats.stop();
+        }
+    }
+
+    @Test
     void clientDisconnectBeforeTheBoundedBodyCompletesDoesNotPublishAnEnvelope() throws Exception {
         CmsFixture tenant = seedTenant();
         CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "go-joint-disconnect"),
@@ -823,6 +866,34 @@ class CmsPageIntegrationTests {
             assertThat(goIngestionMessageCount()).isEqualTo(messagesBefore);
             assertThat(count("SELECT count(*) FROM nexora.event_ledger_entries WHERE event_id = '"
                     + envelope.path("eventId").asText() + "'")).isZero();
+        } finally {
+            stopGoIngestion(go);
+        }
+    }
+
+    @Test
+    void boundsBackpressureAtTheGoIngressBeforeASecondJetStreamPublish() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "go-joint-backpressure"),
+                "cms-go-joint-backpressure-create");
+        publish(tenant, page.pageId());
+        String bearer = ISSUER.token(tenant.ownerSubjectId(), Instant.now().plusSeconds(60));
+        ObjectNode firstEnvelope = publicationInvalidationEnvelope(tenant, page, "go-joint-backpressure-1");
+        ObjectNode rejectedEnvelope = publicationInvalidationEnvelope(tenant, page, "go-joint-backpressure-2");
+        GoIngestionRuntime go = startGoIngestion(1);
+        try {
+            long messagesBefore = goIngestionMessageCount();
+            HttpResponse<String> accepted = http.send(goIngressRequest(go, bearer, firstEnvelope),
+                    HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> rejected = http.send(goIngressRequest(go, bearer, rejectedEnvelope),
+                    HttpResponse.BodyHandlers.ofString());
+
+            assertThat(accepted.statusCode()).isEqualTo(202);
+            assertThat(rejected.statusCode()).isEqualTo(429);
+            assertThat(json.readTree(rejected.body()).path("code").asText()).isEqualTo("RATE_LIMITED");
+            assertThat(goIngestionMessageCount()).isEqualTo(messagesBefore + 1);
+            assertThat(count("SELECT count(*) FROM nexora.event_ledger_entries WHERE event_id = '"
+                    + rejectedEnvelope.path("eventId").asText() + "'")).isZero();
         } finally {
             stopGoIngestion(go);
         }
