@@ -33,8 +33,8 @@ class OutboxPublisherTest {
     private static OutboxEvent event(int attemptCount) {
         return new OutboxEvent(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "page", UUID.randomUUID(), 1,
-                "tenant:00000000-0000-0000-0000-000000000001:workflow", "WORKFLOW_TRANSITIONED", "1.0.0",
-                "sha256:idempotency", "sha256:payload", "{\"safeDisplay\":{}}", "outbox-test-1", Instant.now(), attemptCount);
+                "tenant:00000000-0000-4000-8000-000000000001:workflow", "WORKFLOW_TRANSITIONED", "1.1.0",
+                "sha256:" + "1".repeat(64), "sha256:" + "2".repeat(64), "{\"resourceId\":\"00000000-0000-4000-8000-000000000005\",\"resourceType\":\"page\",\"organizationId\":\"00000000-0000-4000-8000-000000000001\",\"subjectId\":\"00000000-0000-4000-8000-000000000002\",\"actorId\":\"00000000-0000-4000-8000-000000000003\",\"eventVersion\":1,\"traceId\":\"00000000000000000000000000000001\",\"schemaVersion\":\"1.1.0\",\"safeDisplay\":{\"label\":\"WORKFLOW_TRANSITIONED\",\"status\":\"ARCHIVED\",\"variant\":\"neutral\"}}", "00000000000000000000000000000001", Instant.now(), attemptCount);
     }
 
     private static final class RecordingEvents extends OutboxEventRepository {

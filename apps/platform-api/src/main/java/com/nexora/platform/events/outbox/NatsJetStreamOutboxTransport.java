@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.nexora.platform.observability.TraceIdPolicy;
 import io.nats.client.Connection;
 import io.nats.client.JetStream;
 import io.nats.client.JetStreamApiException;
@@ -40,8 +39,10 @@ public class NatsJetStreamOutboxTransport implements OutboxTransport {
     }
 
     private byte[] envelope(OutboxEvent event) {
-        if (!TraceIdPolicy.isSafe(event.traceId())) {
-            throw new OutboxTransportException("The outbox event has no safe trace identifier.", null);
+        try {
+            EventContractV1_1.verifyForPublication(event);
+        } catch (IllegalArgumentException exception) {
+            throw new OutboxTransportException("The outbox event does not satisfy contract v1.1.", exception);
         }
         try {
             JsonNode safePayload = JSON.readTree(event.safePayloadJson());
