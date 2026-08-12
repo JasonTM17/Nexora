@@ -15,11 +15,18 @@ import com.nexora.platform.events.outbox.OutboxTransport;
 import com.nexora.platform.events.outbox.OutboxContractViolationException;
 import com.nexora.platform.events.outbox.EventContractV1_1;
 import com.nexora.platform.events.outbox.CmsWorkflowOutboxRecorder;
+import com.nexora.platform.events.consumer.EventEnvelopeRejectedException;
+import com.nexora.platform.events.consumer.EventLedgerConsumer;
+import com.nexora.platform.events.consumer.EventLedgerReceipt;
+import com.nexora.platform.events.consumer.NatsJetStreamEventHandler;
 import com.nexora.platform.tenant.TenantContext;
 import com.nexora.platform.tenant.TenantContextService;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jwt.SignedJWT;
 import io.nats.client.Nats;
+import io.nats.client.JetStreamSubscription;
+import io.nats.client.Message;
+import io.nats.client.PushSubscribeOptions;
 import io.nats.client.api.StorageType;
 import io.nats.client.api.StreamConfiguration;
 import java.net.URI;
@@ -85,6 +92,9 @@ class CmsPageIntegrationTests {
 
     @Autowired
     private CmsWorkflowOutboxRecorder outboxRecorder;
+
+    @Autowired
+    private EventLedgerConsumer eventLedger;
 
     @Autowired
     private TenantContextService tenantContexts;
@@ -313,6 +323,43 @@ class CmsPageIntegrationTests {
         assertThat(count("SELECT count(*) FROM nexora.outbox_events WHERE resource_id = '" + page.pageId()
                 + "' AND state = 'PUBLISHED' AND attempt_count = 1 AND published_at IS NOT NULL"))
                 .isEqualTo(1);
+    }
+
+    @Test
+    void persistsTheVerifiedRawJetStreamEnvelopeBeforeAckAndConvergesOnReplay() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "ledger-page"),
+                "cms-ledger-create-1");
+        publish(tenant, page.pageId());
+        pages.archive(tenant.ownerContext(), page.pageId(), 1, "cms-ledger-archive-1");
+
+        try (io.nats.client.Connection connection = Nats.connect(natsUrl())) {
+            String durable = "ledger-" + UUID.randomUUID().toString().replace("-", "");
+            JetStreamSubscription subscription = connection.jetStream().subscribe(OUTBOX_SUBJECT,
+                    PushSubscribeOptions.builder().durable(durable).build());
+            OutboxPublisher.PublishResult published = publisher.publishAvailable();
+            assertThat(published.published()).isGreaterThanOrEqualTo(1);
+
+            Message delivery = subscription.nextMessage(java.time.Duration.ofSeconds(5));
+            assertThat(delivery).isNotNull();
+            EventLedgerReceipt first = new NatsJetStreamEventHandler(eventLedger).consumeAndAck(delivery);
+            EventLedgerReceipt replay = eventLedger.consume(delivery.getData());
+
+            assertThat(first.duplicate()).isFalse();
+            assertThat(replay.eventId()).isEqualTo(first.eventId());
+            assertThat(replay.duplicate()).isTrue();
+            assertThat(count("SELECT count(*) FROM nexora.event_ledger_entries WHERE event_id = '"
+                    + first.eventId() + "'")).isEqualTo(1);
+
+            com.fasterxml.jackson.databind.node.ObjectNode malformed =
+                    (com.fasterxml.jackson.databind.node.ObjectNode) json.readTree(delivery.getData());
+            malformed.remove("safePayload");
+            assertThatThrownBy(() -> eventLedger.consume(json.writeValueAsBytes(malformed)))
+                    .isInstanceOf(EventEnvelopeRejectedException.class);
+            assertThat(count("SELECT count(*) FROM nexora.event_ledger_entries WHERE event_id = '"
+                    + first.eventId() + "'")).isEqualTo(1);
+            subscription.unsubscribe();
+        }
     }
 
     @Test
