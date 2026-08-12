@@ -153,10 +153,8 @@ GRANT SELECT, INSERT ON realtime.messages TO authenticated;
         'V018__realtime_descriptor_event_versions.sql',
         'V019__realtime_descriptor_epoch_lookup.sql'
     ))
-    $contractBoundaryMigrations = @($migrationFiles | Where-Object Name -in @(
-        'V020__event_contract_v1_1_and_consumer_ledger.sql',
-        'V021__event_version_boundary_and_terminal_contract_rejections.sql'
-    ))
+    $v020Migration = @($migrationFiles | Where-Object Name -eq 'V020__event_contract_v1_1_and_consumer_ledger.sql')
+    $v021Migration = @($migrationFiles | Where-Object Name -eq 'V021__event_version_boundary_and_terminal_contract_rejections.sql')
     $preM3Migrations = @($migrationFiles | Where-Object Name -notin @(
         'V014__outbox_events_and_private_realtime_policy.sql',
         'V015__scoped_realtime_channel_authorization.sql',
@@ -167,7 +165,7 @@ GRANT SELECT, INSERT ON realtime.messages TO authenticated;
         'V020__event_contract_v1_1_and_consumer_ledger.sql',
         'V021__event_version_boundary_and_terminal_contract_rejections.sql'
     ))
-    if ($m3PreV020Migrations.Count -ne 6 -or $contractBoundaryMigrations.Count -ne 2) {
+    if ($m3PreV020Migrations.Count -ne 6 -or $v020Migration.Count -ne 1 -or $v021Migration.Count -ne 1) {
         throw 'Expected ordered V014 through V021 M3 event-contract migrations.'
     }
 
@@ -217,10 +215,76 @@ SELECT nexora.record_outbox_event(
 COMMIT;
 '@
 
-    foreach ($migration in $contractBoundaryMigrations) {
-        Write-Output "Applying $($migration.Name)"
-        Invoke-PsqlText (Get-Content -LiteralPath $migration.FullName -Raw)
-    }
+    Write-Output "Applying $($v020Migration[0].Name)"
+    Invoke-PsqlText (Get-Content -LiteralPath $v020Migration[0].FullName -Raw)
+
+    # V020 permitted positive bigint versions that JCS clients cannot represent.
+    # Seed both durable paths under that historical rule, then require V021 to
+    # preserve them as immutable quarantine evidence rather than aborting or
+    # silently rewriting the envelope.
+    Invoke-PsqlText @'
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000007', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000007', true);
+SELECT nexora.record_outbox_event(
+  '50000000-0000-4000-8000-0000000000f1',
+  '10000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000007',
+  '20000000-0000-4000-8000-000000000007',
+  'job',
+  '50000000-0000-4000-8000-000000000010',
+  'JOB_PROGRESS_CHANGED',
+  9007199254740992,
+  'resource:50000000-0000-4000-8000-000000000010:job-progress',
+  '1.1.0',
+  'sha256:f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1',
+  'sha256:f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2',
+  'sha256:f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3',
+  '{"resourceId":"50000000-0000-4000-8000-000000000010","resourceType":"job","organizationId":"10000000-0000-4000-8000-000000000001","subjectId":"20000000-0000-4000-8000-000000000007","actorId":"20000000-0000-4000-8000-000000000007","eventVersion":9007199254740992,"jobState":"RUNNING","progress":45,"traceId":"ffffffffffffffffffffffffffffffff","schemaVersion":"1.1.0","safeDisplay":{"label":"JOB_PROGRESS_CHANGED","status":"RUNNING","variant":"warning"}}'::jsonb
+);
+SELECT * FROM nexora.record_event_ledger_entry(
+  '50000000-0000-4000-8000-0000000000f2',
+  '10000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000007',
+  '20000000-0000-4000-8000-000000000007',
+  'page',
+  '30000000-0000-4000-8000-000000000001',
+  'PUBLICATION_INVALIDATED',
+  9007199254740992,
+  'tenant:10000000-0000-4000-8000-000000000001:publication',
+  '1.1.0',
+  'sha256:f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4',
+  'sha256:f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5',
+  '{"resourceId":"30000000-0000-4000-8000-000000000001","resourceType":"page","organizationId":"10000000-0000-4000-8000-000000000001","subjectId":"20000000-0000-4000-8000-000000000007","actorId":"20000000-0000-4000-8000-000000000007","eventVersion":9007199254740992,"traceId":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","schemaVersion":"1.1.0","safeDisplay":{"label":"PUBLICATION_INVALIDATED","status":"ARCHIVED","variant":"neutral"}}'::jsonb,
+  '2026-08-11T00:00:00Z'
+);
+SELECT nexora.record_outbox_event(
+  '50000000-0000-4000-8000-0000000000f5',
+  '10000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000007',
+  '20000000-0000-4000-8000-000000000007',
+  'outbox',
+  '50000000-0000-4000-8000-000000000011',
+  'OUTBOX_RECORDED',
+  1,
+  'tenant:10000000-0000-4000-8000-000000000001:outbox',
+  '1.1.0',
+  'sha256:f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6',
+  'sha256:f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7',
+  'sha256:f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8',
+  '{"resourceId":"50000000-0000-4000-8000-000000000011","resourceType":"outbox","organizationId":"10000000-0000-4000-8000-000000000001","subjectId":"20000000-0000-4000-8000-000000000007","actorId":"20000000-0000-4000-8000-000000000007","eventVersion":1,"traceId":"dddddddddddddddddddddddddddddddd","schemaVersion":"1.1.0","safeDisplay":{"label":"OUTBOX_RECORDED","status":"PENDING","variant":"info"}}'::jsonb
+);
+SELECT count(*) FROM nexora.claim_outbox_events('historical-contract', interval '15 minutes', 10);
+SELECT nexora.fail_claimed_outbox_event(
+  '50000000-0000-4000-8000-0000000000f5', 'historical-contract', 'EVENT_CONTRACT_REJECTED'
+);
+COMMIT;
+'@
+
+    Write-Output "Applying $($v021Migration[0].Name)"
+    Invoke-PsqlText (Get-Content -LiteralPath $v021Migration[0].FullName -Raw)
     Write-Output 'Running M3 outbox/private-Realtime fixture'
     Invoke-PsqlText (Get-Content -LiteralPath $m3Fixture -Raw)
 

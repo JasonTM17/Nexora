@@ -2,15 +2,240 @@
 -- deterministic envelope failures must never consume a transient retry budget.
 -- This is forward-only; V014--V020 remain immutable historical migrations.
 
+BEGIN;
+SET LOCAL ROLE nexora_migrator;
+
+-- V020 accepted every positive bigint. Preserve any historical row that its
+-- runtime was allowed to write but a JCS consumer cannot represent, instead of
+-- letting that row abort this upgrade or silently altering its envelope.
+CREATE TABLE nexora.event_version_boundary_quarantine (
+  source_table text NOT NULL CHECK (source_table IN ('outbox_events', 'event_ledger_entries')),
+  source_id uuid NOT NULL,
+  organization_id uuid NOT NULL,
+  topic text NOT NULL,
+  event_type nexora.outbox_event_type NOT NULL,
+  idempotency_key_digest text NOT NULL CHECK (idempotency_key_digest ~ '^sha256:[a-f0-9]{64}$'),
+  original_event_version bigint NOT NULL CHECK (
+    original_event_version < 1 OR original_event_version > 9007199254740991
+  ),
+  original_row jsonb NOT NULL CHECK (jsonb_typeof(original_row) = 'object'),
+  reason text NOT NULL DEFAULT 'EVENT_VERSION_OUTSIDE_JCS_SAFE_RANGE' CHECK (
+    reason = 'EVENT_VERSION_OUTSIDE_JCS_SAFE_RANGE'
+  ),
+  quarantined_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+  PRIMARY KEY (source_table, source_id),
+  UNIQUE (source_table, organization_id, topic, event_type, idempotency_key_digest)
+);
+
+ALTER TABLE nexora.event_version_boundary_quarantine ENABLE ROW LEVEL SECURITY;
+ALTER TABLE nexora.event_version_boundary_quarantine FORCE ROW LEVEL SECURITY;
+
+CREATE POLICY event_version_boundary_quarantine_migrator_control
+ON nexora.event_version_boundary_quarantine
+FOR ALL TO nexora_migrator
+USING (true)
+WITH CHECK (true);
+
+WITH moved AS (
+  DELETE FROM nexora.outbox_events
+  WHERE event_version NOT BETWEEN 1 AND 9007199254740991
+  RETURNING *
+)
+INSERT INTO nexora.event_version_boundary_quarantine (
+  source_table, source_id, organization_id, topic, event_type,
+  idempotency_key_digest, original_event_version, original_row
+)
+SELECT
+  'outbox_events', moved.id, moved.organization_id, moved.topic, moved.event_type,
+  moved.idempotency_key_digest, moved.event_version, to_jsonb(moved)
+FROM moved;
+
+WITH moved AS (
+  DELETE FROM nexora.event_ledger_entries
+  WHERE event_version NOT BETWEEN 1 AND 9007199254740991
+  RETURNING *
+)
+INSERT INTO nexora.event_version_boundary_quarantine (
+  source_table, source_id, organization_id, topic, event_type,
+  idempotency_key_digest, original_event_version, original_row
+)
+SELECT
+  'event_ledger_entries', moved.event_id, moved.organization_id, moved.topic, moved.event_type,
+  moved.idempotency_key_digest, moved.event_version, to_jsonb(moved)
+FROM moved;
+
+CREATE FUNCTION nexora.guard_event_version_boundary_quarantine()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = pg_catalog, nexora
+AS $function$
+BEGIN
+  RAISE EXCEPTION USING ERRCODE = '55000', MESSAGE = 'EVENT_VERSION_QUARANTINE_IMMUTABLE';
+END
+$function$;
+
+CREATE TRIGGER event_version_boundary_quarantine_immutable
+BEFORE UPDATE OR DELETE ON nexora.event_version_boundary_quarantine
+FOR EACH ROW EXECUTE FUNCTION nexora.guard_event_version_boundary_quarantine();
+
+REVOKE ALL ON TABLE nexora.event_version_boundary_quarantine FROM PUBLIC;
+REVOKE ALL ON TABLE nexora.event_version_boundary_quarantine FROM nexora_runtime;
+
+COMMENT ON TABLE nexora.event_version_boundary_quarantine IS
+  'Immutable operator-only evidence for V020 rows whose positive bigint event version is outside the JCS-safe range. Runtime replay or idempotency reuse remains rejected.';
+
+CREATE OR REPLACE FUNCTION nexora.outbox_safe_payload_v1_1_is_allowed(
+  in_event_type nexora.outbox_event_type,
+  in_resource_type text,
+  in_payload jsonb
+)
+RETURNS boolean
+LANGUAGE plpgsql
+IMMUTABLE
+STRICT
+SECURITY INVOKER
+SET search_path = pg_catalog, nexora
+AS $function$
+DECLARE
+  key text;
+  value jsonb;
+  safe_display jsonb;
+  expected_label text;
+BEGIN
+  IF jsonb_typeof(in_payload) <> 'object'
+     OR NOT (in_payload ?& ARRAY[
+       'resourceId', 'resourceType', 'organizationId', 'subjectId', 'actorId',
+       'eventVersion', 'traceId', 'schemaVersion', 'safeDisplay'
+     ]) THEN
+    RETURN false;
+  END IF;
+
+  FOR key, value IN SELECT * FROM jsonb_each(in_payload) LOOP
+    IF key NOT IN (
+      'resourceId', 'resourceType', 'organizationId', 'subjectId', 'actorId',
+      'eventVersion', 'jobState', 'progress', 'correlationId', 'traceId',
+      'receiptId', 'schemaVersion', 'safeDisplay'
+    ) THEN
+      RETURN false;
+    END IF;
+  END LOOP;
+
+  IF jsonb_typeof(in_payload -> 'resourceId') <> 'string'
+     OR jsonb_typeof(in_payload -> 'resourceType') <> 'string'
+     OR jsonb_typeof(in_payload -> 'organizationId') <> 'string'
+     OR jsonb_typeof(in_payload -> 'subjectId') <> 'string'
+     OR jsonb_typeof(in_payload -> 'actorId') <> 'string'
+     OR jsonb_typeof(in_payload -> 'traceId') <> 'string'
+     OR jsonb_typeof(in_payload -> 'schemaVersion') <> 'string'
+     OR in_payload ->> 'resourceType' <> in_resource_type
+     OR in_resource_type NOT IN ('page', 'job', 'notification', 'collaboration_session', 'outbox')
+     OR in_payload ->> 'schemaVersion' <> '1.1.0'
+     OR in_payload ->> 'resourceId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+     OR in_payload ->> 'organizationId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+     OR in_payload ->> 'subjectId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+     OR in_payload ->> 'actorId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+     OR in_payload ->> 'traceId' !~ '^[a-f0-9]{32}$'
+     OR jsonb_typeof(in_payload -> 'eventVersion') <> 'number'
+     OR (in_payload ->> 'eventVersion')::numeric NOT BETWEEN 1 AND 9007199254740991
+     OR (in_payload ->> 'eventVersion')::numeric <> trunc((in_payload ->> 'eventVersion')::numeric) THEN
+    RETURN false;
+  END IF;
+
+  IF (in_payload ? 'correlationId' AND (
+        jsonb_typeof(in_payload -> 'correlationId') <> 'string'
+        OR in_payload ->> 'correlationId' !~ '^[a-f0-9]{32}$'
+      ))
+     OR (in_payload ? 'receiptId' AND (
+        jsonb_typeof(in_payload -> 'receiptId') <> 'string'
+        OR in_payload ->> 'receiptId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      )) THEN
+    RETURN false;
+  END IF;
+
+  IF in_event_type = 'JOB_PROGRESS_CHANGED' THEN
+    IF NOT (in_payload ?& ARRAY['jobState', 'progress'])
+       OR jsonb_typeof(in_payload -> 'jobState') <> 'string'
+       OR in_payload ->> 'jobState' NOT IN ('QUEUED', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELED')
+       OR jsonb_typeof(in_payload -> 'progress') <> 'number'
+       OR (in_payload ->> 'progress')::numeric NOT BETWEEN 0 AND 100
+       OR (in_payload ->> 'progress')::numeric <> trunc((in_payload ->> 'progress')::numeric) THEN
+      RETURN false;
+    END IF;
+  ELSIF in_payload ? 'jobState' OR in_payload ? 'progress' THEN
+    RETURN false;
+  END IF;
+
+  safe_display := in_payload -> 'safeDisplay';
+  IF jsonb_typeof(safe_display) <> 'object'
+     OR NOT (safe_display ?& ARRAY['label', 'status', 'variant'])
+     OR EXISTS (
+       SELECT 1
+       FROM jsonb_object_keys(safe_display) AS display_key
+       WHERE display_key NOT IN ('label', 'status', 'variant')
+     )
+     OR EXISTS (
+       SELECT 1 FROM jsonb_each(safe_display) AS display_value
+       WHERE jsonb_typeof(display_value.value) <> 'string'
+     ) THEN
+    RETURN false;
+  END IF;
+
+  expected_label := in_event_type::text;
+  IF safe_display ->> 'label' <> expected_label THEN
+    RETURN false;
+  END IF;
+
+  RETURN CASE in_event_type
+    WHEN 'PUBLICATION_INVALIDATED' THEN (safe_display ->> 'status', safe_display ->> 'variant') IN (
+      ('QUEUED', 'warning'), ('PUBLISHED', 'success'), ('ARCHIVED', 'neutral'), ('INVALIDATED', 'danger')
+    )
+    WHEN 'WORKFLOW_TRANSITIONED' THEN (safe_display ->> 'status', safe_display ->> 'variant') IN (
+      ('PENDING', 'info'), ('IN_REVIEW', 'warning'), ('PUBLISHED', 'success'), ('ARCHIVED', 'neutral'), ('FAILED', 'danger')
+    )
+    WHEN 'JOB_PROGRESS_CHANGED' THEN (safe_display ->> 'status', safe_display ->> 'variant') IN (
+      ('QUEUED', 'info'), ('RUNNING', 'warning'), ('COMPLETED', 'success'), ('FAILED', 'danger'), ('CANCELED', 'neutral')
+    )
+    WHEN 'NOTIFICATION_ENQUEUED' THEN (safe_display ->> 'status', safe_display ->> 'variant') IN (
+      ('QUEUED', 'info'), ('DELIVERED', 'success'), ('FAILED', 'danger')
+    )
+    WHEN 'PRESENCE_CHANGED' THEN (safe_display ->> 'status', safe_display ->> 'variant') IN (
+      ('ACTIVE', 'success'), ('INACTIVE', 'neutral')
+    )
+    WHEN 'OUTBOX_RECORDED' THEN (safe_display ->> 'status', safe_display ->> 'variant') IN (
+      ('PENDING', 'info'), ('CLAIMED', 'warning'), ('PUBLISHED', 'success'), ('FAILED', 'danger'), ('DEAD_LETTER', 'danger')
+    )
+    ELSE false
+  END;
+EXCEPTION
+  WHEN invalid_text_representation OR numeric_value_out_of_range THEN
+    RETURN false;
+END
+$function$;
+
 ALTER TABLE nexora.outbox_events
   DROP CONSTRAINT IF EXISTS outbox_events_event_version_check,
   ADD CONSTRAINT outbox_events_event_version_jcs_safe_check
-    CHECK (event_version BETWEEN 1 AND 9007199254740991);
+    CHECK (event_version BETWEEN 1 AND 9007199254740991),
+  ADD CONSTRAINT outbox_events_safe_payload_event_version_jcs_safe_check
+    CHECK (
+      jsonb_typeof(safe_payload -> 'eventVersion') = 'number'
+      AND (safe_payload ->> 'eventVersion')::numeric BETWEEN 1 AND 9007199254740991
+      AND (safe_payload ->> 'eventVersion')::numeric = trunc((safe_payload ->> 'eventVersion')::numeric)
+      AND (safe_payload ->> 'eventVersion')::numeric = event_version::numeric
+    );
 
 ALTER TABLE nexora.event_ledger_entries
   DROP CONSTRAINT IF EXISTS event_ledger_entries_event_version_check,
   ADD CONSTRAINT event_ledger_entries_event_version_jcs_safe_check
-    CHECK (event_version BETWEEN 1 AND 9007199254740991);
+    CHECK (event_version BETWEEN 1 AND 9007199254740991),
+  ADD CONSTRAINT event_ledger_entries_safe_payload_event_version_jcs_safe_check
+    CHECK (
+      jsonb_typeof(safe_payload -> 'eventVersion') = 'number'
+      AND (safe_payload ->> 'eventVersion')::numeric BETWEEN 1 AND 9007199254740991
+      AND (safe_payload ->> 'eventVersion')::numeric = trunc((safe_payload ->> 'eventVersion')::numeric)
+      AND (safe_payload ->> 'eventVersion')::numeric = event_version::numeric
+    );
 
 CREATE OR REPLACE FUNCTION nexora.guard_outbox_event_mutation()
 RETURNS trigger
@@ -345,6 +570,23 @@ BEGIN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'PAYLOAD_REJECTED';
   END IF;
 
+  IF EXISTS (
+    SELECT 1
+    FROM nexora.event_version_boundary_quarantine AS quarantined
+    WHERE quarantined.source_table = 'outbox_events'
+      AND (
+        quarantined.source_id = in_id
+        OR (
+          quarantined.organization_id = in_organization_id
+          AND quarantined.topic = in_topic
+          AND quarantined.event_type = in_event_type
+          AND quarantined.idempotency_key_digest = in_idempotency_key_digest
+        )
+      )
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'EVENT_VERSION_QUARANTINED';
+  END IF;
+
   INSERT INTO nexora.outbox_events (
     id, organization_id, subject_id, actor_id, resource_type, resource_id,
     event_type, event_version, topic, schema_version,
@@ -424,6 +666,23 @@ BEGIN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'PAYLOAD_REJECTED';
   END IF;
 
+  IF EXISTS (
+    SELECT 1
+    FROM nexora.event_version_boundary_quarantine AS quarantined
+    WHERE quarantined.source_table = 'event_ledger_entries'
+      AND (
+        quarantined.source_id = in_event_id
+        OR (
+          quarantined.organization_id = in_organization_id
+          AND quarantined.topic = in_topic
+          AND quarantined.event_type = in_event_type
+          AND quarantined.idempotency_key_digest = in_idempotency_key_digest
+        )
+      )
+  ) THEN
+    RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'EVENT_VERSION_QUARANTINED';
+  END IF;
+
   INSERT INTO nexora.event_ledger_entries (
     event_id, organization_id, subject_id, actor_id, resource_type, resource_id,
     event_type, event_version, topic, schema_version, idempotency_key_digest,
@@ -492,3 +751,18 @@ $function$;
 
 REVOKE ALL ON FUNCTION nexora.reject_claimed_outbox_event(uuid, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION nexora.reject_claimed_outbox_event(uuid, text) TO nexora_runtime;
+
+DO $block$
+DECLARE
+  api_role text;
+BEGIN
+  FOREACH api_role IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = api_role) THEN
+      EXECUTE format('REVOKE ALL ON TABLE nexora.event_version_boundary_quarantine FROM %I', api_role);
+      EXECUTE format('REVOKE ALL ON FUNCTION nexora.reject_claimed_outbox_event(uuid, text) FROM %I', api_role);
+    END IF;
+  END LOOP;
+END
+$block$;
+
+COMMIT;
