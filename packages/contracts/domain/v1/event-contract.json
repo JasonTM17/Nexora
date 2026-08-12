@@ -86,7 +86,7 @@
     "resourceType": { "type": "string", "enum": ["page", "job", "notification", "collaboration_session", "outbox"] },
     "traceId": { "type": "string", "pattern": "^[a-f0-9]{32}$" },
     "topic": { "type": "string", "pattern": "^(tenant|resource):[0-9a-f-]{36}:[a-z][a-z0-9-]{0,31}$" },
-    "eventVersion": { "type": "integer", "minimum": 1 },
+    "eventVersion": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
     "schemaVersion": { "type": "string", "enum": ["1.1.0"] },
     "occurredAt": { "type": "string", "format": "date-time" }
   },
@@ -240,7 +240,7 @@
       "resourceType": "must match the eventRouting.matrix resourceTypes entry for envelope eventType",
       "traceId": "^[a-f0-9]{32}$",
       "correlationId": "^[a-f0-9]{32}$",
-      "eventVersion": "positive integer",
+      "eventVersion": "positive IEEE-754/JCS-safe integer no greater than 9007199254740991",
       "jobState": { "enum": ["QUEUED", "RUNNING", "COMPLETED", "FAILED", "CANCELED"] },
       "progress": "integer between 0 and 100 inclusive",
       "schemaVersion": "exactly 1.1.0",
@@ -297,7 +297,7 @@
     "legacySchemaVersionPolicy": "Ingress and consumers reject 1.0.0 envelopes fail closed because their free-form safeDisplay shape cannot establish this contract's PII boundary.",
     "producerPolicy": "New producers emit schemaVersion 1.1.0 only.",
     "persistenceHandoff": "M3-DB01 must quarantine or dead-letter legacy rows rather than silently reserializing them as 1.1.0; M3 runtime owners must record explicit conversion evidence before accepting older inputs.",
-    "eventVersionRule": "eventVersion is business-event evolution and does not substitute for schemaVersion."
+    "eventVersionRule": "eventVersion is business-event evolution and does not substitute for schemaVersion; it is a positive IEEE-754/JCS-safe integer no greater than 9007199254740991 so every publisher and consumer can reproduce its canonical payload bytes."
   },
   "errors": [
     "INVALID_EVENT_VERSION",
