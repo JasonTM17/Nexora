@@ -140,6 +140,7 @@ func handleIngest(writer http.ResponseWriter, request *http.Request, ingestor Ev
 	}
 	writer.Header().Set("Cache-Control", "no-store")
 	writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+	writer.Header().Set("Nexora-Trace-Id", envelope.TraceID)
 	writer.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(writer).Encode(struct {
 		EventID string `json:"eventId"`

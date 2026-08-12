@@ -35,7 +35,7 @@ func TestJetStreamPublisherMarshalsCanonicalEnvelopeAndWaitsForAck(t *testing.T)
 	if err != nil {
 		t.Fatalf("Publish() error = %v", err)
 	}
-	if stub.message == nil || !stub.hasDeadline || stub.message.Header.Get(nats.MsgIdHdr) != envelope.EventID || stub.message.Header.Get("Nexora-Schema-Version") != domain.SchemaVersion {
+	if stub.message == nil || !stub.hasDeadline || stub.message.Header.Get(nats.MsgIdHdr) != envelope.EventID || stub.message.Header.Get("Nexora-Schema-Version") != domain.SchemaVersion || stub.message.Header.Get("Nexora-Trace-Id") != envelope.TraceID {
 		t.Fatalf("published message = %#v", stub.message)
 	}
 	if ack.Stream != "NEXORA_EVENTS" || ack.Sequence != 17 || ack.Duplicate {

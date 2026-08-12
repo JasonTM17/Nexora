@@ -60,6 +60,7 @@ func (publisher *JetStreamPublisher) Publish(ctx context.Context, subject string
 	message.Data = payload
 	message.Header.Set(nats.MsgIdHdr, envelope.EventID)
 	message.Header.Set("Nexora-Schema-Version", envelope.SchemaVersion)
+	message.Header.Set("Nexora-Trace-Id", envelope.TraceID)
 	publishContext, cancel := context.WithTimeout(ctx, publisher.publishTimeout)
 	defer cancel()
 	ack, err := publisher.jetStream.Publish(publishContext, message)

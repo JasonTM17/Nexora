@@ -120,6 +120,9 @@ func TestEventIngestionAcceptsOnlyBoundedBearerJSON(t *testing.T) {
 	if response.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("Cache-Control = %q", response.Header().Get("Cache-Control"))
 	}
+	if response.Header().Get("Nexora-Trace-Id") != transportEnvelope().TraceID {
+		t.Fatalf("Nexora-Trace-Id = %q", response.Header().Get("Nexora-Trace-Id"))
+	}
 	if !strings.Contains(response.Body.String(), `"eventId":"70000000-0000-4000-8000-000000000001"`) {
 		t.Fatalf("response did not retain request event ID: %s", response.Body.String())
 	}
@@ -188,6 +191,9 @@ func TestEventIngestionMapsCollectorFailuresWithoutLeakingDetails(t *testing.T) 
 			handler.ServeHTTP(response, request)
 			if response.Code != test.wantStatus || !strings.Contains(response.Body.String(), test.wantCode) || strings.Contains(response.Body.String(), "password") {
 				t.Fatalf("status/body = %d %s", response.Code, response.Body.String())
+			}
+			if response.Header().Get("Nexora-Trace-Id") != "" {
+				t.Fatalf("rejected request echoed trace header: %q", response.Header().Get("Nexora-Trace-Id"))
 			}
 		})
 	}
