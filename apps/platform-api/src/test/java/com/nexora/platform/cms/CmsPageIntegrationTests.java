@@ -2,6 +2,12 @@ package com.nexora.platform.cms;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,6 +33,9 @@ import io.nats.client.Nats;
 import io.nats.client.JetStreamSubscription;
 import io.nats.client.Message;
 import io.nats.client.PushSubscribeOptions;
+import io.nats.client.api.AckPolicy;
+import io.nats.client.api.ConsumerConfiguration;
+import io.nats.client.api.DeliverPolicy;
 import io.nats.client.api.StorageType;
 import io.nats.client.api.StreamConfiguration;
 import java.net.URI;
@@ -45,6 +54,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -335,13 +345,19 @@ class CmsPageIntegrationTests {
 
         try (io.nats.client.Connection connection = Nats.connect(natsUrl())) {
             String durable = "ledger-" + UUID.randomUUID().toString().replace("-", "");
-            JetStreamSubscription subscription = connection.jetStream().subscribe(OUTBOX_SUBJECT,
-                    PushSubscribeOptions.builder().durable(durable).build());
+            PushSubscribeOptions options = ConsumerConfiguration.builder()
+                    .durable(durable)
+                    .deliverPolicy(DeliverPolicy.New)
+                    .ackPolicy(AckPolicy.Explicit)
+                    .buildPushSubscribeOptions();
+            JetStreamSubscription subscription = connection.jetStream().subscribe(OUTBOX_SUBJECT, options);
             OutboxPublisher.PublishResult published = publisher.publishAvailable();
             assertThat(published.published()).isGreaterThanOrEqualTo(1);
 
             Message delivery = subscription.nextMessage(java.time.Duration.ofSeconds(5));
             assertThat(delivery).isNotNull();
+            JsonNode publishedEnvelope = json.readTree(delivery.getData());
+            assertThat(publishedEnvelope.path("resourceId").asText()).isEqualTo(page.pageId().toString());
             EventLedgerReceipt first = new NatsJetStreamEventHandler(eventLedger).consumeAndAck(delivery);
             EventLedgerReceipt replay = eventLedger.consume(delivery.getData());
 
@@ -351,13 +367,61 @@ class CmsPageIntegrationTests {
             assertThat(count("SELECT count(*) FROM nexora.event_ledger_entries WHERE event_id = '"
                     + first.eventId() + "'")).isEqualTo(1);
 
-            com.fasterxml.jackson.databind.node.ObjectNode malformed =
-                    (com.fasterxml.jackson.databind.node.ObjectNode) json.readTree(delivery.getData());
-            malformed.remove("safePayload");
-            assertThatThrownBy(() -> eventLedger.consume(json.writeValueAsBytes(malformed)))
+            String raw = new String(delivery.getData(), StandardCharsets.UTF_8);
+            String eventId = publishedEnvelope.path("eventId").asText();
+            String duplicateEnvelopeField = raw.replace("\"eventId\":\"" + eventId + "\"",
+                    "\"eventId\":\"" + eventId + "\",\"eventId\":\"" + eventId + "\"");
+            String duplicatePayloadField = raw.replace("\"label\":\"WORKFLOW_TRANSITIONED\"",
+                    "\"label\":\"WORKFLOW_TRANSITIONED\",\"label\":\"WORKFLOW_TRANSITIONED\"");
+            assertThatThrownBy(() -> eventLedger.consume(duplicateEnvelopeField.getBytes(StandardCharsets.UTF_8)))
+                    .isInstanceOf(EventEnvelopeRejectedException.class);
+            assertThatThrownBy(() -> eventLedger.consume(duplicatePayloadField.getBytes(StandardCharsets.UTF_8)))
+                    .isInstanceOf(EventEnvelopeRejectedException.class);
+            assertThatThrownBy(() -> eventLedger.consume((raw + "{\"body\":\"secret\"}").getBytes(StandardCharsets.UTF_8)))
                     .isInstanceOf(EventEnvelopeRejectedException.class);
             assertThat(count("SELECT count(*) FROM nexora.event_ledger_entries WHERE event_id = '"
                     + first.eventId() + "'")).isEqualTo(1);
+
+            Message malformedDelivery = mock(Message.class);
+            when(malformedDelivery.isJetStream()).thenReturn(true);
+            when(malformedDelivery.getData()).thenReturn(duplicatePayloadField.getBytes(StandardCharsets.UTF_8));
+            assertThatThrownBy(() -> new NatsJetStreamEventHandler(eventLedger).consumeAndAck(malformedDelivery))
+                    .isInstanceOf(EventEnvelopeRejectedException.class);
+            verify(malformedDelivery).term();
+            verify(malformedDelivery, never()).ackSync(any(java.time.Duration.class));
+
+            EventLedgerConsumer unavailableConsumer = new EventLedgerConsumer(new com.nexora.platform.events.consumer.EventLedgerRepository(null) {
+                @Override
+                public EventLedgerReceipt record(OutboxEvent ignored) {
+                    throw new IllegalStateException("simulated ledger outage");
+                }
+            });
+            Message retryDelivery = mock(Message.class);
+            when(retryDelivery.isJetStream()).thenReturn(true);
+            when(retryDelivery.getData()).thenReturn(delivery.getData());
+            assertThatThrownBy(() -> new NatsJetStreamEventHandler(unavailableConsumer).consumeAndAck(retryDelivery))
+                    .isInstanceOf(IllegalStateException.class);
+            verify(retryDelivery).nakWithDelay(java.time.Duration.ofSeconds(1));
+            verify(retryDelivery, never()).ackSync(any(java.time.Duration.class));
+
+            AtomicBoolean persisted = new AtomicBoolean();
+            EventLedgerConsumer acknowledgedConsumer = new EventLedgerConsumer(new com.nexora.platform.events.consumer.EventLedgerRepository(null) {
+                @Override
+                public EventLedgerReceipt record(OutboxEvent event) {
+                    persisted.set(true);
+                    return new EventLedgerReceipt(event.id(), false);
+                }
+            });
+            Message acknowledgedDelivery = mock(Message.class);
+            when(acknowledgedDelivery.isJetStream()).thenReturn(true);
+            when(acknowledgedDelivery.getData()).thenReturn(delivery.getData());
+            doAnswer(ignored -> {
+                assertThat(persisted).isTrue();
+                return null;
+            }).when(acknowledgedDelivery).ackSync(any(java.time.Duration.class));
+            assertThat(new NatsJetStreamEventHandler(acknowledgedConsumer).consumeAndAck(acknowledgedDelivery).duplicate())
+                    .isFalse();
+            verify(acknowledgedDelivery).ackSync(java.time.Duration.ofSeconds(3));
             subscription.unsubscribe();
         }
     }

@@ -2,6 +2,9 @@ package com.nexora.platform.events.consumer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.StreamReadFeature;
 import com.nexora.platform.events.outbox.EventContractV1_1;
 import com.nexora.platform.events.outbox.OutboxEvent;
 import java.io.IOException;
@@ -9,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
@@ -21,7 +25,12 @@ import org.springframework.stereotype.Service;
 @Service
 @Profile("database")
 public class EventLedgerConsumer {
-    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final ObjectMapper JSON = new ObjectMapper(JsonFactory.builder()
+            .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+            .build())
+            .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+    private static final Pattern CANONICAL_UUID = Pattern.compile(
+            "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$");
     private static final Set<String> ENVELOPE_FIELDS = Set.of(
             "eventId", "eventType", "eventVersion", "schemaVersion", "organizationId", "subjectId",
             "resourceType", "resourceId", "topic", "actorId", "traceId", "idempotencyKeyDigest",
@@ -70,7 +79,11 @@ public class EventLedgerConsumer {
     }
 
     private static UUID uuid(JsonNode envelope, String field) {
-        return UUID.fromString(text(envelope, field));
+        String raw = text(envelope, field);
+        if (!CANONICAL_UUID.matcher(raw).matches()) {
+            throw rejected(null);
+        }
+        return UUID.fromString(raw);
     }
 
     private static String text(JsonNode envelope, String field) {
