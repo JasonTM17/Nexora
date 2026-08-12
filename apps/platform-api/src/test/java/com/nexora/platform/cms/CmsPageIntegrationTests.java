@@ -564,6 +564,75 @@ class CmsPageIntegrationTests {
         assertThat(ordinarySessionToken.getJWTClaimsSet().getClaim("nexora_realtime_topic")).isNull();
     }
 
+    @Test
+    void admitsOnlyFreshAuthorizedPublicationInvalidationCandidates() throws Exception {
+        CmsFixture alpha = seedTenant();
+        CmsFixture beta = seedTenant();
+        CmsPageService.PageView alphaPage = pages.create(alpha.ownerContext(), create(alpha, "admission-alpha"),
+                "cms-admission-alpha-create");
+        CmsPageService.PageView betaPage = pages.create(beta.ownerContext(), create(beta, "admission-beta"),
+                "cms-admission-beta-create");
+        publish(alpha, alphaPage.pageId());
+        publish(beta, betaPage.pageId());
+        Instant bearerExpiry = Instant.now().plusSeconds(90);
+        UUID unprivilegedSubject = UUID.randomUUID();
+        addMembership(alpha, unprivilegedSubject, "CONTENT_CREATOR");
+
+        HttpResponse<String> allowed = admission(
+                alpha.organizationId(), alpha.ownerSubjectId(), bearerExpiry, alphaPage.pageId(),
+                "PUBLICATION_INVALIDATED", "page", 7, "1.1.0");
+        HttpResponse<String> unowned = admission(
+                alpha.organizationId(), unprivilegedSubject, bearerExpiry, alphaPage.pageId(),
+                "PUBLICATION_INVALIDATED", "page", 7, "1.1.0");
+        HttpResponse<String> crossTenantSelection = admission(
+                beta.organizationId(), alpha.ownerSubjectId(), bearerExpiry, betaPage.pageId(),
+                "PUBLICATION_INVALIDATED", "page", 7, "1.1.0");
+        HttpResponse<String> crossTenantResource = admission(
+                alpha.organizationId(), alpha.ownerSubjectId(), bearerExpiry, betaPage.pageId(),
+                "PUBLICATION_INVALIDATED", "page", 7, "1.1.0");
+        HttpResponse<String> mismatch = admission(
+                alpha.organizationId(), alpha.ownerSubjectId(), bearerExpiry, alphaPage.pageId(),
+                "WORKFLOW_TRANSITIONED", "page", 7, "1.1.0");
+        HttpResponse<String> unauthenticated = http.send(HttpRequest.newBuilder(URI.create(
+                        "http://127.0.0.1:" + port + "/api/v1/internal/event-admission/publication-invalidated"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("""
+                        {"eventType":"PUBLICATION_INVALIDATED","resourceType":"page",
+                        "resourceId":"%s","eventVersion":7,"schemaVersion":"1.1.0"}
+                        """.formatted(alphaPage.pageId()).replaceAll("\\s+", "")))
+                .build(), HttpResponse.BodyHandlers.ofString());
+
+        assertThat(allowed.statusCode()).isEqualTo(200);
+        JsonNode decision = json.readTree(allowed.body());
+        assertThat(decision.path("organizationId").asText()).isEqualTo(alpha.organizationId().toString());
+        assertThat(decision.path("subjectId").asText()).isEqualTo(alpha.ownerSubjectId().toString());
+        assertThat(decision.path("actorId").asText()).isEqualTo(alpha.ownerSubjectId().toString());
+        assertThat(decision.path("resourceType").asText()).isEqualTo("page");
+        assertThat(decision.path("resourceId").asText()).isEqualTo(alphaPage.pageId().toString());
+        assertThat(decision.path("eventType").asText()).isEqualTo("PUBLICATION_INVALIDATED");
+        assertThat(decision.path("eventVersion").asLong()).isEqualTo(7);
+        assertThat(decision.path("schemaVersion").asText()).isEqualTo("1.1.0");
+        assertThat(decision.path("topic").asText()).isEqualTo("tenant:" + alpha.organizationId() + ":publication");
+        assertThat(Instant.parse(decision.path("validUntil").asText())).isBeforeOrEqualTo(bearerExpiry);
+        assertThat(decision.has("membershipId")).isFalse();
+        assertThat(decision.has("role")).isFalse();
+
+        for (HttpResponse<String> denied : List.of(unowned, crossTenantSelection, crossTenantResource)) {
+            assertThat(denied.statusCode()).isEqualTo(403);
+            assertThat(json.readTree(denied.body()).path("code").asText()).isEqualTo("PERMISSION_DENIED");
+        }
+        assertThat(mismatch.statusCode()).isEqualTo(400);
+        assertThat(unauthenticated.statusCode()).isEqualTo(401);
+        assertThat(json.readTree(unauthenticated.body()).path("code").asText()).isEqualTo("AUTHENTICATION_REQUIRED");
+
+        HttpResponse<String> openApi = http.send(HttpRequest.newBuilder(URI.create(
+                        "http://127.0.0.1:" + port + "/v3/api-docs"))
+                .GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(openApi.statusCode()).isEqualTo(200);
+        assertThat(json.readTree(openApi.body()).path("paths")
+                .has("/api/v1/internal/event-admission/publication-invalidated")).isFalse();
+    }
+
     private CmsPageService.CreateCommand create(CmsFixture tenant, String slug) {
         return new CmsPageService.CreateCommand(tenant.siteId(), slug, "Welcome", "1.0.0", digest('a'),
                 tenant.themeVersionId(), seo());
@@ -605,6 +674,30 @@ class CmsPageIntegrationTests {
         HttpRequest request = HttpRequest.newBuilder(URI.create(
                         "http://127.0.0.1:" + port + "/api/v1/realtime/descriptors"))
                 .header("Authorization", "Bearer " + ISSUER.token(subjectId, Instant.now().plusSeconds(60)))
+                .header("X-Nexora-Organization-Id", organizationId.toString())
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        return http.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> admission(
+            UUID organizationId,
+            UUID subjectId,
+            Instant bearerExpiry,
+            UUID resourceId,
+            String eventType,
+            String resourceType,
+            long eventVersion,
+            String schemaVersion) throws Exception {
+        String body = """
+                {"eventType":"%s","resourceType":"%s","resourceId":"%s",
+                "eventVersion":%d,"schemaVersion":"%s"}
+                """.formatted(eventType, resourceType, resourceId, eventVersion, schemaVersion)
+                .replaceAll("\\s+", "");
+        HttpRequest request = HttpRequest.newBuilder(URI.create(
+                        "http://127.0.0.1:" + port + "/api/v1/internal/event-admission/publication-invalidated"))
+                .header("Authorization", "Bearer " + ISSUER.token(subjectId, bearerExpiry))
                 .header("X-Nexora-Organization-Id", organizationId.toString())
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
