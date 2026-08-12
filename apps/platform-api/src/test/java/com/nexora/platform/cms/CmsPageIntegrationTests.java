@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.nexora.platform.auth.DomainAccessException;
 import com.nexora.platform.auth.LocalJwtIssuer;
 import com.nexora.platform.events.outbox.OutboxEvent;
@@ -38,7 +39,9 @@ import io.nats.client.api.ConsumerConfiguration;
 import io.nats.client.api.DeliverPolicy;
 import io.nats.client.api.StorageType;
 import io.nats.client.api.StreamConfiguration;
+import java.net.InetAddress;
 import java.net.URI;
+import java.net.ServerSocket;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -48,12 +51,14 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
@@ -83,6 +88,8 @@ class CmsPageIntegrationTests {
             .withExposedPorts(4222);
     private static final String OUTBOX_STREAM = "NEXORA_EVENTS";
     private static final String OUTBOX_SUBJECT = "nexora.events.workflow";
+    private static final String GO_INGESTION_STREAM = "NEXORA_GO_INGESTION";
+    private static final String GO_INGESTION_SUBJECT = "nexora.events.publication";
     private static Path migrationDirectory;
 
     @Autowired
@@ -122,6 +129,7 @@ class CmsPageIntegrationTests {
         prepareRuntimeRole();
         prepareMigrations();
         prepareOutboxStream();
+        prepareGoIngestionStream();
         registry.add("NEXORA_RUNTIME_DATABASE_URL", DATABASE::getJdbcUrl);
         registry.add("NEXORA_RUNTIME_DATABASE_USERNAME", () -> RUNTIME_LOGIN);
         registry.add("NEXORA_RUNTIME_DATABASE_PASSWORD", () -> RUNTIME_PASSWORD);
@@ -640,6 +648,52 @@ class CmsPageIntegrationTests {
                 .has("/api/v1/internal/event-admission/publication-invalidated")).isFalse();
     }
 
+    @Test
+    void goIngressUsesSpringAdmissionThenPersistsAndConvergesThroughTheDurableConsumer() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "go-joint-ingress"),
+                "cms-go-joint-create");
+        publish(tenant, page.pageId());
+
+        GoIngestionRuntime go = startGoIngestion();
+        try (io.nats.client.Connection connection = Nats.connect(natsUrl())) {
+            HttpResponse<String> readiness = http.send(HttpRequest.newBuilder(URI.create(go.baseUrl() + "/readyz"))
+                    .GET().timeout(Duration.ofSeconds(3)).build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(readiness.statusCode()).isEqualTo(200);
+
+            String durable = "go-ledger-" + UUID.randomUUID().toString().replace("-", "");
+            PushSubscribeOptions options = ConsumerConfiguration.builder()
+                    .durable(durable)
+                    .deliverPolicy(DeliverPolicy.New)
+                    .ackPolicy(AckPolicy.Explicit)
+                    .buildPushSubscribeOptions();
+            JetStreamSubscription subscription = connection.jetStream().subscribe(GO_INGESTION_SUBJECT, options);
+            ObjectNode envelope = publicationInvalidationEnvelope(tenant, page);
+            HttpResponse<String> accepted = http.send(HttpRequest.newBuilder(URI.create(go.baseUrl() + "/v1/events"))
+                    .header("Authorization", "Bearer " + ISSUER.token(tenant.ownerSubjectId(), Instant.now().plusSeconds(60)))
+                    .header("Content-Type", "application/json")
+                    .timeout(Duration.ofSeconds(5))
+                    .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(envelope)))
+                    .build(), HttpResponse.BodyHandlers.ofString());
+
+            assertThat(accepted.statusCode()).isEqualTo(202);
+            assertThat(accepted.headers().firstValue("Nexora-Trace-Id")).contains(envelope.path("traceId").asText());
+            Message delivery = subscription.nextMessage(Duration.ofSeconds(5));
+            assertThat(delivery).isNotNull();
+            assertThat(json.readTree(delivery.getData()).path("eventId").asText())
+                    .isEqualTo(envelope.path("eventId").asText());
+            EventLedgerReceipt first = new NatsJetStreamEventHandler(eventLedger).consumeAndAck(delivery);
+            EventLedgerReceipt replay = eventLedger.consume(delivery.getData());
+
+            assertThat(first.duplicate()).isFalse();
+            assertThat(replay.eventId()).isEqualTo(first.eventId());
+            assertThat(replay.duplicate()).isTrue();
+            subscription.unsubscribe();
+        } finally {
+            stopGoIngestion(go);
+        }
+    }
+
     private CmsPageService.CreateCommand create(CmsFixture tenant, String slug) {
         return new CmsPageService.CreateCommand(tenant.siteId(), slug, "Welcome", "1.0.0", digest('a'),
                 tenant.themeVersionId(), seo());
@@ -806,8 +860,146 @@ class CmsPageIntegrationTests {
         }
     }
 
+    private static void prepareGoIngestionStream() {
+        try (io.nats.client.Connection connection = Nats.connect(natsUrl())) {
+            connection.jetStreamManagement().addStream(StreamConfiguration.builder()
+                    .name(GO_INGESTION_STREAM)
+                    .subjects(GO_INGESTION_SUBJECT)
+                    .storageType(StorageType.Memory)
+                    .build());
+        } catch (Exception exception) {
+            throw new IllegalStateException("Unable to prepare the disposable Go ingestion stream", exception);
+        }
+    }
+
     private static String natsUrl() {
         return "nats://" + NATS.getHost() + ":" + NATS.getMappedPort(4222);
+    }
+
+    private ObjectNode publicationInvalidationEnvelope(CmsFixture tenant, CmsPageService.PageView page) {
+        String traceId = "0".repeat(31) + "1";
+        ObjectNode safePayload = json.createObjectNode();
+        safePayload.put("resourceId", page.pageId().toString());
+        safePayload.put("resourceType", "page");
+        safePayload.put("organizationId", tenant.organizationId().toString());
+        safePayload.put("subjectId", tenant.ownerSubjectId().toString());
+        safePayload.put("actorId", tenant.ownerSubjectId().toString());
+        safePayload.put("eventVersion", page.draftVersion());
+        safePayload.put("traceId", traceId);
+        safePayload.put("schemaVersion", "1.1.0");
+        ObjectNode display = safePayload.putObject("safeDisplay");
+        display.put("label", "PUBLICATION_INVALIDATED");
+        display.put("status", "PUBLISHED");
+        display.put("variant", "success");
+
+        ObjectNode envelope = json.createObjectNode();
+        envelope.put("eventId", UUID.randomUUID().toString());
+        envelope.put("eventType", "PUBLICATION_INVALIDATED");
+        envelope.put("eventVersion", page.draftVersion());
+        envelope.put("organizationId", tenant.organizationId().toString());
+        envelope.put("subjectId", tenant.ownerSubjectId().toString());
+        envelope.put("resourceType", "page");
+        envelope.put("resourceId", page.pageId().toString());
+        envelope.put("topic", "tenant:" + tenant.organizationId() + ":publication");
+        envelope.put("actorId", tenant.ownerSubjectId().toString());
+        envelope.put("traceId", traceId);
+        envelope.put("idempotencyKeyDigest", "sha256:" + "a".repeat(64));
+        envelope.put("payloadDigest", EventContractV1_1.payloadDigest(safePayload));
+        envelope.set("safePayload", safePayload);
+        envelope.put("occurredAt", Instant.now().toString());
+        envelope.put("schemaVersion", "1.1.0");
+        return envelope;
+    }
+
+    private GoIngestionRuntime startGoIngestion() throws Exception {
+        Path repository = Path.of("..", "..").toAbsolutePath().normalize();
+        Path service = repository.resolve("services").resolve("event-ingestion");
+        Path binary = Files.createTempFile("nexora-event-ingestion-", ".exe");
+        Path output = Files.createTempFile("nexora-event-ingestion-", ".log");
+        Files.deleteIfExists(binary);
+        Process build = new ProcessBuilder("go", "build", "-o", binary.toString(), "./cmd/event-ingestion")
+                .directory(service.toFile())
+                .redirectErrorStream(true)
+                .redirectOutput(output.toFile())
+                .start();
+        if (!build.waitFor(60, TimeUnit.SECONDS) || build.exitValue() != 0) {
+            build.destroyForcibly();
+            throw new IllegalStateException("Unable to build the isolated Go ingress: " + processOutput(output));
+        }
+
+        int goPort = freeLoopbackPort();
+        ProcessBuilder launch = new ProcessBuilder(binary.toString())
+                .directory(service.toFile())
+                .redirectErrorStream(true)
+                .redirectOutput(output.toFile());
+        launch.environment().put("NEXORA_EVENT_INGESTION_ADDR", "127.0.0.1:" + goPort);
+        launch.environment().put("NEXORA_EVENT_INGESTION_ADMISSION_URL",
+                "http://127.0.0.1:" + port + "/api/v1/internal/event-admission");
+        launch.environment().put("NEXORA_EVENT_INGESTION_NATS_URL", natsUrl());
+        launch.environment().put("NEXORA_EVENT_INGESTION_PUBLISH_TIMEOUT", "2s");
+        Process process = launch.start();
+        GoIngestionRuntime runtime = new GoIngestionRuntime(process, binary, output, goPort);
+        try {
+            awaitGoHealth(runtime);
+            return runtime;
+        } catch (Exception exception) {
+            stopGoIngestion(runtime);
+            throw exception;
+        }
+    }
+
+    private void awaitGoHealth(GoIngestionRuntime runtime) throws Exception {
+        Instant deadline = Instant.now().plusSeconds(10);
+        while (Instant.now().isBefore(deadline)) {
+            if (!runtime.process().isAlive()) {
+                throw new IllegalStateException("Go ingress exited before health became available: "
+                        + processOutput(runtime.output()));
+            }
+            try {
+                HttpResponse<String> response = http.send(HttpRequest.newBuilder(URI.create(runtime.baseUrl() + "/healthz"))
+                        .GET().timeout(Duration.ofSeconds(1)).build(), HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() == 200) {
+                    return;
+                }
+            } catch (java.io.IOException ignored) {
+                // The loopback listener is still starting.
+            }
+            Thread.sleep(50);
+        }
+        throw new IllegalStateException("Go ingress did not become healthy: " + processOutput(runtime.output()));
+    }
+
+    private static int freeLoopbackPort() throws Exception {
+        try (ServerSocket socket = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            return socket.getLocalPort();
+        }
+    }
+
+    private static String processOutput(Path output) {
+        try {
+            return Files.readString(output, StandardCharsets.UTF_8);
+        } catch (Exception ignored) {
+            return "<unavailable>";
+        }
+    }
+
+    private static void stopGoIngestion(GoIngestionRuntime runtime) throws Exception {
+        if (runtime == null) {
+            return;
+        }
+        runtime.process().destroy();
+        if (!runtime.process().waitFor(5, TimeUnit.SECONDS)) {
+            runtime.process().destroyForcibly();
+            runtime.process().waitFor(5, TimeUnit.SECONDS);
+        }
+        Files.deleteIfExists(runtime.binary());
+        Files.deleteIfExists(runtime.output());
+    }
+
+    private record GoIngestionRuntime(Process process, Path binary, Path output, int port) {
+        String baseUrl() {
+            return "http://127.0.0.1:" + port;
+        }
     }
 
     private static void prepareMigrations() {
