@@ -580,7 +580,10 @@ class CmsPageIntegrationTests {
 
         HttpResponse<String> allowed = admission(
                 alpha.organizationId(), alpha.ownerSubjectId(), bearerExpiry, alphaPage.pageId(),
-                "PUBLICATION_INVALIDATED", "page", 7, "1.1.0");
+                "PUBLICATION_INVALIDATED", "page", 1, "1.1.0");
+        HttpResponse<String> forgedVersion = admission(
+                alpha.organizationId(), alpha.ownerSubjectId(), bearerExpiry, alphaPage.pageId(),
+                "PUBLICATION_INVALIDATED", "page", 2, "1.1.0");
         HttpResponse<String> unowned = admission(
                 alpha.organizationId(), unprivilegedSubject, bearerExpiry, alphaPage.pageId(),
                 "PUBLICATION_INVALIDATED", "page", 7, "1.1.0");
@@ -593,6 +596,9 @@ class CmsPageIntegrationTests {
         HttpResponse<String> mismatch = admission(
                 alpha.organizationId(), alpha.ownerSubjectId(), bearerExpiry, alphaPage.pageId(),
                 "WORKFLOW_TRANSITIONED", "page", 7, "1.1.0");
+        HttpResponse<String> expired = admission(
+                alpha.organizationId(), alpha.ownerSubjectId(), Instant.now().minusSeconds(60), alphaPage.pageId(),
+                "PUBLICATION_INVALIDATED", "page", 1, "1.1.0");
         HttpResponse<String> unauthenticated = http.send(HttpRequest.newBuilder(URI.create(
                         "http://127.0.0.1:" + port + "/api/v1/internal/event-admission/publication-invalidated"))
                 .header("Content-Type", "application/json")
@@ -610,18 +616,19 @@ class CmsPageIntegrationTests {
         assertThat(decision.path("resourceType").asText()).isEqualTo("page");
         assertThat(decision.path("resourceId").asText()).isEqualTo(alphaPage.pageId().toString());
         assertThat(decision.path("eventType").asText()).isEqualTo("PUBLICATION_INVALIDATED");
-        assertThat(decision.path("eventVersion").asLong()).isEqualTo(7);
+        assertThat(decision.path("eventVersion").asLong()).isEqualTo(1);
         assertThat(decision.path("schemaVersion").asText()).isEqualTo("1.1.0");
         assertThat(decision.path("topic").asText()).isEqualTo("tenant:" + alpha.organizationId() + ":publication");
         assertThat(Instant.parse(decision.path("validUntil").asText())).isBeforeOrEqualTo(bearerExpiry);
         assertThat(decision.has("membershipId")).isFalse();
         assertThat(decision.has("role")).isFalse();
 
-        for (HttpResponse<String> denied : List.of(unowned, crossTenantSelection, crossTenantResource)) {
+        for (HttpResponse<String> denied : List.of(unowned, crossTenantSelection, crossTenantResource, forgedVersion)) {
             assertThat(denied.statusCode()).isEqualTo(403);
             assertThat(json.readTree(denied.body()).path("code").asText()).isEqualTo("PERMISSION_DENIED");
         }
         assertThat(mismatch.statusCode()).isEqualTo(400);
+        assertThat(expired.statusCode()).isEqualTo(401);
         assertThat(unauthenticated.statusCode()).isEqualTo(401);
         assertThat(json.readTree(unauthenticated.body()).path("code").asText()).isEqualTo("AUTHENTICATION_REQUIRED");
 

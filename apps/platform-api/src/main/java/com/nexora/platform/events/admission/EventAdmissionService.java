@@ -51,21 +51,24 @@ public class EventAdmissionService {
         return tenantContexts.withFreshTenant(selected, (actor, jdbc) -> {
             permissions.require(jdbc, actor, "page.publish");
             PageResource page = findPublishedPage(jdbc, candidate.resourceId(), actor.organizationId());
+            if (candidate.eventVersion() != page.eventVersion()) {
+                throw denied();
+            }
             Instant validUntil = validity(bearerExpiresAt);
             return new AdmissionDecision(
                     actor.organizationId(), actor.subjectId(), actor.subjectId(), RESOURCE_TYPE, page.id(),
-                    EVENT_TYPE, candidate.eventVersion(), SCHEMA_VERSION,
+                    EVENT_TYPE, page.eventVersion(), SCHEMA_VERSION,
                     "tenant:%s:publication".formatted(actor.organizationId()), validUntil);
         });
     }
 
     private PageResource findPublishedPage(JdbcTemplate jdbc, UUID pageId, UUID organizationId) {
         return jdbc.query("""
-                SELECT id, organization_id
+                SELECT id, draft_version
                 FROM nexora.pages
                 WHERE id = ? AND organization_id = ? AND state = 'PUBLISHED'
                 """, (result, row) -> new PageResource(
-                        result.getObject("id", UUID.class), result.getObject("organization_id", UUID.class)),
+                        result.getObject("id", UUID.class), result.getLong("draft_version")),
                 pageId, organizationId).stream().findFirst().orElseThrow(this::denied);
     }
 
@@ -93,7 +96,7 @@ public class EventAdmissionService {
     record CandidateEnvelope(
             String eventType, String resourceType, UUID resourceId, long eventVersion, String schemaVersion) { }
 
-    private record PageResource(UUID id, UUID organizationId) { }
+    private record PageResource(UUID id, long eventVersion) { }
 
     public record AdmissionDecision(
             UUID organizationId,
