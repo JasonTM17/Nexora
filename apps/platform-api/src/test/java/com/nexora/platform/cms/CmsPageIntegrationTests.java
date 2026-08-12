@@ -12,9 +12,11 @@ import com.nexora.platform.events.outbox.OutboxEventRepository;
 import com.nexora.platform.events.outbox.OutboxPublisher;
 import com.nexora.platform.events.outbox.OutboxPublisherProperties;
 import com.nexora.platform.events.outbox.OutboxTransport;
-import com.nexora.platform.events.outbox.OutboxTransportException;
+import com.nexora.platform.events.outbox.OutboxContractViolationException;
 import com.nexora.platform.events.outbox.EventContractV1_1;
+import com.nexora.platform.events.outbox.CmsWorkflowOutboxRecorder;
 import com.nexora.platform.tenant.TenantContext;
+import com.nexora.platform.tenant.TenantContextService;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jwt.SignedJWT;
 import io.nats.client.Nats;
@@ -80,6 +82,12 @@ class CmsPageIntegrationTests {
 
     @Autowired
     private OutboxTransport outboxTransport;
+
+    @Autowired
+    private CmsWorkflowOutboxRecorder outboxRecorder;
+
+    @Autowired
+    private TenantContextService tenantContexts;
 
     @LocalServerPort
     private int port;
@@ -308,6 +316,25 @@ class CmsPageIntegrationTests {
     }
 
     @Test
+    void reusesTheOriginalOutboxReceiptForTheSameArchiveRequest() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "outbox-idempotency"),
+                "cms-outbox-idempotency-create-1");
+        publish(tenant, page.pageId());
+        pages.archive(tenant.ownerContext(), page.pageId(), 1, "cms-outbox-idempotency-archive-1");
+        CmsPageService.PageView archived = pages.get(tenant.ownerContext(), page.pageId());
+        UUID[] replay = tenantContexts.withFreshTenant(tenant.ownerContext(), (authoritative, jdbc) -> new UUID[] {
+            outboxRecorder.recordArchivedPage(jdbc, authoritative, page.pageId(), archived.draftVersion(), archived.updatedAt()),
+            outboxRecorder.recordArchivedPage(jdbc, authoritative, page.pageId(), archived.draftVersion(), archived.updatedAt())
+        });
+
+        assertThat(replay[1]).isEqualTo(replay[0]);
+        assertThat(count("SELECT count(*) FROM nexora.outbox_events WHERE resource_id = '" + page.pageId()
+                + "' AND event_type = 'WORKFLOW_TRANSITIONED'"))
+                .isEqualTo(1);
+    }
+
+    @Test
     void retriesAfterTransportOutageThenRecoversThroughJetStream() throws Exception {
         CmsFixture tenant = seedTenant();
         CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "outbox-retry"),
@@ -373,7 +400,7 @@ class CmsPageIntegrationTests {
         long messagesBefore = streamMessageCount();
 
         assertThatThrownBy(() -> outboxTransport.publish(hostile))
-                .isInstanceOf(OutboxTransportException.class)
+                .isInstanceOf(OutboxContractViolationException.class)
                 .hasMessageContaining("does not satisfy contract v1.1");
 
         assertThat(streamMessageCount()).isEqualTo(messagesBefore);
