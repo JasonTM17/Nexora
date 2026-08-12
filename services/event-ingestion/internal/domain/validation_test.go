@@ -37,6 +37,15 @@ func TestValidateEnvelopeRejectsUnsafePayloadAndRouting(t *testing.T) {
 			event.SafePayload["progress"] = json.Number("101")
 			return event
 		}},
+		{name: "event version above JCS safe range", mutate: func(event EventEnvelope) EventEnvelope {
+			event.EventVersion = 9007199254740992
+			event.SafePayload["eventVersion"] = json.Number("9007199254740992")
+			return event
+		}},
+		{name: "safe payload event version above JCS safe range", mutate: func(event EventEnvelope) EventEnvelope {
+			event.SafePayload["eventVersion"] = json.Number("9007199254740992")
+			return event
+		}},
 		{name: "secret in idempotency digest", mutate: func(event EventEnvelope) EventEnvelope {
 			event.IdempotencyKeyDigest = "Bearer-secret-value-0001"
 			return event

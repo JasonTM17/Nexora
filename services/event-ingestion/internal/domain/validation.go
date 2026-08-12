@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	SchemaVersion = "1.1.0"
-	maxAuthTTL    = 5 * time.Minute
+	SchemaVersion    = "1.1.0"
+	maxAuthTTL       = 5 * time.Minute
+	maxEventVersion  int64 = 9007199254740991
 )
 
 var (
@@ -110,7 +111,7 @@ func ValidateEnvelope(envelope EventEnvelope) error {
 		!uuidPattern.MatchString(envelope.ResourceID) {
 		return invalid("identifier")
 	}
-	if envelope.EventVersion <= 0 {
+	if envelope.EventVersion < 1 || envelope.EventVersion > maxEventVersion {
 		return invalid("eventVersion")
 	}
 	route, ok := envelope.EventType.Route()
@@ -185,8 +186,8 @@ func validateSafePayload(envelope EventEnvelope) error {
 				return err
 			}
 		case "eventVersion":
-			number, ok := numericValue(value)
-			if !ok || number < 1 || number != math.Trunc(number) {
+			_, ok := eventVersionValue(value)
+			if !ok {
 				return invalid("safePayload.eventVersion")
 			}
 		case "progress":
@@ -259,12 +260,43 @@ func validateSafePayload(envelope EventEnvelope) error {
 		}
 	}
 	if value, ok := envelope.SafePayload["eventVersion"]; ok {
-		number, valid := numericValue(value)
-		if !valid || number != float64(envelope.EventVersion) {
+		number, valid := eventVersionValue(value)
+		if !valid || number != envelope.EventVersion {
 			return invalid("safePayload.eventVersion")
 		}
 	}
 	return nil
+}
+
+func eventVersionValue(value any) (int64, bool) {
+	switch number := value.(type) {
+	case json.Number:
+		parsed, err := number.Int64()
+		return parsed, err == nil && parsed >= 1 && parsed <= maxEventVersion
+	case int:
+		return int64(number), number >= 1 && int64(number) <= maxEventVersion
+	case int32:
+		return int64(number), number >= 1 && int64(number) <= maxEventVersion
+	case int64:
+		return number, number >= 1 && number <= maxEventVersion
+	case uint:
+		return int64(number), number >= 1 && uint64(number) <= uint64(maxEventVersion)
+	case uint64:
+		return int64(number), number >= 1 && number <= uint64(maxEventVersion)
+	case float32:
+		return eventVersionFloat(float64(number))
+	case float64:
+		return eventVersionFloat(number)
+	default:
+		return 0, false
+	}
+}
+
+func eventVersionFloat(number float64) (int64, bool) {
+	if math.IsNaN(number) || math.IsInf(number, 0) || number < 1 || number > float64(maxEventVersion) || number != math.Trunc(number) {
+		return 0, false
+	}
+	return int64(number), true
 }
 
 func validateSafeDisplay(eventType EventType, value any) error {

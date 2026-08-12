@@ -15,6 +15,7 @@ var publicationInvalidatedFixture []byte
 func TestFrozenPublicationFixtureMatchesLocalEnvelopeBoundary(t *testing.T) {
 	decoder := json.NewDecoder(bytes.NewReader(publicationInvalidatedFixture))
 	decoder.UseNumber()
+	decoder.DisallowUnknownFields()
 	var envelope EventEnvelope
 	if err := decoder.Decode(&envelope); err != nil {
 		t.Fatalf("Decode() error = %v", err)

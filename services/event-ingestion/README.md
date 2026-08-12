@@ -21,7 +21,7 @@ claim that browser credentials or tenant IDs can be trusted here.
 
 `internal/domain/testdata/v1/publication-invalidated.json` is a local test
 fixture pinned to `packages/contracts/domain/v1/event-contract.json` SHA-256
-`D367422D60EFFEA6B0CCE7EBC4A4ABE557D8F613A3E048E5AC914C04FB686337` on
+`7954CA52DA41EFD5E434089E2959812AED2FCCBFFA8BF77634591326879B214D` on
 the current main. It is not a second contract source. Any canonical contract
 change requires revalidating this fixture before a M3-T05 interface pin.
 
