@@ -95,7 +95,14 @@ BEGIN
     END IF;
   END LOOP;
 
-  IF in_payload ->> 'resourceType' <> in_resource_type
+  IF jsonb_typeof(in_payload -> 'resourceId') <> 'string'
+     OR jsonb_typeof(in_payload -> 'resourceType') <> 'string'
+     OR jsonb_typeof(in_payload -> 'organizationId') <> 'string'
+     OR jsonb_typeof(in_payload -> 'subjectId') <> 'string'
+     OR jsonb_typeof(in_payload -> 'actorId') <> 'string'
+     OR jsonb_typeof(in_payload -> 'traceId') <> 'string'
+     OR jsonb_typeof(in_payload -> 'schemaVersion') <> 'string'
+     OR in_payload ->> 'resourceType' <> in_resource_type
      OR in_resource_type NOT IN ('page', 'job', 'notification', 'collaboration_session', 'outbox')
      OR in_payload ->> 'schemaVersion' <> '1.1.0'
      OR in_payload ->> 'resourceId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
@@ -109,13 +116,20 @@ BEGIN
     RETURN false;
   END IF;
 
-  IF (in_payload ? 'correlationId' AND in_payload ->> 'correlationId' !~ '^[a-f0-9]{32}$')
-     OR (in_payload ? 'receiptId' AND in_payload ->> 'receiptId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') THEN
+  IF (in_payload ? 'correlationId' AND (
+        jsonb_typeof(in_payload -> 'correlationId') <> 'string'
+        OR in_payload ->> 'correlationId' !~ '^[a-f0-9]{32}$'
+      ))
+     OR (in_payload ? 'receiptId' AND (
+        jsonb_typeof(in_payload -> 'receiptId') <> 'string'
+        OR in_payload ->> 'receiptId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      )) THEN
     RETURN false;
   END IF;
 
   IF in_event_type = 'JOB_PROGRESS_CHANGED' THEN
     IF NOT (in_payload ?& ARRAY['jobState', 'progress'])
+       OR jsonb_typeof(in_payload -> 'jobState') <> 'string'
        OR in_payload ->> 'jobState' NOT IN ('QUEUED', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELED')
        OR jsonb_typeof(in_payload -> 'progress') <> 'number'
        OR (in_payload ->> 'progress')::numeric NOT BETWEEN 0 AND 100
@@ -326,11 +340,11 @@ BEGIN
     RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'UNOWNED_SUBJECT';
   END IF;
 
-  IF in_schema_version <> '1.1.0'
-     OR in_event_version <= 0
-     OR in_idempotency_key_digest !~ '^sha256:[a-f0-9]{64}$'
-     OR in_request_fingerprint_digest !~ '^sha256:[a-f0-9]{64}$'
-     OR in_payload_digest !~ '^sha256:[a-f0-9]{64}$'
+  IF in_schema_version IS DISTINCT FROM '1.1.0'
+     OR in_event_version IS NULL OR in_event_version <= 0
+     OR in_idempotency_key_digest IS NULL OR in_idempotency_key_digest !~ '^sha256:[a-f0-9]{64}$'
+     OR in_request_fingerprint_digest IS NULL OR in_request_fingerprint_digest !~ '^sha256:[a-f0-9]{64}$'
+     OR in_payload_digest IS NULL OR in_payload_digest !~ '^sha256:[a-f0-9]{64}$'
      OR NOT nexora.outbox_event_route_v1_1_is_valid(in_event_type, in_resource_type, in_topic, in_organization_id, in_resource_id)
      OR NOT nexora.outbox_safe_payload_v1_1_is_allowed(in_event_type, in_resource_type, in_safe_payload) THEN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'PAYLOAD_REJECTED';
@@ -446,10 +460,10 @@ AS $function$
 DECLARE
   existing nexora.event_ledger_entries%ROWTYPE;
 BEGIN
-  IF in_schema_version <> '1.1.0'
-     OR in_event_version <= 0
-     OR in_idempotency_key_digest !~ '^sha256:[a-f0-9]{64}$'
-     OR in_payload_digest !~ '^sha256:[a-f0-9]{64}$'
+  IF in_schema_version IS DISTINCT FROM '1.1.0'
+     OR in_event_version IS NULL OR in_event_version <= 0
+     OR in_idempotency_key_digest IS NULL OR in_idempotency_key_digest !~ '^sha256:[a-f0-9]{64}$'
+     OR in_payload_digest IS NULL OR in_payload_digest !~ '^sha256:[a-f0-9]{64}$'
      OR NOT nexora.outbox_event_route_v1_1_is_valid(in_event_type, in_resource_type, in_topic, in_organization_id, in_resource_id)
      OR NOT nexora.outbox_safe_payload_v1_1_is_allowed(in_event_type, in_resource_type, in_safe_payload)
      OR in_safe_payload ->> 'organizationId' <> in_organization_id::text

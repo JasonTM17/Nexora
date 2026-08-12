@@ -168,7 +168,8 @@ BEGIN
 
   IF nexora.outbox_safe_payload_v1_1_is_allowed('PUBLICATION_INVALIDATED', 'page', '{"body":"secret content"}'::jsonb)
      OR nexora.outbox_safe_payload_v1_1_is_allowed('PUBLICATION_INVALIDATED', 'page', '{"safeDisplay":{"label":"PUBLICATION_INVALIDATED","status":"ARCHIVED","variant":"neutral"}}'::jsonb)
-     OR nexora.outbox_safe_payload_v1_1_is_allowed('PUBLICATION_INVALIDATED', 'page', '{"resourceId":"30000000-0000-4000-8000-000000000001","resourceType":"page","organizationId":"10000000-0000-4000-8000-000000000001","subjectId":"20000000-0000-4000-8000-000000000007","actorId":"20000000-0000-4000-8000-000000000007","eventVersion":1,"traceId":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","schemaVersion":"1.1.0","safeDisplay":{"label":"PUBLICATION_INVALIDATED","status":"ARCHIVED","variant":"purple"}}'::jsonb) THEN
+     OR nexora.outbox_safe_payload_v1_1_is_allowed('PUBLICATION_INVALIDATED', 'page', '{"resourceId":"30000000-0000-4000-8000-000000000001","resourceType":"page","organizationId":"10000000-0000-4000-8000-000000000001","subjectId":"20000000-0000-4000-8000-000000000007","actorId":"20000000-0000-4000-8000-000000000007","eventVersion":1,"traceId":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","schemaVersion":"1.1.0","safeDisplay":{"label":"PUBLICATION_INVALIDATED","status":"ARCHIVED","variant":"purple"}}'::jsonb)
+     OR nexora.outbox_safe_payload_v1_1_is_allowed('PUBLICATION_INVALIDATED', 'page', '{"resourceId":null,"resourceType":"page","organizationId":"10000000-0000-4000-8000-000000000001","subjectId":"20000000-0000-4000-8000-000000000007","actorId":"20000000-0000-4000-8000-000000000007","eventVersion":1,"traceId":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","schemaVersion":"1.1.0","safeDisplay":{"label":"PUBLICATION_INVALIDATED","status":"ARCHIVED","variant":"neutral"}}'::jsonb) THEN
     RAISE EXCEPTION 'unsafe payload or sensitive display value passed';
   END IF;
 
