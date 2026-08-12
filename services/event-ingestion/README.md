@@ -55,6 +55,21 @@ go test ./...
 go vet ./...
 ```
 
+Build and run the isolated container with Docker Compose:
+
+```powershell
+docker compose up --build --wait -d
+docker compose ps
+docker compose down --volumes --remove-orphans
+```
+
+The service-only Compose file keeps the listener on container loopback and
+uses an in-container healthcheck, so it does not publish an unauthenticated
+port to the host. It runs the read-only, capability-dropped image. This is
+disposable local evidence only. The
+the default process still has no NATS connection or event route until the
+contract-owned runtime wiring packet is accepted.
+
 `GET /healthz` reports process liveness and `GET /readyz` reports service
 readiness. `GET /metrics` exposes only bounded aggregate HTTP outcome, in-flight
 and duration values in Prometheus text format; it never includes credentials,

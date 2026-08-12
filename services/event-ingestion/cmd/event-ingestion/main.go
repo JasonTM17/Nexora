@@ -3,16 +3,24 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/jasontm17/nexora/services/event-ingestion/internal/application"
 	"github.com/jasontm17/nexora/services/event-ingestion/internal/config"
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--healthcheck" {
+		healthcheck()
+		return
+	}
+
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	settings, err := config.Load(os.LookupEnv)
 	if err != nil {
@@ -28,4 +36,30 @@ func main() {
 		logger.Error("event ingestion server stopped unexpectedly", "error", err)
 		os.Exit(1)
 	}
+}
+
+func healthcheck() {
+	settings, err := config.Load(os.LookupEnv)
+	if err != nil {
+		os.Exit(1)
+	}
+	client := http.Client{Timeout: time.Second}
+	if err := checkHealth(settings, &client); err != nil {
+		os.Exit(1)
+	}
+}
+
+func checkHealth(settings config.Config, client *http.Client) error {
+	if client == nil {
+		return fmt.Errorf("healthcheck HTTP client is required")
+	}
+	response, err := client.Get("http://" + settings.Address + "/healthz")
+	if err != nil {
+		return fmt.Errorf("request health endpoint: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("health endpoint returned HTTP %d", response.StatusCode)
+	}
+	return nil
 }
