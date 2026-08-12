@@ -11,13 +11,14 @@ NATS publish backpressure, and load measurements can be operated independently.
 It does not own database writes, migrations, shared event contracts, root
 runtime wiring, or browser authorization.
 
-The current branch validates the frozen event shape, enforces trusted-context
-cross-binding, applies bounded per-principal admission, and publishes only
-after a JetStream acknowledgement. Its HTTP adapter is dependency-injected and
-is not registered by the default process: the backend still owns the missing
-short-lived ingestion-credential issuer and runtime wiring owns the NATS
-connection/configuration. This is deliberate fail-closed behavior, not a
-claim that browser credentials or tenant IDs can be trusted here.
+The current branch validates the frozen event shape, forwards the caller's
+existing bearer only to the Spring-owned admission boundary, exact-compares its
+fresh RLS decision, applies bounded per-principal admission, and publishes only
+after a JetStream acknowledgement. It does not mint, cache or parse a second
+credential type. Spring remains the JWT, current-membership and page authority;
+the Go process rejects the route unless both explicit runtime dependencies are
+configured. This is deliberate fail-closed behavior, not a claim that browser
+credentials or tenant IDs can be trusted here.
 
 `internal/domain/testdata/v1/publication-invalidated.json` is a local test
 fixture pinned to `packages/contracts/domain/v1/event-contract.json` SHA-256
@@ -47,6 +48,8 @@ All defaults are local-only and bounded:
 | `NEXORA_EVENT_INGESTION_PUBLISH_TIMEOUT` | `2s` | 1ms..30s acknowledgement deadline |
 | `NEXORA_EVENT_INGESTION_RATE_LIMIT_PER_MINUTE` | `60` | 1..10000 per trusted organization/subject |
 | `NEXORA_EVENT_INGESTION_RATE_LIMIT_KEYS` | `10000` | 1..100000 retained principals; saturation rejects new keys |
+| `NEXORA_EVENT_INGESTION_ADMISSION_URL` | unset | Exact `http(s)://host/api/v1/internal/event-admission`; paired with NATS URL |
+| `NEXORA_EVENT_INGESTION_NATS_URL` | unset | Credential-free `nats://host:port`; paired with admission URL |
 
 Run the local checks from this directory:
 
@@ -67,8 +70,10 @@ The service-only Compose file keeps the listener on container loopback and
 uses an in-container healthcheck, so it does not publish an unauthenticated
 port to the host. It runs the read-only, capability-dropped image. This is
 disposable local evidence only. The default process still has no NATS
-connection or event route until the
-contract-owned runtime wiring packet is accepted.
+connection or event route until both URLs are configured. The admission URL is
+a private service-to-service boundary, excluded from OpenAPI/generated browser
+clients; the later runtime-wiring packet owns its network placement and any
+separate credential transport.
 
 `GET /healthz` reports process liveness and `GET /readyz` reports service
 readiness. `GET /metrics` exposes only bounded aggregate HTTP outcome, in-flight
