@@ -420,7 +420,7 @@ CREATE INDEX event_ledger_entries_resource_lookup_idx
 ON nexora.event_ledger_entries (organization_id, resource_type, resource_id, occurred_at, event_id);
 
 COMMENT ON TABLE nexora.event_ledger_entries IS
-  'Private durable M3 consumer receipt ledger. Runtime has function-only access; M3-T05 recomputes canonical payload digests before invoking the record function.';
+  'Private durable M3 consumer receipt ledger. Runtime has function-only access; M3-T05 recomputes canonical payload digests and verifies the trusted NATS envelope before invoking the record function.';
 
 CREATE FUNCTION nexora.record_event_ledger_entry(
   in_event_id uuid,
@@ -444,29 +444,8 @@ SECURITY DEFINER
 SET search_path = pg_catalog, nexora
 AS $function$
 DECLARE
-  current_organization uuid;
-  current_subject uuid;
-  current_membership uuid;
   existing nexora.event_ledger_entries%ROWTYPE;
 BEGIN
-  current_organization := NULLIF(current_setting('nexora.organization_id', true), '')::uuid;
-  current_subject := NULLIF(current_setting('nexora.subject_id', true), '')::uuid;
-  current_membership := NULLIF(current_setting('nexora.membership_id', true), '')::uuid;
-
-  IF current_organization IS NULL OR current_subject IS NULL OR current_membership IS NULL
-     OR in_organization_id IS DISTINCT FROM current_organization
-     OR in_subject_id IS DISTINCT FROM current_subject
-     OR in_actor_id IS DISTINCT FROM current_subject
-     OR NOT EXISTS (
-       SELECT 1 FROM nexora.membership_authorizations AS actor
-       WHERE actor.organization_id = current_organization
-         AND actor.subject_id = current_subject
-         AND actor.membership_id = current_membership
-         AND actor.status = 'ACTIVE'
-     ) THEN
-    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'UNOWNED_SUBJECT';
-  END IF;
-
   IF in_schema_version <> '1.1.0'
      OR in_event_version <= 0
      OR in_idempotency_key_digest !~ '^sha256:[a-f0-9]{64}$'
