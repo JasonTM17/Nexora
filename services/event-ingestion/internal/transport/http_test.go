@@ -59,6 +59,45 @@ func TestHealthAndReadinessEndpoints(t *testing.T) {
 	}
 }
 
+func TestMetricsEndpointReportsOnlyBoundedRequestOutcomes(t *testing.T) {
+	ingestor := &ingestorStub{receipt: domain.PublishReceipt{EventID: "70000000-0000-4000-8000-000000000099"}}
+	handler := NewHandler(readinessStub(true), WithEventIngestion(ingestor, 4096))
+
+	unauthorized := httptest.NewRequest(http.MethodPost, "/v1/events", nil)
+	handler.ServeHTTP(httptest.NewRecorder(), unauthorized)
+
+	body, err := json.Marshal(transportEnvelope())
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	accepted := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(string(body)))
+	accepted.Header.Set("Content-Type", "application/json")
+	accepted.Header.Set("Authorization", "Bearer verified-local-credential")
+	handler.ServeHTTP(httptest.NewRecorder(), accepted)
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	metrics := response.Body.String()
+	if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" || response.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("metrics response = %d %#v", response.Code, response.Header())
+	}
+	for _, expected := range []string{
+		`nexora_event_ingestion_http_requests_total{outcome="accepted"} 1`,
+		`nexora_event_ingestion_http_requests_total{outcome="unauthorized"} 1`,
+		`nexora_event_ingestion_http_request_duration_seconds_count 2`,
+		`nexora_event_ingestion_http_in_flight_requests 0`,
+	} {
+		if !strings.Contains(metrics, expected) {
+			t.Fatalf("metrics missing %q: %s", expected, metrics)
+		}
+	}
+	for _, unexpected := range []string{"verified-local-credential", "10000000-0000-4000-8000-000000000001", "00000000000000000000000000000001"} {
+		if strings.Contains(metrics, unexpected) {
+			t.Fatalf("metrics leaked request value %q: %s", unexpected, metrics)
+		}
+	}
+}
+
 func TestEventIngestionAcceptsOnlyBoundedBearerJSON(t *testing.T) {
 	ingestor := &ingestorStub{receipt: domain.PublishReceipt{EventID: "70000000-0000-4000-8000-000000000099"}}
 	handler := NewHandler(readinessStub(true), WithEventIngestion(ingestor, 4096))

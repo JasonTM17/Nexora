@@ -56,5 +56,7 @@ go vet ./...
 ```
 
 `GET /healthz` reports process liveness and `GET /readyz` reports service
-readiness. Neither endpoint implies NATS, persistence, deployment, or provider
-readiness.
+readiness. `GET /metrics` exposes only bounded aggregate HTTP outcome, in-flight
+and duration values in Prometheus text format; it never includes credentials,
+tenant/resource IDs, event IDs, trace IDs or payload values. None of these
+endpoints implies NATS, persistence, deployment, or provider readiness.

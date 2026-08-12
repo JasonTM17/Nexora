@@ -28,6 +28,7 @@ type EventIngestor interface {
 type handlerOptions struct {
 	ingestor  EventIngestor
 	bodyLimit int64
+	metrics   *ingestionMetrics
 }
 
 type HandlerOption func(*handlerOptions)
@@ -46,7 +47,7 @@ func WithEventIngestion(ingestor EventIngestor, bodyLimit int64) HandlerOption {
 // NewHandler provides process health endpoints. The event route is unavailable
 // unless an explicit trusted ingestion dependency is supplied.
 func NewHandler(readiness Readiness, options ...HandlerOption) http.Handler {
-	settings := handlerOptions{}
+	settings := handlerOptions{metrics: newIngestionMetrics()}
 	for _, option := range options {
 		if option != nil {
 			option(&settings)
@@ -65,12 +66,47 @@ func NewHandler(readiness Readiness, options ...HandlerOption) http.Handler {
 		}
 		writer.WriteHeader(http.StatusOK)
 	})
+	mux.HandleFunc("GET /metrics", settings.metrics.writePrometheus)
 	if settings.ingestor != nil {
 		mux.HandleFunc("POST /v1/events", func(writer http.ResponseWriter, request *http.Request) {
-			handleIngest(writer, request, settings.ingestor, settings.bodyLimit)
+			handleObservedIngest(writer, request, settings.ingestor, settings.bodyLimit, settings.metrics)
 		})
 	}
 	return mux
+}
+
+func handleObservedIngest(writer http.ResponseWriter, request *http.Request, ingestor EventIngestor, bodyLimit int64, metrics *ingestionMetrics) {
+	started := metrics.begin()
+	recorder := &statusRecorder{ResponseWriter: writer}
+	defer func() { metrics.finish(recorder.statusCode(), started) }()
+	handleIngest(recorder, request, ingestor, bodyLimit)
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (recorder *statusRecorder) WriteHeader(status int) {
+	if recorder.status != 0 {
+		return
+	}
+	recorder.status = status
+	recorder.ResponseWriter.WriteHeader(status)
+}
+
+func (recorder *statusRecorder) Write(body []byte) (int, error) {
+	if recorder.status == 0 {
+		recorder.WriteHeader(http.StatusOK)
+	}
+	return recorder.ResponseWriter.Write(body)
+}
+
+func (recorder *statusRecorder) statusCode() int {
+	if recorder.status == 0 {
+		return http.StatusOK
+	}
+	return recorder.status
 }
 
 func handleIngest(writer http.ResponseWriter, request *http.Request, ingestor EventIngestor, bodyLimit int64) {
