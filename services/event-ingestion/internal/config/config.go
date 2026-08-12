@@ -193,7 +193,7 @@ func validateAdmissionURL(value string) error {
 
 func validateNATSURL(value string) error {
 	parsed, err := url.ParseRequestURI(value)
-	if err != nil || parsed.Scheme != "nats" || parsed.Host == "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+	if err != nil || parsed.Scheme != "nats" || parsed.Host == "" || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
 		return fmt.Errorf("NEXORA_EVENT_INGESTION_NATS_URL must be a nats:// host URL")
 	}
 	return nil

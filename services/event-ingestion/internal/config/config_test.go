@@ -46,14 +46,19 @@ func TestLoadEnablesOnlyCompleteValidatedIngestionDependencies(t *testing.T) {
 		t.Fatalf("Load() = %#v, %v", settings, err)
 	}
 
-	for name, value := range map[string]string{
-		"NEXORA_EVENT_INGESTION_ADMISSION_URL": "https://example.test/other",
-		"NEXORA_EVENT_INGESTION_NATS_URL":      "https://127.0.0.1:4222",
+	for _, test := range []struct {
+		name  string
+		key   string
+		value string
+	}{
+		{name: "wrong admission path", key: "NEXORA_EVENT_INGESTION_ADMISSION_URL", value: "https://example.test/other"},
+		{name: "wrong nats scheme", key: "NEXORA_EVENT_INGESTION_NATS_URL", value: "https://127.0.0.1:4222"},
+		{name: "nats credentials", key: "NEXORA_EVENT_INGESTION_NATS_URL", value: "nats://credential@127.0.0.1:4222"},
 	} {
-		t.Run(name, func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			_, err := Load(func(key string) (string, bool) {
-				if key == name {
-					return value, true
+				if key == test.key {
+					return test.value, true
 				}
 				if key == "NEXORA_EVENT_INGESTION_ADMISSION_URL" {
 					return "http://127.0.0.1:8080/api/v1/internal/event-admission", true
