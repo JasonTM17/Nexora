@@ -53,11 +53,15 @@ import java.sql.DriverManager;
 import java.sql.Statement;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
@@ -694,6 +698,35 @@ class CmsPageIntegrationTests {
         }
     }
 
+    @Test
+    void recordsTheBoundedGoIngressAndSpringAdmissionComparisonWithoutAThroughputClaim() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "go-joint-benchmark"),
+                "cms-go-joint-benchmark-create");
+        publish(tenant, page.pageId());
+        String bearer = ISSUER.token(tenant.ownerSubjectId(), Instant.now().plusSeconds(90));
+        int concurrency = 4;
+        int samples = 16;
+
+        GoIngestionRuntime go = startGoIngestion(120);
+        try {
+            List<HttpRequest> springRequests = new ArrayList<>();
+            List<HttpRequest> goRequests = new ArrayList<>();
+            for (int index = 0; index < samples; index++) {
+                springRequests.add(springAdmissionRequest(tenant, page, bearer));
+                goRequests.add(goIngressRequest(go, tenant, page, bearer));
+            }
+            BenchmarkResult spring = benchmark("spring-admission", springRequests, concurrency, 200);
+            long messagesBefore = goIngestionMessageCount();
+            BenchmarkResult ingress = benchmark("go-ingress", goRequests, concurrency, 202);
+
+            assertThat(goIngestionMessageCount()).isGreaterThanOrEqualTo(messagesBefore + samples);
+            writeJointBenchmark(spring, ingress, concurrency, samples);
+        } finally {
+            stopGoIngestion(go);
+        }
+    }
+
     private CmsPageService.CreateCommand create(CmsFixture tenant, String slug) {
         return new CmsPageService.CreateCommand(tenant.siteId(), slug, "Welcome", "1.0.0", digest('a'),
                 tenant.themeVersionId(), seo());
@@ -912,9 +945,15 @@ class CmsPageIntegrationTests {
     }
 
     private GoIngestionRuntime startGoIngestion() throws Exception {
+        return startGoIngestion(60);
+    }
+
+    private GoIngestionRuntime startGoIngestion(int rateLimitPerMinute) throws Exception {
         Path repository = Path.of("..", "..").toAbsolutePath().normalize();
         Path service = repository.resolve("services").resolve("event-ingestion");
-        Path binary = Files.createTempFile("nexora-event-ingestion-", ".exe");
+        String executableSuffix = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win")
+                ? ".exe" : "";
+        Path binary = Files.createTempFile("nexora-event-ingestion-", executableSuffix);
         Path output = Files.createTempFile("nexora-event-ingestion-", ".log");
         Files.deleteIfExists(binary);
         Process build = new ProcessBuilder("go", "build", "-o", binary.toString(), "./cmd/event-ingestion")
@@ -937,6 +976,7 @@ class CmsPageIntegrationTests {
                 "http://127.0.0.1:" + port + "/api/v1/internal/event-admission");
         launch.environment().put("NEXORA_EVENT_INGESTION_NATS_URL", natsUrl());
         launch.environment().put("NEXORA_EVENT_INGESTION_PUBLISH_TIMEOUT", "2s");
+        launch.environment().put("NEXORA_EVENT_INGESTION_RATE_LIMIT_PER_MINUTE", Integer.toString(rateLimitPerMinute));
         Process process = launch.start();
         GoIngestionRuntime runtime = new GoIngestionRuntime(process, binary, output, goPort);
         try {
@@ -945,6 +985,92 @@ class CmsPageIntegrationTests {
         } catch (Exception exception) {
             stopGoIngestion(runtime);
             throw exception;
+        }
+    }
+
+    private HttpRequest springAdmissionRequest(CmsFixture tenant, CmsPageService.PageView page, String bearer) {
+        return HttpRequest.newBuilder(URI.create(
+                        "http://127.0.0.1:" + port + "/api/v1/internal/event-admission/publication-invalidated"))
+                .header("Authorization", "Bearer " + bearer)
+                .header("X-Nexora-Organization-Id", tenant.organizationId().toString())
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(5))
+                .POST(HttpRequest.BodyPublishers.ofString("""
+                        {"eventType":"PUBLICATION_INVALIDATED","resourceType":"page",
+                        "resourceId":"%s","eventVersion":%d,"schemaVersion":"1.1.0"}
+                        """.formatted(page.pageId(), page.draftVersion()).replaceAll("\\s+", "")))
+                .build();
+    }
+
+    private HttpRequest goIngressRequest(GoIngestionRuntime go, CmsFixture tenant, CmsPageService.PageView page, String bearer)
+            throws Exception {
+        return HttpRequest.newBuilder(URI.create(go.baseUrl() + "/v1/events"))
+                .header("Authorization", "Bearer " + bearer)
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(5))
+                .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(publicationInvalidationEnvelope(tenant, page))))
+                .build();
+    }
+
+    private BenchmarkResult benchmark(String name, List<HttpRequest> requests, int concurrency, int expectedStatus)
+            throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(concurrency);
+        try {
+            long started = System.nanoTime();
+            List<Future<BenchmarkSample>> futures = new ArrayList<>();
+            for (HttpRequest request : requests) {
+                futures.add(executor.submit(() -> {
+                    long requestStarted = System.nanoTime();
+                    HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+                    return new BenchmarkSample(response.statusCode(), (System.nanoTime() - requestStarted) / 1_000_000);
+                }));
+            }
+            List<Long> latencies = new ArrayList<>();
+            for (Future<BenchmarkSample> future : futures) {
+                BenchmarkSample sample = future.get(10, TimeUnit.SECONDS);
+                assertThat(sample.status()).isEqualTo(expectedStatus);
+                latencies.add(sample.durationMillis());
+            }
+            return new BenchmarkResult(name, (System.nanoTime() - started) / 1_000_000, latencies);
+        } finally {
+            executor.shutdownNow();
+            executor.awaitTermination(5, TimeUnit.SECONDS);
+        }
+    }
+
+    private void writeJointBenchmark(BenchmarkResult spring, BenchmarkResult ingress, int concurrency, int samples)
+            throws Exception {
+        ObjectNode report = json.createObjectNode();
+        report.put("kind", "m3-go-spring-joint-local-benchmark");
+        report.put("sourceSha", gitHead());
+        report.put("dataset", "one published page and one active OWNER bearer; PUBLICATION_INVALIDATED/page");
+        report.put("concurrency", concurrency);
+        report.put("samplesPerPath", samples);
+        report.put("comparison", "Go full ingress versus Spring admission baseline; not a throughput or production claim");
+        report.put("javaVersion", System.getProperty("java.version"));
+        report.put("os", System.getProperty("os.name") + " " + System.getProperty("os.arch"));
+        report.set("springAdmission", json.valueToTree(spring));
+        report.set("goIngress", json.valueToTree(ingress));
+        Path output = Path.of("target", "m3-go-spring-joint-benchmark.json");
+        Files.createDirectories(output.getParent());
+        Files.writeString(output, json.writerWithDefaultPrettyPrinter().writeValueAsString(report), StandardCharsets.UTF_8);
+    }
+
+    private static String gitHead() throws Exception {
+        Process command = new ProcessBuilder("git", "rev-parse", "HEAD")
+                .directory(Path.of("..", "..").toAbsolutePath().normalize().toFile())
+                .redirectErrorStream(true)
+                .start();
+        if (!command.waitFor(5, TimeUnit.SECONDS) || command.exitValue() != 0) {
+            command.destroyForcibly();
+            throw new IllegalStateException("Unable to resolve the joint source SHA");
+        }
+        return new String(command.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+    }
+
+    private long goIngestionMessageCount() throws Exception {
+        try (io.nats.client.Connection connection = Nats.connect(natsUrl())) {
+            return connection.jetStreamManagement().getStreamInfo(GO_INGESTION_STREAM).getStreamState().getMsgCount();
         }
     }
 
@@ -1000,6 +1126,12 @@ class CmsPageIntegrationTests {
         String baseUrl() {
             return "http://127.0.0.1:" + port;
         }
+    }
+
+    private record BenchmarkSample(int status, long durationMillis) {
+    }
+
+    private record BenchmarkResult(String path, long elapsedMillis, List<Long> latencyMillis) {
     }
 
     private static void prepareMigrations() {
