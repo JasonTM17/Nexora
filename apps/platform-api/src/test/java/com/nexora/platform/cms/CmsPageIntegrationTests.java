@@ -39,9 +39,11 @@ import io.nats.client.api.ConsumerConfiguration;
 import io.nats.client.api.DeliverPolicy;
 import io.nats.client.api.StorageType;
 import io.nats.client.api.StreamConfiguration;
+import java.lang.management.ManagementFactory;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.ServerSocket;
+import java.net.Socket;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -716,7 +718,9 @@ class CmsPageIntegrationTests {
         publish(tenant, page.pageId());
         String bearer = ISSUER.token(tenant.ownerSubjectId(), Instant.now().plusSeconds(90));
         int concurrency = 4;
+        int warmupSamples = 4;
         int samples = 16;
+        Instant benchmarkStarted = Instant.now();
 
         GoIngestionRuntime go = startGoIngestion(120);
         try (io.nats.client.Connection connection = Nats.connect(natsUrl())) {
@@ -727,29 +731,98 @@ class CmsPageIntegrationTests {
                     .ackPolicy(AckPolicy.Explicit)
                     .buildPushSubscribeOptions();
             JetStreamSubscription subscription = connection.jetStream().subscribe(GO_INGESTION_SUBJECT, options);
+            List<HttpRequest> springWarmupRequests = new ArrayList<>();
+            List<HttpRequest> goWarmupRequests = new ArrayList<>();
             List<HttpRequest> springRequests = new ArrayList<>();
             List<HttpRequest> goRequests = new ArrayList<>();
+            for (int index = 0; index < warmupSamples; index++) {
+                springWarmupRequests.add(springAdmissionRequest(tenant, page, bearer));
+                goWarmupRequests.add(goIngressRequest(go, bearer,
+                        publicationInvalidationEnvelope(tenant, page, "go-joint-warmup-" + index)));
+            }
             for (int index = 0; index < samples; index++) {
                 springRequests.add(springAdmissionRequest(tenant, page, bearer));
                 goRequests.add(goIngressRequest(go, bearer,
                         publicationInvalidationEnvelope(tenant, page, "go-joint-benchmark-" + index)));
             }
+            benchmark("spring-admission-warmup", springWarmupRequests, concurrency, 200);
+            benchmark("go-ingress-warmup", goWarmupRequests, concurrency, 202);
+            assertDistinctDurableGoDeliveries(subscription, warmupSamples);
             BenchmarkResult spring = benchmark("spring-admission", springRequests, concurrency, 200);
             long messagesBefore = goIngestionMessageCount();
             BenchmarkResult ingress = benchmark("go-ingress", goRequests, concurrency, 202);
 
             assertThat(goIngestionMessageCount()).isGreaterThanOrEqualTo(messagesBefore + samples);
-            Set<String> deliveredEventIds = new HashSet<>();
-            for (int index = 0; index < samples; index++) {
-                Message delivery = subscription.nextMessage(Duration.ofSeconds(5));
-                assertThat(delivery).isNotNull();
-                EventLedgerReceipt receipt = new NatsJetStreamEventHandler(eventLedger).consumeAndAck(delivery);
-                assertThat(receipt.duplicate()).isFalse();
-                deliveredEventIds.add(receipt.eventId().toString());
-            }
-            assertThat(deliveredEventIds).hasSize(samples);
-            writeJointBenchmark(spring, ingress, concurrency, samples);
+            assertDistinctDurableGoDeliveries(subscription, samples);
+            writeJointBenchmark(spring, ingress, concurrency, warmupSamples, samples, benchmarkStarted);
             subscription.unsubscribe();
+        } finally {
+            stopGoIngestion(go);
+        }
+    }
+
+    @Test
+    void boundsGoIngressWhenJetStreamBecomesUnavailableWithoutPersistingTheEnvelope() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "go-joint-outage"),
+                "cms-go-joint-outage-create");
+        publish(tenant, page.pageId());
+        ObjectNode envelope = publicationInvalidationEnvelope(tenant, page, "go-joint-nats-outage");
+        GenericContainer<?> isolatedNats = new GenericContainer<>("nats:2.11.0-alpine")
+                .withCommand("-js", "-sd", "/data")
+                .withExposedPorts(4222);
+        GoIngestionRuntime go = null;
+        try {
+            isolatedNats.start();
+            String isolatedNatsUrl = "nats://" + isolatedNats.getHost() + ":" + isolatedNats.getMappedPort(4222);
+            prepareGoIngestionStream(isolatedNatsUrl);
+            go = startGoIngestion(60, isolatedNatsUrl);
+            isolatedNats.stop();
+
+            Instant started = Instant.now();
+            HttpResponse<String> response = http.send(HttpRequest.newBuilder(URI.create(go.baseUrl() + "/v1/events"))
+                    .header("Authorization", "Bearer " + ISSUER.token(tenant.ownerSubjectId(), Instant.now().plusSeconds(60)))
+                    .header("Content-Type", "application/json")
+                    .timeout(Duration.ofSeconds(5))
+                    .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(envelope)))
+                    .build(), HttpResponse.BodyHandlers.ofString());
+
+            assertThat(response.statusCode()).isEqualTo(503);
+            assertThat(json.readTree(response.body()).path("code").asText()).isEqualTo("INGESTION_UNAVAILABLE");
+            assertThat(Duration.between(started, Instant.now())).isLessThan(Duration.ofSeconds(4));
+            assertThat(count("SELECT count(*) FROM nexora.event_ledger_entries WHERE event_id = '"
+                    + envelope.path("eventId").asText() + "'")).isZero();
+        } finally {
+            stopGoIngestion(go);
+            isolatedNats.stop();
+        }
+    }
+
+    @Test
+    void clientDisconnectBeforeTheBoundedBodyCompletesDoesNotPublishAnEnvelope() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "go-joint-disconnect"),
+                "cms-go-joint-disconnect-create");
+        publish(tenant, page.pageId());
+        ObjectNode envelope = publicationInvalidationEnvelope(tenant, page, "go-joint-client-disconnect");
+        byte[] body = json.writeValueAsBytes(envelope);
+        GoIngestionRuntime go = startGoIngestion();
+        try (Socket socket = new Socket(InetAddress.getLoopbackAddress(), go.port())) {
+            long messagesBefore = goIngestionMessageCount();
+            String request = "POST /v1/events HTTP/1.1\r\n"
+                    + "Host: 127.0.0.1\r\n"
+                    + "Authorization: Bearer " + ISSUER.token(tenant.ownerSubjectId(), Instant.now().plusSeconds(60)) + "\r\n"
+                    + "Content-Type: application/json\r\n"
+                    + "Content-Length: " + body.length + "\r\n\r\n";
+            socket.getOutputStream().write(request.getBytes(StandardCharsets.US_ASCII));
+            socket.getOutputStream().write(body, 0, body.length / 2);
+            socket.getOutputStream().flush();
+            socket.close();
+
+            Thread.sleep(250);
+            assertThat(goIngestionMessageCount()).isEqualTo(messagesBefore);
+            assertThat(count("SELECT count(*) FROM nexora.event_ledger_entries WHERE event_id = '"
+                    + envelope.path("eventId").asText() + "'")).isZero();
         } finally {
             stopGoIngestion(go);
         }
@@ -922,7 +995,11 @@ class CmsPageIntegrationTests {
     }
 
     private static void prepareGoIngestionStream() {
-        try (io.nats.client.Connection connection = Nats.connect(natsUrl())) {
+        prepareGoIngestionStream(natsUrl());
+    }
+
+    private static void prepareGoIngestionStream(String endpoint) {
+        try (io.nats.client.Connection connection = Nats.connect(endpoint)) {
             connection.jetStreamManagement().addStream(StreamConfiguration.builder()
                     .name(GO_INGESTION_STREAM)
                     .subjects(GO_INGESTION_SUBJECT)
@@ -983,41 +1060,50 @@ class CmsPageIntegrationTests {
     }
 
     private GoIngestionRuntime startGoIngestion(int rateLimitPerMinute) throws Exception {
+        return startGoIngestion(rateLimitPerMinute, natsUrl());
+    }
+
+    private GoIngestionRuntime startGoIngestion(int rateLimitPerMinute, String jetStreamUrl) throws Exception {
         Path repository = Path.of("..", "..").toAbsolutePath().normalize();
         Path service = repository.resolve("services").resolve("event-ingestion");
         String executableSuffix = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win")
                 ? ".exe" : "";
         Path binary = Files.createTempFile("nexora-event-ingestion-", executableSuffix);
         Path output = Files.createTempFile("nexora-event-ingestion-", ".log");
-        Files.deleteIfExists(binary);
-        Process build = new ProcessBuilder("go", "build", "-o", binary.toString(), "./cmd/event-ingestion")
-                .directory(service.toFile())
-                .redirectErrorStream(true)
-                .redirectOutput(output.toFile())
-                .start();
-        if (!build.waitFor(60, TimeUnit.SECONDS) || build.exitValue() != 0) {
-            build.destroyForcibly();
-            throw new IllegalStateException("Unable to build the isolated Go ingress: " + processOutput(output));
-        }
-
-        int goPort = freeLoopbackPort();
-        ProcessBuilder launch = new ProcessBuilder(binary.toString())
-                .directory(service.toFile())
-                .redirectErrorStream(true)
-                .redirectOutput(output.toFile());
-        launch.environment().put("NEXORA_EVENT_INGESTION_ADDR", "127.0.0.1:" + goPort);
-        launch.environment().put("NEXORA_EVENT_INGESTION_ADMISSION_URL",
-                "http://127.0.0.1:" + port + "/api/v1/internal/event-admission");
-        launch.environment().put("NEXORA_EVENT_INGESTION_NATS_URL", natsUrl());
-        launch.environment().put("NEXORA_EVENT_INGESTION_PUBLISH_TIMEOUT", "2s");
-        launch.environment().put("NEXORA_EVENT_INGESTION_RATE_LIMIT_PER_MINUTE", Integer.toString(rateLimitPerMinute));
-        Process process = launch.start();
-        GoIngestionRuntime runtime = new GoIngestionRuntime(process, binary, output, goPort);
+        GoIngestionRuntime runtime = null;
         try {
+            Files.deleteIfExists(binary);
+            Process build = new ProcessBuilder("go", "build", "-o", binary.toString(), "./cmd/event-ingestion")
+                    .directory(service.toFile())
+                    .redirectErrorStream(true)
+                    .redirectOutput(output.toFile())
+                    .start();
+            if (!build.waitFor(60, TimeUnit.SECONDS) || build.exitValue() != 0) {
+                build.destroyForcibly();
+                throw new IllegalStateException("Unable to build the isolated Go ingress: " + processOutput(output));
+            }
+
+            int goPort = freeLoopbackPort();
+            ProcessBuilder launch = new ProcessBuilder(binary.toString())
+                    .directory(service.toFile())
+                    .redirectErrorStream(true)
+                    .redirectOutput(output.toFile());
+            launch.environment().put("NEXORA_EVENT_INGESTION_ADDR", "127.0.0.1:" + goPort);
+            launch.environment().put("NEXORA_EVENT_INGESTION_ADMISSION_URL",
+                    "http://127.0.0.1:" + port + "/api/v1/internal/event-admission");
+            launch.environment().put("NEXORA_EVENT_INGESTION_NATS_URL", jetStreamUrl);
+            launch.environment().put("NEXORA_EVENT_INGESTION_PUBLISH_TIMEOUT", "2s");
+            launch.environment().put("NEXORA_EVENT_INGESTION_RATE_LIMIT_PER_MINUTE", Integer.toString(rateLimitPerMinute));
+            runtime = new GoIngestionRuntime(launch.start(), binary, output, goPort);
             awaitGoHealth(runtime);
             return runtime;
         } catch (Exception exception) {
-            stopGoIngestion(runtime);
+            if (runtime != null) {
+                stopGoIngestion(runtime);
+            } else {
+                Files.deleteIfExists(binary);
+                Files.deleteIfExists(output);
+            }
             throw exception;
         }
     }
@@ -1058,30 +1144,70 @@ class CmsPageIntegrationTests {
                     return new BenchmarkSample(response.statusCode(), (System.nanoTime() - requestStarted) / 1_000_000);
                 }));
             }
-            List<Long> latencies = new ArrayList<>();
+            List<BenchmarkSample> samples = new ArrayList<>();
             for (Future<BenchmarkSample> future : futures) {
                 BenchmarkSample sample = future.get(10, TimeUnit.SECONDS);
                 assertThat(sample.status()).isEqualTo(expectedStatus);
-                latencies.add(sample.durationMillis());
+                samples.add(sample);
             }
-            return new BenchmarkResult(name, (System.nanoTime() - started) / 1_000_000, latencies);
+            return new BenchmarkResult(name, (System.nanoTime() - started) / 1_000_000, samples);
         } finally {
             executor.shutdownNow();
             executor.awaitTermination(5, TimeUnit.SECONDS);
         }
     }
 
-    private void writeJointBenchmark(BenchmarkResult spring, BenchmarkResult ingress, int concurrency, int samples)
+    private void assertDistinctDurableGoDeliveries(JetStreamSubscription subscription, int expectedDeliveries)
             throws Exception {
+        Set<String> deliveredEventIds = new HashSet<>();
+        Set<String> deliveredIdempotencyDigests = new HashSet<>();
+        for (int index = 0; index < expectedDeliveries; index++) {
+            Message delivery = subscription.nextMessage(Duration.ofSeconds(5));
+            assertThat(delivery).isNotNull();
+            JsonNode envelope = json.readTree(delivery.getData());
+            EventLedgerReceipt receipt = new NatsJetStreamEventHandler(eventLedger).consumeAndAck(delivery);
+            assertThat(receipt.duplicate()).isFalse();
+            deliveredEventIds.add(receipt.eventId().toString());
+            deliveredIdempotencyDigests.add(envelope.path("idempotencyKeyDigest").asText());
+        }
+        assertThat(deliveredEventIds).hasSize(expectedDeliveries);
+        assertThat(deliveredIdempotencyDigests).hasSize(expectedDeliveries);
+    }
+
+    private void writeJointBenchmark(
+            BenchmarkResult spring,
+            BenchmarkResult ingress,
+            int concurrency,
+            int warmupSamples,
+            int samples,
+            Instant started) throws Exception {
         ObjectNode report = json.createObjectNode();
         report.put("kind", "m3-go-spring-joint-local-benchmark");
         report.put("sourceSha", gitHead());
+        report.put("recordedAt", Instant.now().toString());
+        report.put("elapsedMillis", Duration.between(started, Instant.now()).toMillis());
         report.put("dataset", "one published page and one active OWNER bearer; PUBLICATION_INVALIDATED/page");
         report.put("concurrency", concurrency);
+        report.put("warmupSamplesPerPath", warmupSamples);
         report.put("samplesPerPath", samples);
-        report.put("comparison", "Go full ingress versus Spring admission baseline; not a throughput or production claim");
-        report.put("javaVersion", System.getProperty("java.version"));
-        report.put("os", System.getProperty("os.name") + " " + System.getProperty("os.arch"));
+        report.put("comparison", "Go full ingress versus Spring admission baseline; local bounded diagnostic, not a throughput or production claim");
+        report.put("retentionCriterion", "Retain Go only after all authorization, durable-failure, and an approved longer load profile pass; this probe deliberately makes no retention decision.");
+        ObjectNode environment = report.putObject("environment");
+        environment.put("javaVersion", System.getProperty("java.version"));
+        environment.put("os", System.getProperty("os.name") + " " + System.getProperty("os.arch"));
+        environment.put("availableProcessors", Runtime.getRuntime().availableProcessors());
+        environment.put("jvmMaxMemoryBytes", Runtime.getRuntime().maxMemory());
+        environment.put("jvmVendor", System.getProperty("java.vendor"));
+        environment.put("goVersion", commandOutput("go", "version"));
+        environment.put("postgresImage", "postgres:17.5-alpine");
+        environment.put("natsImage", "nats:2.11.0-alpine");
+        environment.put("jetStream", true);
+        environment.put("managementRuntime", ManagementFactory.getRuntimeMXBean().getName());
+        ObjectNode protocol = report.putObject("protocol");
+        protocol.put("warmup", "Each path receives four successful warmup requests before measurement.");
+        protocol.put("successCondition", "Every measured response has the expected status; every Go ingress event has a unique event ID and idempotency digest, then persists and ACKs through the durable consumer.");
+        protocol.put("changedVariable", "ingress path: Go full ingress versus direct Spring admission baseline");
+        protocol.put("limitation", "The paths are not equivalent end-to-end services; result is diagnostic raw data only.");
         report.set("springAdmission", json.valueToTree(spring));
         report.set("goIngress", json.valueToTree(ingress));
         Path output = Path.of("target", "m3-go-spring-joint-benchmark.json");
@@ -1090,13 +1216,17 @@ class CmsPageIntegrationTests {
     }
 
     private static String gitHead() throws Exception {
-        Process command = new ProcessBuilder("git", "rev-parse", "HEAD")
+        return commandOutput("git", "rev-parse", "HEAD");
+    }
+
+    private static String commandOutput(String... commandLine) throws Exception {
+        Process command = new ProcessBuilder(commandLine)
                 .directory(Path.of("..", "..").toAbsolutePath().normalize().toFile())
                 .redirectErrorStream(true)
                 .start();
         if (!command.waitFor(5, TimeUnit.SECONDS) || command.exitValue() != 0) {
             command.destroyForcibly();
-            throw new IllegalStateException("Unable to resolve the joint source SHA");
+            throw new IllegalStateException("Unable to read local test environment metadata");
         }
         return new String(command.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
     }
@@ -1164,7 +1294,7 @@ class CmsPageIntegrationTests {
     private record BenchmarkSample(int status, long durationMillis) {
     }
 
-    private record BenchmarkResult(String path, long elapsedMillis, List<Long> latencyMillis) {
+    private record BenchmarkResult(String path, long elapsedMillis, List<BenchmarkSample> samples) {
     }
 
     private static void prepareMigrations() {
