@@ -603,7 +603,7 @@ class CmsPageIntegrationTests {
         try {
             migrationDirectory = Files.createTempDirectory("nexora-cms-flyway-");
             Path source = Path.of("..", "..", "database", "migrations").toAbsolutePath().normalize();
-            for (int version = 1; version <= 20; version++) {
+            for (int version = 1; version <= 21; version++) {
                 String prefix = "V%03d__".formatted(version);
                 try (Stream<Path> candidates = Files.list(source)) {
                     Path migration = candidates.filter(path -> path.getFileName().toString().startsWith(prefix))

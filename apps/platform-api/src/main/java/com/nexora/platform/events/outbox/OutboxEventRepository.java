@@ -44,6 +44,16 @@ public class OutboxEventRepository {
                 """, this::map, eventId, owner, errorCode);
     }
 
+    /**
+     * Permanently rejects a claimed event that cannot satisfy the frozen
+     * contract. V021 keeps this separate from transient transport failure so
+     * it can never be claimed or retried again.
+     */
+    public void rejectContractViolation(UUID eventId, String owner) {
+        jdbc.queryForObject("SELECT id FROM nexora.reject_claimed_outbox_event(?, ?)", UUID.class,
+                eventId, owner);
+    }
+
     public void deadLetter(UUID eventId, String errorCode) {
         jdbc.queryForObject("SELECT id FROM nexora.dead_letter_failed_outbox_event(?, ?)", UUID.class,
                 eventId, errorCode);
