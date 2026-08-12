@@ -66,8 +66,8 @@ docker compose down --volumes --remove-orphans
 The service-only Compose file keeps the listener on container loopback and
 uses an in-container healthcheck, so it does not publish an unauthenticated
 port to the host. It runs the read-only, capability-dropped image. This is
-disposable local evidence only. The
-the default process still has no NATS connection or event route until the
+disposable local evidence only. The default process still has no NATS
+connection or event route until the
 contract-owned runtime wiring packet is accepted.
 
 `GET /healthz` reports process liveness and `GET /readyz` reports service
@@ -76,5 +76,7 @@ and duration values in Prometheus text format; it never includes credentials,
 tenant/resource IDs, event IDs, trace IDs or payload values. None of these
 endpoints implies NATS, persistence, deployment, or provider readiness.
 After trusted validation, accepted responses and JetStream messages carry the
-server-derived `Nexora-Trace-Id` for bounded correlation; rejected requests do
-not echo untrusted trace input.
+validated envelope `Nexora-Trace-Id` for bounded correlation. The trusted
+backend/runtime boundary remains responsible for deriving and binding that
+trace value before this adapter accepts the event; rejected requests do not
+echo untrusted trace input.
