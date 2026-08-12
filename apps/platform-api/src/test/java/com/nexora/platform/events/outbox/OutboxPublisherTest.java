@@ -30,6 +30,23 @@ class OutboxPublisherTest {
         assertThat(events.deadLetteredEventId).isEqualTo(fifthAttempt.id());
     }
 
+    @Test
+    void recordsContractViolationsSeparatelyFromTransientTransportFailures() {
+        OutboxEvent fifthAttempt = event(5);
+        RecordingEvents events = new RecordingEvents(fifthAttempt);
+        OutboxPublisher publisher = new OutboxPublisher(
+                events,
+                ignored -> { throw new OutboxContractViolationException("invalid envelope", null); },
+                new OutboxPublisherProperties(true, "nats://unused", "nexora.events.workflow", "test-worker",
+                        Duration.ofSeconds(30), 1));
+
+        OutboxPublisher.PublishResult result = publisher.publishAvailable();
+
+        assertThat(result.deadLettered()).isEqualTo(1);
+        assertThat(events.lastErrorCode).isEqualTo("EVENT_CONTRACT_REJECTED");
+        assertThat(events.deadLetterErrorCode).isEqualTo("EVENT_CONTRACT_REJECTED");
+    }
+
     private static OutboxEvent event(int attemptCount) {
         return new OutboxEvent(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "page", UUID.randomUUID(), 1,
@@ -41,6 +58,8 @@ class OutboxPublisherTest {
         private final OutboxEvent event;
         private UUID failedEventId;
         private UUID deadLetteredEventId;
+        private String lastErrorCode;
+        private String deadLetterErrorCode;
 
         private RecordingEvents(OutboxEvent event) {
             super(null);
@@ -55,12 +74,14 @@ class OutboxPublisherTest {
         @Override
         public OutboxEvent markFailed(UUID eventId, String owner, String errorCode) {
             failedEventId = eventId;
+            lastErrorCode = errorCode;
             return event;
         }
 
         @Override
         public void deadLetter(UUID eventId, String errorCode) {
             deadLetteredEventId = eventId;
+            deadLetterErrorCode = errorCode;
         }
     }
 }
