@@ -562,10 +562,18 @@ BEGIN;
 SET LOCAL ROLE nexora_migrator;
 DO $$
 BEGIN
-  IF (SELECT count(*) FROM nexora.outbox_events) <> 2
+  IF (SELECT count(*) FROM nexora.outbox_events) <> 3
      OR (SELECT count(*) FROM nexora.outbox_events WHERE state = 'PUBLISHED') <> 1
-     OR (SELECT count(*) FROM nexora.outbox_events WHERE state = 'DEAD_LETTER') <> 1 THEN
-    RAISE EXCEPTION 'final outbox projection does not retain both terminal outcomes';
+     OR (SELECT count(*) FROM nexora.outbox_events WHERE state = 'DEAD_LETTER') <> 2
+     OR NOT EXISTS (
+       SELECT 1
+       FROM nexora.outbox_events
+       WHERE id = '50000000-0000-4000-8000-0000000000c1'
+         AND schema_version = '1.0.0'
+         AND state = 'DEAD_LETTER'
+         AND last_error_code = 'LEGACY_SCHEMA_REJECTED'
+     ) THEN
+    RAISE EXCEPTION 'final outbox projection did not retain terminal outcomes and the rejected legacy receipt';
   END IF;
   IF (SELECT count(*) FROM nexora.event_ledger_entries) <> 1 THEN
     RAISE EXCEPTION 'event ledger did not retain one durable logical receipt';

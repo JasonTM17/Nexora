@@ -145,15 +145,15 @@ GRANT EXECUTE ON FUNCTION auth.jwt(), auth.uid(), realtime.topic() TO authentica
 GRANT SELECT, INSERT ON realtime.messages TO authenticated;
 '@
 
-    $m3Migrations = @($migrationFiles | Where-Object Name -in @(
+    $m3PreV020Migrations = @($migrationFiles | Where-Object Name -in @(
         'V014__outbox_events_and_private_realtime_policy.sql',
         'V015__scoped_realtime_channel_authorization.sql',
         'V016__realtime_presence_resource_projection.sql',
         'V017__realtime_projection_trigger_privileges.sql',
         'V018__realtime_descriptor_event_versions.sql',
-        'V019__realtime_descriptor_epoch_lookup.sql',
-        'V020__event_contract_v1_1_and_consumer_ledger.sql'
+        'V019__realtime_descriptor_epoch_lookup.sql'
     ))
+    $v020Migration = @($migrationFiles | Where-Object Name -eq 'V020__event_contract_v1_1_and_consumer_ledger.sql')
     $preM3Migrations = @($migrationFiles | Where-Object Name -notin @(
         'V014__outbox_events_and_private_realtime_policy.sql',
         'V015__scoped_realtime_channel_authorization.sql',
@@ -163,7 +163,7 @@ GRANT SELECT, INSERT ON realtime.messages TO authenticated;
         'V019__realtime_descriptor_epoch_lookup.sql',
         'V020__event_contract_v1_1_and_consumer_ledger.sql'
     ))
-    if ($m3Migrations.Count -ne 7) {
+    if ($m3PreV020Migrations.Count -ne 6 -or $v020Migration.Count -ne 1) {
         throw 'Expected ordered V014 through V020 M3-DB01 migrations.'
     }
 
@@ -179,10 +179,42 @@ GRANT SELECT, INSERT ON realtime.messages TO authenticated;
     Write-Output 'Running M2 CMS/immutable-history/RLS fixture'
     Invoke-PsqlText (Get-Content -LiteralPath $cmsFixture -Raw)
 
-    foreach ($migration in $m3Migrations) {
+    foreach ($migration in $m3PreV020Migrations) {
         Write-Output "Applying $($migration.Name)"
         Invoke-PsqlText (Get-Content -LiteralPath $migration.FullName -Raw)
     }
+
+    # Seed an active 1.0.0 row through the former V014 runtime function. V020
+    # must preserve its raw bytes and make it a visible terminal rejection,
+    # never quietly rewrite it as the 1.1.0 contract.
+    Invoke-PsqlText @'
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000007', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000007', true);
+SELECT nexora.record_outbox_event(
+  '50000000-0000-4000-8000-0000000000c1',
+  '10000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000007',
+  '20000000-0000-4000-8000-000000000007',
+  'page',
+  '30000000-0000-4000-8000-000000000001',
+  'PUBLICATION_INVALIDATED',
+  1,
+  'tenant:10000000-0000-4000-8000-000000000001:publication',
+  '1.0.0',
+  'sha256:legacy-contract-row',
+  'sha256:legacy-request-row',
+  'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  '{"resourceId":"30000000-0000-4000-8000-000000000001","resourceType":"page","organizationId":"10000000-0000-4000-8000-000000000001","subjectId":"20000000-0000-4000-8000-000000000007","actorId":"20000000-0000-4000-8000-000000000007","eventVersion":1,"traceId":"legacy-trace","schemaVersion":"1.0.0","safeDisplay":{"label":"legacy","status":"queued","hint":"legacy"}}'::jsonb,
+  '2026-08-10T00:00:00Z'
+);
+COMMIT;
+'@
+
+    Write-Output "Applying $($v020Migration[0].Name)"
+    Invoke-PsqlText (Get-Content -LiteralPath $v020Migration[0].FullName -Raw)
     Write-Output 'Running M3 outbox/private-Realtime fixture'
     Invoke-PsqlText (Get-Content -LiteralPath $m3Fixture -Raw)
 

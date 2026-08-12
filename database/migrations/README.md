@@ -202,10 +202,12 @@ terminal historical rows and moves only active legacy rows to `DEAD_LETTER`
 with `LEGACY_SCHEMA_REJECTED` plus bounded retention. New producers must emit
 only `1.1.0`; M3-T02 owns that application upgrade. `event_ledger_entries` is
 the private, forced-RLS, function-only receipt ledger for M3-T05. Its record
-function requires the established transaction-local ACTIVE
-subject/organization/membership context, returns an exact duplicate receipt,
-and rejects changed event-ID or idempotency reuse. It is not an analytics,
-browser, Data API, provider or hosted-product surface.
+function is a backend-worker boundary rather than a browser/user-authorization
+endpoint: M3-T05 validates the trusted NATS envelope and canonical digest
+before calling it, because delayed delivery may occur after the originating
+membership changes. The function returns an exact duplicate receipt and rejects
+changed event-ID or idempotency reuse. It is not an analytics, browser, Data
+API, provider or hosted-product surface.
 
 The M3 proof script creates a disposable local stand-in for `auth.uid()`,
 `auth.jwt()`, `realtime.topic()`, and `realtime.messages`, applies `V001`
