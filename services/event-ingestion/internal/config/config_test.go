@@ -26,6 +26,57 @@ func TestLoadUsesBoundedLocalDefaults(t *testing.T) {
 	if settings.PublishTimeout != 2*time.Second {
 		t.Fatalf("PublishTimeout = %s", settings.PublishTimeout)
 	}
+	if settings.IngestionEnabled() {
+		t.Fatal("default process unexpectedly enables event ingestion")
+	}
+}
+
+func TestLoadEnablesOnlyCompleteValidatedIngestionDependencies(t *testing.T) {
+	settings, err := Load(func(name string) (string, bool) {
+		switch name {
+		case "NEXORA_EVENT_INGESTION_ADMISSION_URL":
+			return "http://127.0.0.1:8080/api/v1/internal/event-admission", true
+		case "NEXORA_EVENT_INGESTION_NATS_URL":
+			return "nats://127.0.0.1:4222", true
+		default:
+			return "", false
+		}
+	})
+	if err != nil || !settings.IngestionEnabled() {
+		t.Fatalf("Load() = %#v, %v", settings, err)
+	}
+
+	for name, value := range map[string]string{
+		"NEXORA_EVENT_INGESTION_ADMISSION_URL": "https://example.test/other",
+		"NEXORA_EVENT_INGESTION_NATS_URL":      "https://127.0.0.1:4222",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := Load(func(key string) (string, bool) {
+				if key == name {
+					return value, true
+				}
+				if key == "NEXORA_EVENT_INGESTION_ADMISSION_URL" {
+					return "http://127.0.0.1:8080/api/v1/internal/event-admission", true
+				}
+				if key == "NEXORA_EVENT_INGESTION_NATS_URL" {
+					return "nats://127.0.0.1:4222", true
+				}
+				return "", false
+			})
+			if err == nil {
+				t.Fatal("Load() accepted unsafe ingestion dependency")
+			}
+		})
+	}
+	_, err = Load(func(name string) (string, bool) {
+		if name == "NEXORA_EVENT_INGESTION_ADMISSION_URL" {
+			return "http://127.0.0.1:8080/api/v1/internal/event-admission", true
+		}
+		return "", false
+	})
+	if err == nil {
+		t.Fatal("Load() accepted an incomplete ingestion dependency pair")
+	}
 }
 
 func TestLoadAcceptsLiteralLoopbackAddresses(t *testing.T) {

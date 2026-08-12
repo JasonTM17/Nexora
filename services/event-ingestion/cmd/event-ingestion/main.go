@@ -13,6 +13,7 @@ import (
 
 	"github.com/jasontm17/nexora/services/event-ingestion/internal/application"
 	"github.com/jasontm17/nexora/services/event-ingestion/internal/config"
+	"github.com/jasontm17/nexora/services/event-ingestion/internal/transport"
 )
 
 func main() {
@@ -28,7 +29,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := application.NewServer(settings, logger)
+	options := make([]transport.HandlerOption, 0, 1)
+	if settings.IngestionEnabled() {
+		runtime, err := application.NewIngestionRuntime(settings)
+		if err != nil {
+			logger.Error("event ingestion dependencies are unavailable", "error", err)
+			os.Exit(1)
+		}
+		defer func() {
+			if err := runtime.Close(); err != nil {
+				logger.Warn("event ingestion dependencies did not close cleanly", "error", err)
+			}
+		}()
+		options = append(options, transport.WithEventIngestion(runtime.Collector, settings.BodyLimitBytes))
+	}
+
+	server := application.NewServer(settings, logger, options...)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 

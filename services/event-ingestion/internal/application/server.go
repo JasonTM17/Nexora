@@ -23,7 +23,7 @@ type Server struct {
 	httpServer *http.Server
 }
 
-func NewServer(settings config.Config, logger *slog.Logger) *Server {
+func NewServer(settings config.Config, logger *slog.Logger, options ...transport.HandlerOption) *Server {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -35,7 +35,7 @@ func NewServer(settings config.Config, logger *slog.Logger) *Server {
 		listen:    net.Listen,
 		httpServer: &http.Server{
 			Addr:              settings.Address,
-			Handler:           transport.NewHandler(readiness),
+			Handler:           transport.NewHandler(readiness, options...),
 			ReadHeaderTimeout: settings.ReadHeaderTimeout,
 			ReadTimeout:       settings.ReadTimeout,
 			WriteTimeout:      settings.WriteTimeout,

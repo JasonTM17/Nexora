@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -45,6 +46,8 @@ type Config struct {
 	PublishTimeout     time.Duration
 	RateLimitPerMinute int
 	RateLimitKeys      int
+	AdmissionURL       string
+	NATSURL            string
 }
 
 // Load returns local-safe defaults and rejects invalid overrides before serving.
@@ -110,6 +113,25 @@ func Load(lookup LookupEnv) (Config, error) {
 	if err != nil || rateLimitKeys < minimumRateLimitKeys || rateLimitKeys > maximumRateLimitKeys {
 		return Config{}, fmt.Errorf("NEXORA_EVENT_INGESTION_RATE_LIMIT_KEYS must be between %d and %d", minimumRateLimitKeys, maximumRateLimitKeys)
 	}
+	admissionURL, admissionConfigured, err := optionalStringValue(lookup, "NEXORA_EVENT_INGESTION_ADMISSION_URL")
+	if err != nil {
+		return Config{}, err
+	}
+	natsURL, natsConfigured, err := optionalStringValue(lookup, "NEXORA_EVENT_INGESTION_NATS_URL")
+	if err != nil {
+		return Config{}, err
+	}
+	if admissionConfigured != natsConfigured {
+		return Config{}, fmt.Errorf("NEXORA_EVENT_INGESTION_ADMISSION_URL and NEXORA_EVENT_INGESTION_NATS_URL must be configured together")
+	}
+	if admissionConfigured {
+		if err := validateAdmissionURL(admissionURL); err != nil {
+			return Config{}, err
+		}
+		if err := validateNATSURL(natsURL); err != nil {
+			return Config{}, err
+		}
+	}
 
 	return Config{
 		Address:            address,
@@ -122,7 +144,16 @@ func Load(lookup LookupEnv) (Config, error) {
 		PublishTimeout:     publishTimeout,
 		RateLimitPerMinute: rateLimit,
 		RateLimitKeys:      rateLimitKeys,
+		AdmissionURL:       admissionURL,
+		NATSURL:            natsURL,
 	}, nil
+}
+
+// IngestionEnabled is true only when a complete, validated local runtime
+// dependency pair is configured. The default process otherwise fail-closes by
+// leaving the event route unregistered.
+func (config Config) IngestionEnabled() bool {
+	return config.AdmissionURL != "" && config.NATSURL != ""
 }
 
 func stringValue(lookup LookupEnv, name, fallback string) (string, error) {
@@ -135,6 +166,37 @@ func stringValue(lookup LookupEnv, name, fallback string) (string, error) {
 		return "", fmt.Errorf("%s must not be empty", name)
 	}
 	return value, nil
+}
+
+func optionalStringValue(lookup LookupEnv, name string) (string, bool, error) {
+	value, ok := lookup(name)
+	if !ok {
+		return "", false, nil
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", false, fmt.Errorf("%s must not be empty when configured", name)
+	}
+	return value, true, nil
+}
+
+func validateAdmissionURL(value string) error {
+	parsed, err := url.ParseRequestURI(value)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Path != "/api/v1/internal/event-admission" {
+		return fmt.Errorf("NEXORA_EVENT_INGESTION_ADMISSION_URL must be an exact HTTP(S) event-admission base URL")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("NEXORA_EVENT_INGESTION_ADMISSION_URL must use http or https")
+	}
+	return nil
+}
+
+func validateNATSURL(value string) error {
+	parsed, err := url.ParseRequestURI(value)
+	if err != nil || parsed.Scheme != "nats" || parsed.Host == "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("NEXORA_EVENT_INGESTION_NATS_URL must be a nats:// host URL")
+	}
+	return nil
 }
 
 func int64Value(lookup LookupEnv, name string, fallback int64) (int64, error) {
