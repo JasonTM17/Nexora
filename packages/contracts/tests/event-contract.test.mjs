@@ -9,6 +9,7 @@ const digestPattern = new RegExp(domain.eventEnvelope.digest.pattern);
 const uuidPattern = new RegExp(domain.fieldRules.uuid.pattern);
 const traceIdPattern = new RegExp(domain.fieldRules.traceId.pattern);
 const topicPattern = new RegExp(domain.fieldRules.topic.pattern);
+const maxEventVersion = domain.fieldRules.eventVersion.maximum;
 const jobStates = new Set(domain.safePayload.valueRules.jobState.enum);
 const routingByType = new Map(domain.eventRouting.matrix.map((entry) => [entry.eventType, entry]));
 const catalogByType = new Map(domain.safePayload.safeDisplayCatalog.map((entry) => [entry.eventType, entry]));
@@ -88,7 +89,7 @@ function isSafePayload(event) {
   if (!routing || !routing.resourceTypes.includes(payload.resourceType)) return false;
   if (typeof payload.traceId !== "string" || !traceIdPattern.test(payload.traceId)) return false;
   if ("correlationId" in payload && (typeof payload.correlationId !== "string" || !traceIdPattern.test(payload.correlationId))) return false;
-  if (!Number.isInteger(payload.eventVersion) || payload.eventVersion < 1) return false;
+  if (!Number.isInteger(payload.eventVersion) || payload.eventVersion < 1 || payload.eventVersion > maxEventVersion) return false;
   if (event.eventType === "JOB_PROGRESS_CHANGED") {
     if (!jobStates.has(payload.jobState) || !Number.isInteger(payload.progress) || payload.progress < 0 || payload.progress > 100) return false;
   } else if ("jobState" in payload || "progress" in payload) {
@@ -120,7 +121,7 @@ function isCanonicalEnvelope(event, opaqueIdempotencyKey) {
   if (Object.keys(event).some((field) => !domain.eventEnvelope.allowedFields.includes(field))) return false;
   if (!uuidPattern.test(event.eventId) || !uuidPattern.test(event.organizationId) || !uuidPattern.test(event.subjectId) || !uuidPattern.test(event.actorId) || !uuidPattern.test(event.resourceId)) return false;
   if (!routingByType.has(event.eventType) || !routingByType.get(event.eventType).resourceTypes.includes(event.resourceType) || !traceIdPattern.test(event.traceId) || !topicPattern.test(event.topic)) return false;
-  if (!Number.isInteger(event.eventVersion) || event.eventVersion < 1 || event.schemaVersion !== domain.eventEnvelope.version) return false;
+  if (!Number.isInteger(event.eventVersion) || event.eventVersion < 1 || event.eventVersion > maxEventVersion || event.schemaVersion !== domain.eventEnvelope.version) return false;
   if (!digestPattern.test(event.idempotencyKeyDigest) || !digestPattern.test(event.payloadDigest) || !isUtcInstant(event.occurredAt)) return false;
   if (event.topic !== expectedTopic(event)) return false;
   if (!isSafePayload(event) || event.payloadDigest !== payloadDigest(event.safePayload)) return false;
@@ -135,6 +136,7 @@ test("freezes one versioned, operation-bound route and display catalog for every
   assert.equal(domain.eventEnvelope.digest.idempotencyKeyDigest.canonicalBytes.includes("JCS canonical JSON"), true);
   assert.equal(domain.fieldRules.schemaVersion.enum.length, 1);
   assert.equal(domain.fieldRules.schemaVersion.enum[0], "1.1.0");
+  assert.equal(maxEventVersion, 9007199254740991);
   assert.ok(domain.eventEnvelope.requiredFields.includes("schemaVersion"));
   assert.ok(domain.eventEnvelope.requiredFields.includes("idempotencyKeyDigest"));
 
@@ -232,6 +234,11 @@ test("canonical fixture enforces exact routing, ownership, display tuples and fa
   const malformedDigest = structuredClone(publication);
   malformedDigest.payloadDigest = "sha256:not-a-valid-digest";
   assert.equal(isCanonicalEnvelope(malformedDigest, vectorByEventId.get(publication.eventId).opaqueIdempotencyKey), false, "envelope rejects malformed digest fields");
+
+  const unsafeEventVersion = structuredClone(publication);
+  unsafeEventVersion.eventVersion = maxEventVersion + 1;
+  unsafeEventVersion.safePayload.eventVersion = maxEventVersion + 1;
+  assert.equal(isCanonicalEnvelope(unsafeEventVersion, vectorByEventId.get(publication.eventId).opaqueIdempotencyKey), false, "event version must remain JCS-safe across all producers and consumers");
 
   const stalePayloadDigest = structuredClone(publication);
   stalePayloadDigest.safePayload.safeDisplay.status = "INVALIDATED";

@@ -94,6 +94,17 @@ grant runtime/API roles direct ledger access as a rollback shortcut. A future
 correction must be another reviewed forward migration and preserve both the
 outbox terminal receipt and the event-ledger duplicate/replay contract.
 
+`V021` adds a shared JCS-safe event-version bound and a retained immediate
+terminal outcome for known contract violations. Do not undo either by editing
+an applied migration, widening the durable range, or turning
+`EVENT_CONTRACT_REJECTED` into a retryable transport error. A shared-database
+correction requires a new forward migration after contract/producer/consumer
+review and must preserve the retained dead-letter evidence.
+If an upgrade encounters a V020 overflow, the migration preserves the complete
+row projection in the immutable `event_version_boundary_quarantine` table and
+reserves its event/idempotency identity; it never edits or silently drops that
+historical envelope.
+
 For a shared database, use a new reviewed forward migration only after the
 required dependency and rollback assessment. Preserve the outbox receipt and
 terminal-state contract during any expand/contract sequence. Hosted Supabase
