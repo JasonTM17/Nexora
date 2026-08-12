@@ -12,6 +12,7 @@ import com.nexora.platform.events.outbox.OutboxEventRepository;
 import com.nexora.platform.events.outbox.OutboxPublisher;
 import com.nexora.platform.events.outbox.OutboxPublisherProperties;
 import com.nexora.platform.events.outbox.OutboxTransport;
+import com.nexora.platform.events.outbox.OutboxTransportException;
 import com.nexora.platform.tenant.TenantContext;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jwt.SignedJWT;
@@ -282,10 +283,14 @@ class CmsPageIntegrationTests {
         assertThat(envelope.path("resourceType").asText()).isEqualTo("page");
         assertThat(envelope.path("resourceId").asText()).isEqualTo(page.pageId().toString());
         assertThat(envelope.path("topic").asText()).isEqualTo("tenant:%s:workflow".formatted(tenant.organizationId()));
-        assertThat(envelope.path("traceId").asText()).isEqualTo(traceId);
-        assertThat(envelope.path("idempotencyKeyDigest").asText()).startsWith("sha256:");
-        assertThat(envelope.path("payloadDigest").asText()).startsWith("sha256:");
-        assertThat(envelope.path("safePayload").path("traceId").asText()).isEqualTo(traceId);
+        assertThat(envelope.path("schemaVersion").asText()).isEqualTo("1.1.0");
+        assertThat(envelope.path("traceId").asText()).matches("[a-f0-9]{32}");
+        assertThat(envelope.path("traceId").asText()).isNotEqualTo(traceId);
+        assertThat(envelope.path("idempotencyKeyDigest").asText()).matches("sha256:[a-f0-9]{64}");
+        assertThat(envelope.path("payloadDigest").asText()).matches("sha256:[a-f0-9]{64}");
+        assertThat(envelope.path("safePayload").path("traceId").asText()).isEqualTo(envelope.path("traceId").asText());
+        assertThat(envelope.path("safePayload").path("safeDisplay").toString())
+                .isEqualTo("{\"label\":\"WORKFLOW_TRANSITIONED\",\"status\":\"ARCHIVED\",\"variant\":\"neutral\"}");
         assertThat(envelope.path("safePayload").has("body")).isFalse();
         assertThat(envelope.path("safePayload").has("token")).isFalse();
         assertThat(envelope.path("occurredAt").asText()).isNotBlank();
@@ -352,25 +357,22 @@ class CmsPageIntegrationTests {
     }
 
     @Test
-    void encodesPermittedDigestTextWithoutInjectingEnvelopeFields() throws Exception {
+    void rejectsMalformedStoredEnvelopeBeforeJetStreamPublication() throws Exception {
         String hostileDigest = "x\",\"body\":\"injected" + "z".repeat(32);
         OutboxEvent hostile = new OutboxEvent(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "page", UUID.randomUUID(), 1,
-                "tenant:00000000-0000-0000-0000-000000000001:workflow", "WORKFLOW_TRANSITIONED", "1.0.0",
+                "tenant:00000000-0000-0000-0000-000000000001:workflow", "WORKFLOW_TRANSITIONED", "1.1.0",
                 hostileDigest, hostileDigest,
                 "{\"traceId\":\"safe-trace-1\",\"safeDisplay\":{\"label\":\"Page workflow\",\"status\":\"ARCHIVED\"}}",
                 "safe-trace-1", Instant.now(), 1);
 
-        outboxTransport.publish(hostile);
+        long messagesBefore = streamMessageCount();
 
-        JsonNode envelope = latestStreamMessage();
-        assertThat(envelope.path("idempotencyKeyDigest").asText()).isEqualTo(hostileDigest);
-        assertThat(envelope.path("payloadDigest").asText()).isEqualTo(hostileDigest);
-        assertThat(envelope.has("body")).isFalse();
-        assertThat(fieldNames(envelope)).containsExactlyInAnyOrder(
-                "eventId", "eventType", "eventVersion", "organizationId", "subjectId", "resourceType",
-                "resourceId", "topic", "actorId", "traceId", "idempotencyKeyDigest", "payloadDigest",
-                "safePayload", "occurredAt", "schemaVersion");
+        assertThatThrownBy(() -> outboxTransport.publish(hostile))
+                .isInstanceOf(OutboxTransportException.class)
+                .hasMessageContaining("does not satisfy contract v1.1");
+
+        assertThat(streamMessageCount()).isEqualTo(messagesBefore);
     }
 
     @Test
@@ -386,9 +388,10 @@ class CmsPageIntegrationTests {
         String replacementTraceId = response.headers().firstValue("X-Trace-Id").orElseThrow();
         assertThat(replacementTraceId).isNotEqualTo("token-1");
         assertThat(replacementTraceId).matches("[A-Za-z0-9._-]{1,128}");
-        assertThat(count("SELECT count(*) FROM nexora.outbox_events WHERE resource_id = '" + page.pageId()
-                + "' AND safe_payload ->> 'traceId' = '" + replacementTraceId + "'"))
-                .isEqualTo(1);
+        String eventTraceId = scalar("SELECT safe_payload ->> 'traceId' FROM nexora.outbox_events WHERE resource_id = '"
+                + page.pageId() + "'");
+        assertThat(eventTraceId).matches("[a-f0-9]{32}");
+        assertThat(eventTraceId).isNotEqualTo(replacementTraceId);
     }
 
     @Test
@@ -569,7 +572,7 @@ class CmsPageIntegrationTests {
         try {
             migrationDirectory = Files.createTempDirectory("nexora-cms-flyway-");
             Path source = Path.of("..", "..", "database", "migrations").toAbsolutePath().normalize();
-            for (int version = 1; version <= 19; version++) {
+            for (int version = 1; version <= 20; version++) {
                 String prefix = "V%03d__".formatted(version);
                 try (Stream<Path> candidates = Files.list(source)) {
                     Path migration = candidates.filter(path -> path.getFileName().toString().startsWith(prefix))
@@ -627,6 +630,16 @@ class CmsPageIntegrationTests {
              var rows = statement.executeQuery(sql)) {
             rows.next();
             return rows.getInt(1);
+        }
+    }
+
+    private String scalar(String sql) throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                DATABASE.getJdbcUrl(), DATABASE.getUsername(), DATABASE.getPassword());
+             Statement statement = connection.createStatement();
+             var rows = statement.executeQuery(sql)) {
+            rows.next();
+            return rows.getString(1);
         }
     }
 
