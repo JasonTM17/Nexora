@@ -59,8 +59,8 @@ try {
 
     $migrationFiles = Get-ChildItem -LiteralPath $migrationDirectory -File -Filter 'V*__*.sql' |
         Sort-Object Name
-    if ($migrationFiles.Count -ne 20) {
-        throw "Expected exactly twenty ordered migrations through scoped M3-DB01; found $($migrationFiles.Count)"
+    if ($migrationFiles.Count -ne 21) {
+        throw "Expected exactly twenty-one ordered migrations through the M3 event-contract boundary; found $($migrationFiles.Count)"
     }
 
     $env:NEXORA_POSTGRES_PORT = $PostgresPort
@@ -153,7 +153,10 @@ GRANT SELECT, INSERT ON realtime.messages TO authenticated;
         'V018__realtime_descriptor_event_versions.sql',
         'V019__realtime_descriptor_epoch_lookup.sql'
     ))
-    $v020Migration = @($migrationFiles | Where-Object Name -eq 'V020__event_contract_v1_1_and_consumer_ledger.sql')
+    $contractBoundaryMigrations = @($migrationFiles | Where-Object Name -in @(
+        'V020__event_contract_v1_1_and_consumer_ledger.sql',
+        'V021__event_version_boundary_and_terminal_contract_rejections.sql'
+    ))
     $preM3Migrations = @($migrationFiles | Where-Object Name -notin @(
         'V014__outbox_events_and_private_realtime_policy.sql',
         'V015__scoped_realtime_channel_authorization.sql',
@@ -161,10 +164,11 @@ GRANT SELECT, INSERT ON realtime.messages TO authenticated;
         'V017__realtime_projection_trigger_privileges.sql',
         'V018__realtime_descriptor_event_versions.sql',
         'V019__realtime_descriptor_epoch_lookup.sql',
-        'V020__event_contract_v1_1_and_consumer_ledger.sql'
+        'V020__event_contract_v1_1_and_consumer_ledger.sql',
+        'V021__event_version_boundary_and_terminal_contract_rejections.sql'
     ))
-    if ($m3PreV020Migrations.Count -ne 6 -or $v020Migration.Count -ne 1) {
-        throw 'Expected ordered V014 through V020 M3-DB01 migrations.'
+    if ($m3PreV020Migrations.Count -ne 6 -or $contractBoundaryMigrations.Count -ne 2) {
+        throw 'Expected ordered V014 through V021 M3 event-contract migrations.'
     }
 
     foreach ($migration in $preM3Migrations) {
@@ -213,8 +217,10 @@ SELECT nexora.record_outbox_event(
 COMMIT;
 '@
 
-    Write-Output "Applying $($v020Migration[0].Name)"
-    Invoke-PsqlText (Get-Content -LiteralPath $v020Migration[0].FullName -Raw)
+    foreach ($migration in $contractBoundaryMigrations) {
+        Write-Output "Applying $($migration.Name)"
+        Invoke-PsqlText (Get-Content -LiteralPath $migration.FullName -Raw)
+    }
     Write-Output 'Running M3 outbox/private-Realtime fixture'
     Invoke-PsqlText (Get-Content -LiteralPath $m3Fixture -Raw)
 

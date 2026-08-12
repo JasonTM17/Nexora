@@ -131,9 +131,11 @@ SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000007'
 
 DO $$
 DECLARE
+  max_event_version CONSTANT bigint := 9007199254740991;
   publication_id uuid;
   repeated_id uuid;
   job_id uuid;
+  poison_id uuid;
   claimed nexora.outbox_events%ROWTYPE;
   published nexora.outbox_events%ROWTYPE;
   failed nexora.outbox_events%ROWTYPE;
@@ -141,6 +143,7 @@ DECLARE
   attempt integer;
   retry_floor interval;
   retry_ceiling interval;
+  reclaimed_count integer;
 BEGIN
   IF NOT nexora.outbox_safe_payload_v1_1_is_allowed(
     'PUBLICATION_INVALIDATED',
@@ -318,7 +321,7 @@ BEGIN
     'job',
     '50000000-0000-4000-8000-000000000010',
     'JOB_PROGRESS_CHANGED',
-    1,
+    max_event_version,
     'resource:50000000-0000-4000-8000-000000000010:job-progress',
     '1.1.0',
     'sha256:1111111111111111111111111111111111111111111111111111111111111111',
@@ -330,7 +333,7 @@ BEGIN
       "organizationId":"10000000-0000-4000-8000-000000000001",
       "subjectId":"20000000-0000-4000-8000-000000000007",
       "actorId":"20000000-0000-4000-8000-000000000007",
-      "eventVersion":1,
+      "eventVersion":9007199254740991,
       "jobState":"RUNNING",
       "progress":45,
       "traceId":"cccccccccccccccccccccccccccccccc",
@@ -342,6 +345,31 @@ BEGIN
       }
     }'::jsonb
   );
+
+  BEGIN
+    PERFORM nexora.record_outbox_event(
+      '50000000-0000-4000-8000-000000000094',
+      '10000000-0000-4000-8000-000000000001',
+      '20000000-0000-4000-8000-000000000007',
+      '20000000-0000-4000-8000-000000000007',
+      'job',
+      '50000000-0000-4000-8000-000000000010',
+      'JOB_PROGRESS_CHANGED',
+      max_event_version + 1,
+      'resource:50000000-0000-4000-8000-000000000010:job-progress',
+      '1.1.0',
+      'sha256:9494949494949494949494949494949494949494949494949494949494949',
+      'sha256:9595959595959595959595959595959595959595959595959595959595959595',
+      'sha256:9696969696969696969696969696969696969696969696969696969696969696',
+      jsonb_set(
+        '{"resourceId":"50000000-0000-4000-8000-000000000010","resourceType":"job","organizationId":"10000000-0000-4000-8000-000000000001","subjectId":"20000000-0000-4000-8000-000000000007","actorId":"20000000-0000-4000-8000-000000000007","eventVersion":1,"jobState":"RUNNING","progress":45,"traceId":"cccccccccccccccccccccccccccccccc","schemaVersion":"1.1.0","safeDisplay":{"label":"JOB_PROGRESS_CHANGED","status":"RUNNING","variant":"warning"}}'::jsonb,
+        '{eventVersion}', to_jsonb(max_event_version + 1)
+      )
+    );
+    RAISE EXCEPTION 'outbox accepted an event version outside the JCS-safe range';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    NULL;
+  END;
 
   IF NOT nexora.realtime_private_channel_authorized(
     'tenant:10000000-0000-4000-8000-000000000001:publication',
@@ -450,6 +478,45 @@ BEGIN
      OR dead_letter.retain_until <= dead_letter.dead_letter_at THEN
     RAISE EXCEPTION 'runtime FAILED to DEAD_LETTER evidence was not retained';
   END IF;
+
+  poison_id := nexora.record_outbox_event(
+    '50000000-0000-4000-8000-0000000000e1',
+    '10000000-0000-4000-8000-000000000001',
+    '20000000-0000-4000-8000-000000000007',
+    '20000000-0000-4000-8000-000000000007',
+    'outbox',
+    '50000000-0000-4000-8000-000000000011',
+    'OUTBOX_RECORDED',
+    1,
+    'tenant:10000000-0000-4000-8000-000000000001:outbox',
+    '1.1.0',
+    'sha256:e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1',
+    'sha256:e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2',
+    'sha256:e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3',
+    '{"resourceId":"50000000-0000-4000-8000-000000000011","resourceType":"outbox","organizationId":"10000000-0000-4000-8000-000000000001","subjectId":"20000000-0000-4000-8000-000000000007","actorId":"20000000-0000-4000-8000-000000000007","eventVersion":1,"traceId":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","schemaVersion":"1.1.0","safeDisplay":{"label":"OUTBOX_RECORDED","status":"PENDING","variant":"info"}}'::jsonb
+  );
+
+  SELECT * INTO claimed
+  FROM nexora.claim_outbox_events('publisher-contract', interval '15 minutes', 1)
+  LIMIT 1;
+  IF claimed.id IS DISTINCT FROM poison_id OR claimed.attempt_count <> 1 THEN
+    RAISE EXCEPTION 'deterministic contract rejection was not claimed exactly once';
+  END IF;
+
+  dead_letter := nexora.reject_claimed_outbox_event(poison_id, 'publisher-contract');
+  IF dead_letter.state <> 'DEAD_LETTER'
+     OR dead_letter.attempt_count <> 1
+     OR dead_letter.last_error_code <> 'EVENT_CONTRACT_REJECTED'
+     OR dead_letter.dead_letter_at IS NULL
+     OR dead_letter.retain_until <= dead_letter.dead_letter_at THEN
+    RAISE EXCEPTION 'first-attempt contract rejection did not persist terminal evidence';
+  END IF;
+
+  SELECT count(*) INTO reclaimed_count
+  FROM nexora.claim_outbox_events('publisher-contract-retry', interval '15 minutes', 1);
+  IF reclaimed_count <> 0 THEN
+    RAISE EXCEPTION 'terminal contract rejection was reclaimed for retry';
+  END IF;
 END
 $$;
 COMMIT;
@@ -464,6 +531,7 @@ SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-00000000000
 SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000007', true);
 DO $$
 DECLARE
+  max_event_version CONSTANT bigint := 9007199254740991;
   ledger_id uuid;
   duplicate_seen boolean;
   payload jsonb := jsonb_build_object(
@@ -472,7 +540,7 @@ DECLARE
     'organizationId', '10000000-0000-4000-8000-000000000001',
     'subjectId', '20000000-0000-4000-8000-000000000007',
     'actorId', '20000000-0000-4000-8000-000000000007',
-    'eventVersion', 1,
+    'eventVersion', max_event_version,
     'traceId', 'dddddddddddddddddddddddddddddddd',
     'schemaVersion', '1.1.0',
     'safeDisplay', jsonb_build_object(
@@ -487,7 +555,7 @@ BEGIN
     '20000000-0000-4000-8000-000000000007',
     '20000000-0000-4000-8000-000000000007',
     'page', '30000000-0000-4000-8000-000000000001',
-    'PUBLICATION_INVALIDATED', 1,
+    'PUBLICATION_INVALIDATED', max_event_version,
     'tenant:10000000-0000-4000-8000-000000000001:publication',
     '1.1.0',
     'sha256:3333333333333333333333333333333333333333333333333333333333333333',
@@ -506,7 +574,7 @@ BEGIN
     '20000000-0000-4000-8000-000000000007',
     '20000000-0000-4000-8000-000000000007',
     'page', '30000000-0000-4000-8000-000000000001',
-    'PUBLICATION_INVALIDATED', 1,
+    'PUBLICATION_INVALIDATED', max_event_version,
     'tenant:10000000-0000-4000-8000-000000000001:publication',
     '1.1.0',
     'sha256:3333333333333333333333333333333333333333333333333333333333333333',
@@ -525,7 +593,7 @@ BEGIN
       '20000000-0000-4000-8000-000000000007',
       '20000000-0000-4000-8000-000000000007',
       'page', '30000000-0000-4000-8000-000000000001',
-      'PUBLICATION_INVALIDATED', 1,
+      'PUBLICATION_INVALIDATED', max_event_version,
       'tenant:10000000-0000-4000-8000-000000000001:publication',
       '1.1.0',
       'sha256:3333333333333333333333333333333333333333333333333333333333333333',
@@ -544,7 +612,7 @@ BEGIN
       '20000000-0000-4000-8000-000000000007',
       '20000000-0000-4000-8000-000000000007',
       'page', '30000000-0000-4000-8000-000000000001',
-      'PUBLICATION_INVALIDATED', 1,
+      'PUBLICATION_INVALIDATED', max_event_version,
       'tenant:10000000-0000-4000-8000-000000000001:publication',
       '1.1.0',
       'sha256:3333333333333333333333333333333333333333333333333333333333333333',
@@ -563,7 +631,7 @@ BEGIN
       '20000000-0000-4000-8000-000000000007',
       '20000000-0000-4000-8000-000000000007',
       'page', '30000000-0000-4000-8000-000000000001',
-      'PUBLICATION_INVALIDATED', 1,
+      'PUBLICATION_INVALIDATED', max_event_version,
       'tenant:10000000-0000-4000-8000-000000000001:publication',
       '1.0.0',
       'sha256:6666666666666666666666666666666666666666666666666666666666666666',
@@ -571,6 +639,26 @@ BEGIN
       payload, '2026-08-11T00:00:00Z'
     );
     RAISE EXCEPTION 'legacy consumer envelope was not rejected';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    NULL;
+  END;
+
+  BEGIN
+    PERFORM nexora.record_event_ledger_entry(
+      '50000000-0000-4000-8000-0000000000b5',
+      '10000000-0000-4000-8000-000000000001',
+      '20000000-0000-4000-8000-000000000007',
+      '20000000-0000-4000-8000-000000000007',
+      'page', '30000000-0000-4000-8000-000000000001',
+      'PUBLICATION_INVALIDATED', max_event_version + 1,
+      'tenant:10000000-0000-4000-8000-000000000001:publication',
+      '1.1.0',
+      'sha256:8888888888888888888888888888888888888888888888888888888888888888',
+      'sha256:9999999999999999999999999999999999999999999999999999999999999999',
+      jsonb_set(payload, '{eventVersion}', to_jsonb(max_event_version + 1)),
+      '2026-08-11T00:00:00Z'
+    );
+    RAISE EXCEPTION 'consumer ledger accepted an event version outside the JCS-safe range';
   EXCEPTION WHEN invalid_parameter_value THEN
     NULL;
   END;
@@ -582,9 +670,9 @@ BEGIN;
 SET LOCAL ROLE nexora_migrator;
 DO $$
 BEGIN
-  IF (SELECT count(*) FROM nexora.outbox_events) <> 3
+  IF (SELECT count(*) FROM nexora.outbox_events) <> 4
      OR (SELECT count(*) FROM nexora.outbox_events WHERE state = 'PUBLISHED') <> 1
-     OR (SELECT count(*) FROM nexora.outbox_events WHERE state = 'DEAD_LETTER') <> 2
+     OR (SELECT count(*) FROM nexora.outbox_events WHERE state = 'DEAD_LETTER') <> 3
      OR NOT EXISTS (
        SELECT 1
        FROM nexora.outbox_events
@@ -592,6 +680,13 @@ BEGIN
          AND schema_version = '1.0.0'
          AND state = 'DEAD_LETTER'
          AND last_error_code = 'LEGACY_SCHEMA_REJECTED'
+     ) OR NOT EXISTS (
+       SELECT 1
+       FROM nexora.outbox_events
+       WHERE id = '50000000-0000-4000-8000-0000000000e1'
+         AND state = 'DEAD_LETTER'
+         AND attempt_count = 1
+         AND last_error_code = 'EVENT_CONTRACT_REJECTED'
      ) THEN
     RAISE EXCEPTION 'final outbox projection did not retain terminal outcomes and the rejected legacy receipt';
   END IF;
