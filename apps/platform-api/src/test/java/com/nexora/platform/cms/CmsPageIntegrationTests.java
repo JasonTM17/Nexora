@@ -361,6 +361,7 @@ class CmsPageIntegrationTests {
                     .durable(durable)
                     .deliverPolicy(DeliverPolicy.New)
                     .ackPolicy(AckPolicy.Explicit)
+                    .ackWait(Duration.ofMillis(250))
                     .buildPushSubscribeOptions();
             JetStreamSubscription subscription = connection.jetStream().subscribe(OUTBOX_SUBJECT, options);
             OutboxPublisher.PublishResult published = publisher.publishAvailable();
@@ -370,14 +371,18 @@ class CmsPageIntegrationTests {
             assertThat(delivery).isNotNull();
             JsonNode publishedEnvelope = json.readTree(delivery.getData());
             assertThat(publishedEnvelope.path("resourceId").asText()).isEqualTo(page.pageId().toString());
-            EventLedgerReceipt first = new NatsJetStreamEventHandler(eventLedger).consumeAndAck(delivery);
-            EventLedgerReceipt replay = eventLedger.consume(delivery.getData());
+            EventLedgerReceipt persistedBeforeAck = eventLedger.consume(delivery.getData());
+            Message redelivery = subscription.nextMessage(Duration.ofSeconds(5));
+            assertThat(redelivery).isNotNull();
+            assertThat(json.readTree(redelivery.getData()).path("eventId").asText())
+                    .isEqualTo(publishedEnvelope.path("eventId").asText());
+            EventLedgerReceipt replay = new NatsJetStreamEventHandler(eventLedger).consumeAndAck(redelivery);
 
-            assertThat(first.duplicate()).isFalse();
-            assertThat(replay.eventId()).isEqualTo(first.eventId());
+            assertThat(persistedBeforeAck.duplicate()).isFalse();
+            assertThat(replay.eventId()).isEqualTo(persistedBeforeAck.eventId());
             assertThat(replay.duplicate()).isTrue();
             assertThat(count("SELECT count(*) FROM nexora.event_ledger_entries WHERE event_id = '"
-                    + first.eventId() + "'")).isEqualTo(1);
+                    + persistedBeforeAck.eventId() + "'")).isEqualTo(1);
 
             String raw = new String(delivery.getData(), StandardCharsets.UTF_8);
             String eventId = publishedEnvelope.path("eventId").asText();
@@ -392,7 +397,7 @@ class CmsPageIntegrationTests {
             assertThatThrownBy(() -> eventLedger.consume((raw + "{\"body\":\"secret\"}").getBytes(StandardCharsets.UTF_8)))
                     .isInstanceOf(EventEnvelopeRejectedException.class);
             assertThat(count("SELECT count(*) FROM nexora.event_ledger_entries WHERE event_id = '"
-                    + first.eventId() + "'")).isEqualTo(1);
+                    + persistedBeforeAck.eventId() + "'")).isEqualTo(1);
 
             Message malformedDelivery = mock(Message.class);
             when(malformedDelivery.isJetStream()).thenReturn(true);
@@ -670,6 +675,7 @@ class CmsPageIntegrationTests {
                     .durable(durable)
                     .deliverPolicy(DeliverPolicy.New)
                     .ackPolicy(AckPolicy.Explicit)
+                    .ackWait(Duration.ofMillis(250))
                     .buildPushSubscribeOptions();
             JetStreamSubscription subscription = connection.jetStream().subscribe(GO_INGESTION_SUBJECT, options);
             ObjectNode envelope = publicationInvalidationEnvelope(tenant, page);
@@ -686,11 +692,15 @@ class CmsPageIntegrationTests {
             assertThat(delivery).isNotNull();
             assertThat(json.readTree(delivery.getData()).path("eventId").asText())
                     .isEqualTo(envelope.path("eventId").asText());
-            EventLedgerReceipt first = new NatsJetStreamEventHandler(eventLedger).consumeAndAck(delivery);
-            EventLedgerReceipt replay = eventLedger.consume(delivery.getData());
+            EventLedgerReceipt persistedBeforeAck = eventLedger.consume(delivery.getData());
+            Message redelivery = subscription.nextMessage(Duration.ofSeconds(5));
+            assertThat(redelivery).isNotNull();
+            assertThat(json.readTree(redelivery.getData()).path("eventId").asText())
+                    .isEqualTo(envelope.path("eventId").asText());
+            EventLedgerReceipt replay = new NatsJetStreamEventHandler(eventLedger).consumeAndAck(redelivery);
 
-            assertThat(first.duplicate()).isFalse();
-            assertThat(replay.eventId()).isEqualTo(first.eventId());
+            assertThat(persistedBeforeAck.duplicate()).isFalse();
+            assertThat(replay.eventId()).isEqualTo(persistedBeforeAck.eventId());
             assertThat(replay.duplicate()).isTrue();
             subscription.unsubscribe();
         } finally {
@@ -709,19 +719,37 @@ class CmsPageIntegrationTests {
         int samples = 16;
 
         GoIngestionRuntime go = startGoIngestion(120);
-        try {
+        try (io.nats.client.Connection connection = Nats.connect(natsUrl())) {
+            String durable = "go-benchmark-" + UUID.randomUUID().toString().replace("-", "");
+            PushSubscribeOptions options = ConsumerConfiguration.builder()
+                    .durable(durable)
+                    .deliverPolicy(DeliverPolicy.New)
+                    .ackPolicy(AckPolicy.Explicit)
+                    .buildPushSubscribeOptions();
+            JetStreamSubscription subscription = connection.jetStream().subscribe(GO_INGESTION_SUBJECT, options);
             List<HttpRequest> springRequests = new ArrayList<>();
             List<HttpRequest> goRequests = new ArrayList<>();
             for (int index = 0; index < samples; index++) {
                 springRequests.add(springAdmissionRequest(tenant, page, bearer));
-                goRequests.add(goIngressRequest(go, tenant, page, bearer));
+                goRequests.add(goIngressRequest(go, bearer,
+                        publicationInvalidationEnvelope(tenant, page, "go-joint-benchmark-" + index)));
             }
             BenchmarkResult spring = benchmark("spring-admission", springRequests, concurrency, 200);
             long messagesBefore = goIngestionMessageCount();
             BenchmarkResult ingress = benchmark("go-ingress", goRequests, concurrency, 202);
 
             assertThat(goIngestionMessageCount()).isGreaterThanOrEqualTo(messagesBefore + samples);
+            Set<String> deliveredEventIds = new HashSet<>();
+            for (int index = 0; index < samples; index++) {
+                Message delivery = subscription.nextMessage(Duration.ofSeconds(5));
+                assertThat(delivery).isNotNull();
+                EventLedgerReceipt receipt = new NatsJetStreamEventHandler(eventLedger).consumeAndAck(delivery);
+                assertThat(receipt.duplicate()).isFalse();
+                deliveredEventIds.add(receipt.eventId().toString());
+            }
+            assertThat(deliveredEventIds).hasSize(samples);
             writeJointBenchmark(spring, ingress, concurrency, samples);
+            subscription.unsubscribe();
         } finally {
             stopGoIngestion(go);
         }
@@ -910,6 +938,11 @@ class CmsPageIntegrationTests {
     }
 
     private ObjectNode publicationInvalidationEnvelope(CmsFixture tenant, CmsPageService.PageView page) {
+        return publicationInvalidationEnvelope(tenant, page, "go-joint-event-" + UUID.randomUUID());
+    }
+
+    private ObjectNode publicationInvalidationEnvelope(
+            CmsFixture tenant, CmsPageService.PageView page, String opaqueIdempotencyKey) {
         String traceId = "0".repeat(31) + "1";
         ObjectNode safePayload = json.createObjectNode();
         safePayload.put("resourceId", page.pageId().toString());
@@ -936,7 +969,8 @@ class CmsPageIntegrationTests {
         envelope.put("topic", "tenant:" + tenant.organizationId() + ":publication");
         envelope.put("actorId", tenant.ownerSubjectId().toString());
         envelope.put("traceId", traceId);
-        envelope.put("idempotencyKeyDigest", "sha256:" + "a".repeat(64));
+        envelope.put("idempotencyKeyDigest", EventContractV1_1.idempotencyKeyDigest(
+                tenant.organizationId(), envelope.path("topic").asText(), page.pageId(), opaqueIdempotencyKey));
         envelope.put("payloadDigest", EventContractV1_1.payloadDigest(safePayload));
         envelope.set("safePayload", safePayload);
         envelope.put("occurredAt", Instant.now().toString());
@@ -1002,13 +1036,12 @@ class CmsPageIntegrationTests {
                 .build();
     }
 
-    private HttpRequest goIngressRequest(GoIngestionRuntime go, CmsFixture tenant, CmsPageService.PageView page, String bearer)
-            throws Exception {
+    private HttpRequest goIngressRequest(GoIngestionRuntime go, String bearer, ObjectNode envelope) throws Exception {
         return HttpRequest.newBuilder(URI.create(go.baseUrl() + "/v1/events"))
                 .header("Authorization", "Bearer " + bearer)
                 .header("Content-Type", "application/json")
                 .timeout(Duration.ofSeconds(5))
-                .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(publicationInvalidationEnvelope(tenant, page))))
+                .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(envelope)))
                 .build();
     }
 
