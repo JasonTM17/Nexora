@@ -42,7 +42,7 @@ public class NatsJetStreamOutboxTransport implements OutboxTransport {
         try {
             EventContractV1_1.verifyForPublication(event);
         } catch (IllegalArgumentException exception) {
-            throw new OutboxTransportException("The outbox event does not satisfy contract v1.1.", exception);
+            throw new OutboxContractViolationException("The outbox event does not satisfy contract v1.1.", exception);
         }
         try {
             JsonNode safePayload = JSON.readTree(event.safePayloadJson());
