@@ -13,6 +13,7 @@ import com.nexora.platform.events.outbox.OutboxPublisher;
 import com.nexora.platform.events.outbox.OutboxPublisherProperties;
 import com.nexora.platform.events.outbox.OutboxTransport;
 import com.nexora.platform.events.outbox.OutboxTransportException;
+import com.nexora.platform.events.outbox.EventContractV1_1;
 import com.nexora.platform.tenant.TenantContext;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jwt.SignedJWT;
@@ -286,8 +287,11 @@ class CmsPageIntegrationTests {
         assertThat(envelope.path("schemaVersion").asText()).isEqualTo("1.1.0");
         assertThat(envelope.path("traceId").asText()).matches("[a-f0-9]{32}");
         assertThat(envelope.path("traceId").asText()).isNotEqualTo(traceId);
-        assertThat(envelope.path("idempotencyKeyDigest").asText()).matches("sha256:[a-f0-9]{64}");
-        assertThat(envelope.path("payloadDigest").asText()).matches("sha256:[a-f0-9]{64}");
+        assertThat(envelope.path("idempotencyKeyDigest").asText()).isEqualTo(EventContractV1_1.idempotencyKeyDigest(
+                tenant.organizationId(), envelope.path("topic").asText(), page.pageId(),
+                "cms-page-archive:%s:%d".formatted(page.pageId(), 1)));
+        assertThat(envelope.path("payloadDigest").asText())
+                .isEqualTo(EventContractV1_1.payloadDigest(envelope.path("safePayload")));
         assertThat(envelope.path("safePayload").path("traceId").asText()).isEqualTo(envelope.path("traceId").asText());
         assertThat(envelope.path("safePayload").path("safeDisplay").toString())
                 .isEqualTo("{\"label\":\"WORKFLOW_TRANSITIONED\",\"status\":\"ARCHIVED\",\"variant\":\"neutral\"}");
