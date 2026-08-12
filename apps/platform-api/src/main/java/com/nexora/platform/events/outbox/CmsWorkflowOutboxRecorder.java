@@ -1,6 +1,8 @@
 package com.nexora.platform.events.outbox;
 
 import com.nexora.platform.tenant.TenantContext;
+import java.time.Instant;
+import java.sql.Timestamp;
 import java.util.UUID;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -19,18 +21,18 @@ import org.springframework.stereotype.Component;
 public class CmsWorkflowOutboxRecorder {
 
     public UUID recordArchivedPage(
-            JdbcTemplate jdbc, TenantContext actor, UUID pageId, long pageVersion, String traceId) {
+            JdbcTemplate jdbc, TenantContext actor, UUID pageId, long pageVersion, Instant occurredAt) {
         EventContractV1_1.PreparedWorkflowEvent event = EventContractV1_1.archivedPage(actor, pageId, pageVersion);
         UUID eventId = UUID.randomUUID();
         UUID recorded = jdbc.queryForObject("""
                 SELECT nexora.record_outbox_event(
                     ?, ?, ?, ?, ?, ?, ?::nexora.outbox_event_type, ?, ?, ?,
-                    ?, ?, ?, ?::jsonb, transaction_timestamp())
+                    ?, ?, ?, ?::jsonb, ?)
                 """, UUID.class,
                 eventId, actor.organizationId(), actor.subjectId(), actor.subjectId(),
                 EventContractV1_1.RESOURCE_TYPE, pageId, EventContractV1_1.EVENT_TYPE, pageVersion,
                 event.topic(), EventContractV1_1.SCHEMA_VERSION, event.idempotencyKeyDigest(),
-                event.payloadDigest(), event.payloadDigest(), event.safePayloadJson());
+                event.idempotencyKeyDigest(), event.payloadDigest(), event.safePayloadJson(), Timestamp.from(occurredAt));
         if (recorded == null) {
             throw new IllegalStateException("The database did not return an outbox event identifier.");
         }

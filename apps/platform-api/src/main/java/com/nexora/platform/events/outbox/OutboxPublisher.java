@@ -45,9 +45,11 @@ public class OutboxPublisher {
                     acknowledgementUncertain++;
                     continue;
                 }
-                OutboxEvent failed = events.markFailed(event.id(), properties.claimOwner(), "TRANSPORT_UNAVAILABLE");
+                String errorCode = exception instanceof OutboxContractViolationException
+                        ? "EVENT_CONTRACT_REJECTED" : "TRANSPORT_UNAVAILABLE";
+                OutboxEvent failed = events.markFailed(event.id(), properties.claimOwner(), errorCode);
                 if (failed.attemptCount() >= MAX_ATTEMPTS) {
-                    events.deadLetter(failed.id(), "TRANSPORT_UNAVAILABLE");
+                    events.deadLetter(failed.id(), errorCode);
                     deadLettered++;
                 } else {
                     retrying++;
