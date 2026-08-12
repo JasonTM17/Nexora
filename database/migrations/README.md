@@ -205,8 +205,9 @@ the private, forced-RLS, function-only receipt ledger for M3-T05. Its record
 function is a backend-worker boundary rather than a browser/user-authorization
 endpoint: M3-T05 validates the trusted NATS envelope and canonical digest
 before calling it, because delayed delivery may occur after the originating
-membership changes. The function returns an exact duplicate receipt and rejects
-changed event-ID or idempotency reuse. It is not an analytics, browser, Data
+membership changes. The function returns a duplicate receipt only for the exact
+stored envelope (other than receipt persistence time) and rejects changed
+event-ID or idempotency reuse. It is not an analytics, browser, Data
 API, provider or hosted-product surface.
 
 The M3 proof script creates a disposable local stand-in for `auth.uid()`,

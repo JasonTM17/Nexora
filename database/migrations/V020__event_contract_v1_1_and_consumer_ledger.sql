@@ -523,10 +523,18 @@ BEGIN
     AND ledger.idempotency_key_digest = in_idempotency_key_digest;
 
   IF NOT FOUND
-     OR existing.payload_digest IS DISTINCT FROM in_payload_digest
-     OR existing.subject_id IS DISTINCT FROM in_subject_id
-     OR existing.resource_id IS DISTINCT FROM in_resource_id
-     OR existing.event_version IS DISTINCT FROM in_event_version THEN
+     OR ROW(
+       existing.organization_id, existing.subject_id, existing.actor_id,
+       existing.resource_type, existing.resource_id, existing.event_type,
+       existing.event_version, existing.topic, existing.schema_version,
+       existing.idempotency_key_digest, existing.payload_digest,
+       existing.safe_payload, existing.occurred_at
+     ) IS DISTINCT FROM ROW(
+       in_organization_id, in_subject_id, in_actor_id, in_resource_type,
+       in_resource_id, in_event_type, in_event_version, in_topic,
+       in_schema_version, in_idempotency_key_digest, in_payload_digest,
+       in_safe_payload, in_occurred_at
+     ) THEN
     RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'IDEMPOTENCY_KEY_REUSED';
   END IF;
 
