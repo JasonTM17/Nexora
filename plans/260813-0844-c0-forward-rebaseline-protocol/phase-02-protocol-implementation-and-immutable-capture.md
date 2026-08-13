@@ -29,9 +29,11 @@ live files are all hash-equal.
       task/milestone/range acceptance.
 - [ ] Leave the existing `product_dispatch` artifact byte-for-byte unchanged.
       While the new lifecycle is pending, normal product-dispatch acquisition
-      must fail because `goal_rebaseline` is pending; it resumes only when the
-      same artifact is complete. No dispatch suspension or restoration event is
-      permitted.
+      must fail with `GOAL_REBASELINE_PENDING` before lower source/execution
+      predicates run. Once the artifact is complete, that specific admission
+      gate is absent and only the existing dispatch predicates decide the
+      request; this does not assert that a dispatch becomes independently
+      admissible. No dispatch suspension or restoration event is permitted.
 - [ ] Add a distinct `goal_rebaseline` artifact; do not overwrite or fabricate
       a `goal_repin` artifact/history.
 - [ ] Bind a reproducible manifest, range inventory, user approval, source
@@ -47,7 +49,7 @@ live files are all hash-equal.
       | Event/projection | Required immutable identity | Permitted effect |
       |---|---|---|
       | `GOAL_REBASELINE_STARTED` | protocol version; `control_lineage_only=true`; exact C0-08 tuple; seq-60/61 hashes; seq-81 hardening and seq-84 C0-05; pre/post CLI SHA-256; approval/packet hashes; old/target tree and range inventories | create the sole `goal_rebaseline=PENDING` artifact; no other artifact or projection changes |
-      | `GOAL_REBASELINED` | exact start seq/hash; same C0-08 tuple; same Goal/candidate/file list; target SHA/tree/range/manifest; `control_lineage_only=true` | change only that artifact to `COMPLETE`; product dispatch remains byte-identical |
+      | `GOAL_REBASELINED` | exact start seq/hash; same C0-08 tuple; same Goal/candidate/file list; target SHA/tree/range/manifest; `control_lineage_only=true` | change only that artifact to `COMPLETE`; product dispatch remains byte-identical and its rebaseline-specific guard is removed |
       | exact C0-08 `LEASE_RELEASED` | completed rebaseline seq/hash and same lease id/generation/base/head/owner/worktree | one close only; zero active C0 leases |
 
       The verifier rejects synthetic seq-60/61 replacement, `goal_repin`

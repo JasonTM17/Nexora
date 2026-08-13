@@ -21,15 +21,24 @@ fails before an append or lease mutation.
 
 ## Implementation Steps
 
-1. Produce the SQLite clone through a read-only source connection using the
-   SQLite backup API into a new destination; verify source DB SHA-256 and WAL/
-   SHM presence+hash before and after backup, and record clone DB SHA-256.
+1. Capture a source tuple through a read-only connection: DB SHA-256, WAL/SHM
+   presence+hash, verified event count/tip hash and the live CLI SHA-256.
+   Produce the SQLite clone with the backup API into a new destination, then
+   recapture the complete source tuple. If any tuple member changes, discard
+   the clone and STOP; do not replay a concurrent snapshot. Require the clone
+   event count/tip to equal the identical pre/post source tuple before run.
 2. Copy the CLI to the disposable directory, verify reviewed base SHA-256,
    apply the tracked patch, then verify expected post-patch SHA-256 before run.
 3. Capture target only after `HEAD == TARGET`, named branch, empty porcelain,
    locally present target/tree and matching canonical inventory digests.
-4. Run the positive lifecycle and capture redacted machine-readable receipts.
-5. Run one isolated negative per case: non-descendant/wrong target SHA, changed
+4. Run the positive lifecycle and capture redacted machine-readable receipts:
+   after `GOAL_REBASELINE_STARTED`, invoke the ordinary product-dispatch
+   acquisition path and assert `GOAL_REBASELINE_PENDING` before append with an
+   unchanged event count; after `GOAL_REBASELINED`, invoke the same request and
+   assert it is not rejected by that rebaseline gate (an existing independent
+   dispatch predicate may still deny it), again without an unintended append.
+5. Run one isolated negative per case: source-tuple change during clone backup,
+   non-descendant/wrong target SHA, changed
    target after capture, dirty integration checkout, wrong or additional active
    C0 lease, stale C0-05/hardening/code digest, malformed approval/inventory,
    attempted genesis-file-list substitution, non-equivalent old/target
@@ -48,11 +57,14 @@ fails before an append or lease mutation.
 ## Success Criteria
 
 - Positive and negative replay outputs are bound to the exact patch and packet
-  digests, and no negative can mutate a clone past its initial state.
+  digests, an identical source snapshot tuple and clone event tip, and no
+  negative can mutate a clone past its initial state.
 - Positive replay leaves final binding/manifest/Goal/execution projections
   byte-for-byte equal to pre-replay values; `product_dispatch` is also
   byte-for-byte equal. Only the declared `goal_rebaseline` artifact state and
-  the final C0-08 close may change.
+  the final C0-08 close may change. The pending dispatch gate is dynamically
+  observed and then absent after completion without inferring a new dispatch
+  authorization.
 
 ## Risk Assessment
 
