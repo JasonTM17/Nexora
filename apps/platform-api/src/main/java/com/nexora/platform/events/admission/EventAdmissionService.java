@@ -73,6 +73,9 @@ public class EventAdmissionService {
     }
 
     private Instant validity(Instant bearerExpiresAt) {
+        if (!bearerExpiresAt.isAfter(Instant.now())) {
+            throw denied();
+        }
         Instant shortDeadline = Instant.now().plusSeconds(MAX_VALIDITY_SECONDS);
         return bearerExpiresAt.isBefore(shortDeadline) ? bearerExpiresAt : shortDeadline;
     }
