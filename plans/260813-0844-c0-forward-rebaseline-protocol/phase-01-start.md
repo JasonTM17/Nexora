@@ -21,9 +21,9 @@ unaccepted until the explicit rebaseline event succeeds.
       ordered commit list, changed-path list, and deterministic per-file
       manifest from a dedicated clean target checkout.
 - [ ] Capture the semantic identity of **both** clean old and target
-      checkouts. If the historical final-binding file list differs from an
-      observed checkout, preserve the old event value and make that mismatch a
-      named successor justification rather than rewriting history.
+      checkouts. Distinguish the genesis-only standalone file-list artifact
+      from the active final-binding file-list identity; neither may be
+      substituted for the other.
 - [ ] Define `GOAL_REBASELINE_STARTED` and `GOAL_REBASELINED` as distinct
       forward-only events; never reinterpret them as the existing
       `GOAL_REPIN_*` lifecycle.
@@ -83,30 +83,23 @@ separately approved live action.
 | Verified ledger tip | seq 84, `C0_05_VERIFIED_CONTENTION_PASS`, hash `13c7ab18d896ce8c4213718aff6c91ee75d8b1e29aed6c1039d1618c80c868a3` |
 | Active lease | `C0-08-g1-1dcf780dd4`, generation 1, `control/goal-repin`, `chore/goal-repin-control`, old base/head |
 
-### Historical File-List Mismatch (Must Not Be Hidden)
+### Semantic-Identity Interpretation (Corrected Before Code)
 
-The immutable seq-60 final-binding artifact records file-list digest
+The standalone `file_list_digest` artifact at genesis seq 1 is
 `2b668f880511c079d3b8597cf236e0df519e8cf9219cfd8366686ec70f6fbdec`.
-The formal Goal evidence and direct `live_semantic_identity` recomputation in
-both clean checkouts instead produce
-`ea4e12bae221f9b8e20809e2d78d548bb0509b63364d1eeece4efeb30d62f765`,
-with the same candidate digest `91c16ea317b856060ed34eb7464e72ac8e496620c6aa0679ec9fc9dfe3a31246`
-and 70 semantic Markdown files.
+It is not the active final-binding value. Direct replay proves that seq 60's
+`FINAL_BINDING.plan_file_list_digest`, the active `final_binding` projection,
+and `live_semantic_identity` in both clean checkouts all equal
+`ea4e12bae221f9b8e20809e2d78d548bb0509b63364d1eeece4efeb30d62f765`.
+All three use candidate digest
+`91c16ea317b856060ed34eb7464e72ac8e496620c6aa0679ec9fc9dfe3a31246` with
+70 semantic Markdown files.
 
-The forward protocol must therefore bind all four facts in its start body:
-
-1. `old_final_binding_file_list_digest` — the immutable seq-60 value;
-2. `observed_old_semantic_file_list_digest` — recomputed from clean old
-   checkout;
-3. `observed_target_semantic_file_list_digest` — recomputed from clean target
-   checkout; and
-4. `semantic_candidate_equivalent` — true only when both observed candidate
-   and file-list values agree.
-
-The user-approval evidence must name this historical mismatch and authorize
-only its forward supersession. Any difference between the two observed
-semantic identities is a STOP requiring a new material Goal/plan amendment;
-the replacement protocol may not reconcile it by assertion.
+The start body must bind the immutable seq-60 final-binding event/hash and
+its active file-list value separately from the immutable genesis artifact. It
+must also bind old and target observed semantic identities and require them to
+be equal. Any mismatch between the old/target observations is a STOP requiring
+a material Goal/plan amendment; it may not be reconciled by assertion.
 
 The active final binding remains candidate digest
 `91c16ea317b856060ed34eb7464e72ac8e496620c6aa0679ec9fc9dfe3a31246` at

@@ -25,11 +25,11 @@ history. It does **not** accept every source change as product-complete, erase
 the prior binding, authorize R3 actions, push, provision a provider, release,
 or deploy.
 
-The protocol also records an existing historical inconsistency instead of
-normalizing it away: seq 60's immutable final-binding file-list digest differs
-from the reproducible semantic file list observed in both the old and target
-clean checkouts. The successor must preserve the predecessor value, bind both
-observed identities and state exactly why the later binding supersedes it.
+The protocol distinguishes the genesis-only `file_list_digest` artifact from
+the active seq-60 final-binding file-list identity. Direct replay proves that
+the active final binding and both clean checkouts use the same semantic
+file-list digest. The successor therefore rebases the observed Git main SHA,
+not a changed semantic plan identity.
 
 User approval was recorded in this task conversation on 2026-08-13 for the
 design packet, disposable replay, and dual exact-head review. A separate,
