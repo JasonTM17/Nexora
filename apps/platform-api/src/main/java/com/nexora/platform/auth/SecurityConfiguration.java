@@ -28,7 +28,7 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests(requests -> requests
                         .requestMatchers("/api/v1/identity/**", "/api/v1/tenant-context/**",
                                 "/api/v1/authorization/**", "/api/v1/profile/**", "/api/v1/cms/**",
-                                "/api/v1/realtime/**")
+                                "/api/v1/realtime/**", "/api/v1/internal/event-admission/**")
                         .authenticated()
                         .anyRequest().permitAll())
                 .oauth2ResourceServer(resourceServer -> resourceServer

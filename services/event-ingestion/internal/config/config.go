@@ -1,0 +1,246 @@
+package config
+
+import (
+	"fmt"
+	"net"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+)
+
+const (
+	defaultAddress        = "127.0.0.1:18080"
+	defaultBodyLimit      = int64(64 * 1024)
+	minimumBodyLimit      = int64(1024)
+	maximumBodyLimit      = int64(1024 * 1024)
+	defaultHeaderTimeout  = 2 * time.Second
+	defaultReadTimeout    = 5 * time.Second
+	defaultWriteTimeout   = 5 * time.Second
+	defaultIdleTimeout    = 30 * time.Second
+	defaultShutdown       = 10 * time.Second
+	defaultPublishTimeout = 2 * time.Second
+	minimumPublishTimeout = time.Millisecond
+	maximumPublishTimeout = 30 * time.Second
+	defaultRateLimit      = 60
+	defaultRateLimitKeys  = 10_000
+	minimumRateLimit      = 1
+	maximumRateLimit      = 10_000
+	minimumRateLimitKeys  = 1
+	maximumRateLimitKeys  = 100_000
+	defaultMaxConcurrency = 128
+	minimumMaxConcurrency = 1
+	maximumMaxConcurrency = 10_000
+)
+
+// LookupEnv matches os.LookupEnv and keeps configuration parsing testable.
+type LookupEnv func(string) (string, bool)
+
+// Config contains bounded HTTP lifecycle settings plus the paired, validated
+// Spring admission and NATS dependency URLs. Ingestion fails closed unless both
+// are configured together; credentials are never accepted in either URL.
+type Config struct {
+	Address            string
+	BodyLimitBytes     int64
+	ReadHeaderTimeout  time.Duration
+	ReadTimeout        time.Duration
+	WriteTimeout       time.Duration
+	IdleTimeout        time.Duration
+	ShutdownTimeout    time.Duration
+	PublishTimeout     time.Duration
+	RateLimitPerMinute int
+	RateLimitKeys      int
+	MaxConcurrency     int
+	AdmissionURL       string
+	NATSURL            string
+}
+
+// Load returns local-safe defaults and rejects invalid overrides before serving.
+func Load(lookup LookupEnv) (Config, error) {
+	if lookup == nil {
+		return Config{}, fmt.Errorf("environment lookup is required")
+	}
+
+	address, err := stringValue(lookup, "NEXORA_EVENT_INGESTION_ADDR", defaultAddress)
+	if err != nil {
+		return Config{}, err
+	}
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return Config{}, fmt.Errorf("NEXORA_EVENT_INGESTION_ADDR must be host:port: %w", err)
+	}
+	parsedHost := net.ParseIP(host)
+	if parsedHost == nil || !parsedHost.IsLoopback() {
+		return Config{}, fmt.Errorf("NEXORA_EVENT_INGESTION_ADDR must use a literal loopback IP")
+	}
+	parsedPort, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || parsedPort == 0 {
+		return Config{}, fmt.Errorf("NEXORA_EVENT_INGESTION_ADDR must use TCP port 1..65535")
+	}
+
+	bodyLimit, err := int64Value(lookup, "NEXORA_EVENT_INGESTION_BODY_LIMIT_BYTES", defaultBodyLimit)
+	if err != nil {
+		return Config{}, err
+	}
+	if bodyLimit < minimumBodyLimit || bodyLimit > maximumBodyLimit {
+		return Config{}, fmt.Errorf("NEXORA_EVENT_INGESTION_BODY_LIMIT_BYTES must be between %d and %d", minimumBodyLimit, maximumBodyLimit)
+	}
+
+	headerTimeout, err := durationValue(lookup, "NEXORA_EVENT_INGESTION_READ_HEADER_TIMEOUT", defaultHeaderTimeout)
+	if err != nil {
+		return Config{}, err
+	}
+	readTimeout, err := durationValue(lookup, "NEXORA_EVENT_INGESTION_READ_TIMEOUT", defaultReadTimeout)
+	if err != nil {
+		return Config{}, err
+	}
+	writeTimeout, err := durationValue(lookup, "NEXORA_EVENT_INGESTION_WRITE_TIMEOUT", defaultWriteTimeout)
+	if err != nil {
+		return Config{}, err
+	}
+	idleTimeout, err := durationValue(lookup, "NEXORA_EVENT_INGESTION_IDLE_TIMEOUT", defaultIdleTimeout)
+	if err != nil {
+		return Config{}, err
+	}
+	shutdownTimeout, err := durationValue(lookup, "NEXORA_EVENT_INGESTION_SHUTDOWN_TIMEOUT", defaultShutdown)
+	if err != nil {
+		return Config{}, err
+	}
+	publishTimeout, err := durationValue(lookup, "NEXORA_EVENT_INGESTION_PUBLISH_TIMEOUT", defaultPublishTimeout)
+	if err != nil || publishTimeout < minimumPublishTimeout || publishTimeout > maximumPublishTimeout {
+		return Config{}, fmt.Errorf("NEXORA_EVENT_INGESTION_PUBLISH_TIMEOUT must be between %s and %s", minimumPublishTimeout, maximumPublishTimeout)
+	}
+	rateLimit, err := intValue(lookup, "NEXORA_EVENT_INGESTION_RATE_LIMIT_PER_MINUTE", defaultRateLimit)
+	if err != nil || rateLimit < minimumRateLimit || rateLimit > maximumRateLimit {
+		return Config{}, fmt.Errorf("NEXORA_EVENT_INGESTION_RATE_LIMIT_PER_MINUTE must be between %d and %d", minimumRateLimit, maximumRateLimit)
+	}
+	rateLimitKeys, err := intValue(lookup, "NEXORA_EVENT_INGESTION_RATE_LIMIT_KEYS", defaultRateLimitKeys)
+	if err != nil || rateLimitKeys < minimumRateLimitKeys || rateLimitKeys > maximumRateLimitKeys {
+		return Config{}, fmt.Errorf("NEXORA_EVENT_INGESTION_RATE_LIMIT_KEYS must be between %d and %d", minimumRateLimitKeys, maximumRateLimitKeys)
+	}
+	maxConcurrency, err := intValue(lookup, "NEXORA_EVENT_INGESTION_MAX_CONCURRENCY", defaultMaxConcurrency)
+	if err != nil || maxConcurrency < minimumMaxConcurrency || maxConcurrency > maximumMaxConcurrency {
+		return Config{}, fmt.Errorf("NEXORA_EVENT_INGESTION_MAX_CONCURRENCY must be between %d and %d", minimumMaxConcurrency, maximumMaxConcurrency)
+	}
+	admissionURL, admissionConfigured, err := optionalStringValue(lookup, "NEXORA_EVENT_INGESTION_ADMISSION_URL")
+	if err != nil {
+		return Config{}, err
+	}
+	natsURL, natsConfigured, err := optionalStringValue(lookup, "NEXORA_EVENT_INGESTION_NATS_URL")
+	if err != nil {
+		return Config{}, err
+	}
+	if admissionConfigured != natsConfigured {
+		return Config{}, fmt.Errorf("NEXORA_EVENT_INGESTION_ADMISSION_URL and NEXORA_EVENT_INGESTION_NATS_URL must be configured together")
+	}
+	if admissionConfigured {
+		if err := validateAdmissionURL(admissionURL); err != nil {
+			return Config{}, err
+		}
+		if err := validateNATSURL(natsURL); err != nil {
+			return Config{}, err
+		}
+	}
+
+	return Config{
+		Address:            address,
+		BodyLimitBytes:     bodyLimit,
+		ReadHeaderTimeout:  headerTimeout,
+		ReadTimeout:        readTimeout,
+		WriteTimeout:       writeTimeout,
+		IdleTimeout:        idleTimeout,
+		ShutdownTimeout:    shutdownTimeout,
+		PublishTimeout:     publishTimeout,
+		RateLimitPerMinute: rateLimit,
+		RateLimitKeys:      rateLimitKeys,
+		MaxConcurrency:     maxConcurrency,
+		AdmissionURL:       admissionURL,
+		NATSURL:            natsURL,
+	}, nil
+}
+
+// IngestionEnabled is true only when a complete, validated local runtime
+// dependency pair is configured. The default process otherwise fail-closes by
+// leaving the event route unregistered.
+func (config Config) IngestionEnabled() bool {
+	return config.AdmissionURL != "" && config.NATSURL != ""
+}
+
+func stringValue(lookup LookupEnv, name, fallback string) (string, error) {
+	value, ok := lookup(name)
+	if !ok {
+		return fallback, nil
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", fmt.Errorf("%s must not be empty", name)
+	}
+	return value, nil
+}
+
+func optionalStringValue(lookup LookupEnv, name string) (string, bool, error) {
+	value, ok := lookup(name)
+	if !ok {
+		return "", false, nil
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", false, fmt.Errorf("%s must not be empty when configured", name)
+	}
+	return value, true, nil
+}
+
+func validateAdmissionURL(value string) error {
+	parsed, err := url.ParseRequestURI(value)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Path != "/api/v1/internal/event-admission" {
+		return fmt.Errorf("NEXORA_EVENT_INGESTION_ADMISSION_URL must be an exact HTTP(S) event-admission base URL")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("NEXORA_EVENT_INGESTION_ADMISSION_URL must use http or https")
+	}
+	return nil
+}
+
+func validateNATSURL(value string) error {
+	parsed, err := url.ParseRequestURI(value)
+	if err != nil || parsed.Scheme != "nats" || parsed.Host == "" || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("NEXORA_EVENT_INGESTION_NATS_URL must be a nats:// host URL")
+	}
+	return nil
+}
+
+func int64Value(lookup LookupEnv, name string, fallback int64) (int64, error) {
+	value, ok := lookup(name)
+	if !ok {
+		return fallback, nil
+	}
+	parsed, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be an integer: %w", name, err)
+	}
+	return parsed, nil
+}
+
+func intValue(lookup LookupEnv, name string, fallback int) (int, error) {
+	value, ok := lookup(name)
+	if !ok {
+		return fallback, nil
+	}
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return 0, fmt.Errorf("%s must be an integer: %w", name, err)
+	}
+	return parsed, nil
+}
+
+func durationValue(lookup LookupEnv, name string, fallback time.Duration) (time.Duration, error) {
+	value, ok := lookup(name)
+	if !ok {
+		return fallback, nil
+	}
+	parsed, err := time.ParseDuration(strings.TrimSpace(value))
+	if err != nil || parsed <= 0 {
+		return 0, fmt.Errorf("%s must be a positive Go duration", name)
+	}
+	return parsed, nil
+}

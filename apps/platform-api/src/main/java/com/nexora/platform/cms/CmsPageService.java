@@ -156,7 +156,7 @@ public class CmsPageService {
                 throw versionConflict();
             }
             PageView archived = find(jdbc, pageId);
-            outbox.recordArchivedPage(jdbc, authoritative, archived.pageId(), archived.draftVersion(), traceId);
+            outbox.recordArchivedPage(jdbc, authoritative, archived.pageId(), archived.draftVersion(), archived.updatedAt());
             audit(jdbc, authoritative, archived.siteId(), pageId, "WORKFLOW", traceId);
             return new ArchiveResult(archived.pageId(), archived.state(), archived.updatedAt());
         });

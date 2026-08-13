@@ -1,0 +1,33 @@
+{
+  "eventId": "70000000-0000-4000-8000-000000000001",
+  "eventType": "PUBLICATION_INVALIDATED",
+  "eventVersion": 1,
+  "organizationId": "10000000-0000-4000-8000-000000000001",
+  "subjectId": "90000000-0000-4000-8000-000000000001",
+  "resourceType": "page",
+  "resourceId": "30000000-0000-4000-8000-000000000001",
+  "topic": "tenant:10000000-0000-4000-8000-000000000001:publication",
+  "actorId": "80000000-0000-4000-8000-000000000001",
+  "traceId": "00000000000000000000000000000001",
+  "idempotencyKeyDigest": "sha256:6fb55c56873b994eb10bd194e65b098681d86ab4f57d100ab32d79fa0abc7a7a",
+  "payloadDigest": "sha256:5757d2decc21af6e904697887c476532756da2d79bd132fe70ef14d0dfbc60f1",
+  "safePayload": {
+    "resourceId": "30000000-0000-4000-8000-000000000001",
+    "resourceType": "page",
+    "organizationId": "10000000-0000-4000-8000-000000000001",
+    "subjectId": "90000000-0000-4000-8000-000000000001",
+    "actorId": "80000000-0000-4000-8000-000000000001",
+    "correlationId": "10000000000000000000000000000001",
+    "eventVersion": 1,
+    "traceId": "00000000000000000000000000000001",
+    "receiptId": "a1000000-0000-4000-8000-000000000001",
+    "schemaVersion": "1.1.0",
+    "safeDisplay": {
+      "label": "PUBLICATION_INVALIDATED",
+      "status": "QUEUED",
+      "variant": "warning"
+    }
+  },
+  "occurredAt": "2026-08-10T23:59:59Z",
+  "schemaVersion": "1.1.0"
+}

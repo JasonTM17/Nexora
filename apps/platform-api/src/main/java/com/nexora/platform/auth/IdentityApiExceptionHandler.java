@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice(basePackages = {
         "com.nexora.platform.authorization", "com.nexora.platform.identity",
         "com.nexora.platform.tenant", "com.nexora.platform.profile", "com.nexora.platform.cms",
-        "com.nexora.platform.realtime"
+        "com.nexora.platform.realtime", "com.nexora.platform.events"
 })
 public class IdentityApiExceptionHandler implements AuthenticationEntryPoint {
     private static final String GENERIC_PERMISSION_DENIED_MESSAGE = "Permission denied.";
