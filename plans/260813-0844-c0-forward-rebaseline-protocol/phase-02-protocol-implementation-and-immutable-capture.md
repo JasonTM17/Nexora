@@ -20,9 +20,12 @@ live files are all hash-equal.
 - [ ] Require the exact active C0-08 lease, current C0-05 receipt, current
       hardening/code digest, a clean dedicated integration checkout and a
       strict Git descendant target.
-- [ ] Atomically append `GOAL_REBASELINE_STARTED` then `GOAL_REBASELINED`,
-      preserve all prior events, and permit exactly one subsequent close of the
-      old C0-08 lease.
+- [ ] `goal-rebaseline-begin` atomically appends `GOAL_REBASELINE_STARTED`
+      with the sole pending artifact. A later `goal-rebaseline-complete`
+      atomically appends its matching `GOAL_REBASELINED` completion and marks
+      that artifact complete; this observable interval is required for replay
+      of the pending-dispatch denial. Preserve all prior events and permit
+      exactly one subsequent close of the old C0-08 lease.
 - [ ] Mark both events `control_lineage_only: true`; they must not update or
       supersede `final_binding`, `final_manifest`, `goal_contract`,
       `execution_baseline` or `execution_allowances`, and must not record a
