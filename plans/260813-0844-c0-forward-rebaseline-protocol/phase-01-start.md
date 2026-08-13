@@ -78,7 +78,7 @@ separately approved live action.
 | Proposed source target | `0c326c9b05f08c020995f10d59f087030349ba03` |
 | Ancestry | old is an ancestor of target |
 | Ordered commits in range | 127; SHA-256 `6dd3c6cbfd005bbd1f034cb5b9c526b1b2d500645fa86d808e71d5a37e89d983` |
-| Sorted changed paths | 224; SHA-256 `6eafcb57851bdcc823c7658fbfffd26cb625965920b20c664a8b0edc10ceb766` |
+| Sorted changed paths | 224; SHA-256 `c11ee00a4e39e688427b71aeb424eb01215f3c2b0456ed979e0da9a530c5dcb1` |
 | First / final range commit | `4848e4c99a8cbe68ce54ae8dea93314a41a810e7` / `0c326c9b05f08c020995f10d59f087030349ba03` |
 | Dedicated target checkout | `C:\\Users\\Admin\\.codex\\worktrees\\m3t01eventcontracts\\Nexora` on `feature/event-contracts`, observed clean at target |
 | Live executable CLI SHA-256 | `b4840e59379374f800d429c36d70359f1d210891f855ac826ac16125f7fe923f` |

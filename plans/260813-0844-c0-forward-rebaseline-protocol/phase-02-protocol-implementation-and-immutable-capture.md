@@ -65,8 +65,11 @@ live files are all hash-equal.
 3. Capture source inventory canonically: commit digest is SHA-256 of lowercase
    `git rev-list --reverse OLD..TARGET` IDs joined with ASCII LF plus final LF;
    changed-path digest is SHA-256 of bytewise-sorted repository-relative UTF-8
-   paths joined with NUL plus final NUL, derived from
-   `git diff --name-only -z --diff-filter=ACDMRT OLD..TARGET`; target tree is
+   path byte strings joined with NUL plus final NUL, derived without rename
+   detection from `git -c diff.renames=false diff --no-renames --name-only -z
+   --diff-filter=ACDMRT OLD..TARGET`. The procedure must not use host-locale
+   collation; `LC_ALL=C` is set where supported, while the raw NUL bytes and
+   bytewise ordering are authoritative on every host. Target tree is
    `git rev-parse TARGET^{tree}` plus SHA-256 of raw
    `git ls-tree -r -z --full-tree TARGET` output.
 4. Reject changed target state, non-descendants, dirty integration checkout,
