@@ -23,6 +23,7 @@ Advisor FIT, Kongming PASS and Controller disposition before proceeding.
 | [System and module view](./system-and-modules.md) | Planned services, interfaces, ownership and alternatives | M1 foundation, M2 domain/API, M3 events, M4 RAG workers |
 | [Data and trust view](./data-and-trust.md) | Data classification, request authorization and permitted egress | Migration train, platform API, web and security owners |
 | [Failure semantics](./failure-semantics.md) | Planned degraded behavior, retry boundaries and STOP conditions | Each domain owner; later operational acceptance validates it |
+| [ADR — Go/NATS event ingestion](../adr/adr-m3-go-nats-event-ingestion.md) | Bounded Go ingress boundary, Spring admission authority, retention criterion | M3-T04/T05 workers, Advisor/Kongming dual review |
 
 ## Baseline invariants
 
