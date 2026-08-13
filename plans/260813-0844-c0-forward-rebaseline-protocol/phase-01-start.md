@@ -27,6 +27,9 @@ unaccepted until the explicit rebaseline event succeeds.
 - [ ] Define `GOAL_REBASELINE_STARTED` and `GOAL_REBASELINED` as distinct
       forward-only events; never reinterpret them as the existing
       `GOAL_REPIN_*` lifecycle.
+- [ ] Mark both events `control_lineage_only: true`; the source range is
+      observed/unaccepted provenance, not a product task receipt, milestone,
+      execution baseline or production assertion.
 - [ ] Require a user-approval receipt digest, target inventory digest and
       code-patch digest before the start event. The approval must state that
       the range is a control-baseline transition, not blanket product

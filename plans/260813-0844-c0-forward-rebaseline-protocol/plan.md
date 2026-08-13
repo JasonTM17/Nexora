@@ -40,9 +40,9 @@ ledger mutation.
 
 | # | Goal | Priority |
 |---|------|----------|
-| 1 | Preserve the old C0 lineage while binding an independently captured, descendant source target. | P1 |
+| 1 | Preserve the old C0 lineage while binding an independently captured, descendant source target as unaccepted provenance only. | P1 |
 | 2 | Make every live transition replayable, fail closed, and independently reviewable. | P1 |
-| 3 | Resume source delivery only after the new baseline is proven; retain all R3 STOP conditions. | P1 |
+| 3 | Reconcile source-range acceptance separately from control rebaseline; retain all R3 STOP conditions. | P1 |
 
 ## Phases
 
@@ -52,6 +52,7 @@ ledger mutation.
 | 2 | [Protocol implementation and immutable capture](./phase-02-protocol-implementation-and-immutable-capture.md) | Pending |
 | 3 | [Disposable clone replay](./phase-03-disposable-clone-replay.md) | Pending |
 | 4 | [Dual review and gated live transition](./phase-04-dual-review-and-gated-live-transition.md) | Pending |
+| 5 | [Historical source-range reconciliation](./phase-05-historical-source-range-reconciliation.md) | Pending |
 
 ## Success Criteria
 
@@ -60,6 +61,9 @@ ledger mutation.
 - [ ] The protocol preserves immutable predecessor events, requires the one
       active C0-08 lease and fresh C0-05/hardening evidence, and cannot create
       a parallel active C0 lease.
+- [ ] Completion is `CONTROL_LINEAGE_ONLY`: it cannot change final binding,
+      final manifest, Goal, execution baseline or allowances, and cannot
+      accept a task, milestone or the historical source range.
 - [ ] Positive and adversarial clone replays pass before a live transition is
       considered.
 - [ ] Advisor FIT and Kongming PASS name the same protocol bytes, packet and
@@ -67,5 +71,7 @@ ledger mutation.
 - [ ] A second user confirmation precedes any live ledger write; first push,
       paid provision, credentialed provider call, release and deploy remain
       forbidden.
+- [ ] Any later acceptance of the 127-commit range has its own exact packet,
+      requirement evidence and dual review; it is never a rebaseline effect.
 
 <!-- slug: c0-forward-rebaseline-protocol -->

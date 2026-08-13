@@ -31,9 +31,9 @@ live ledger.
 3. After that approval only, materialize the reviewed CLI patch, re-harden,
    run real C0-05 contention, verify, execute one rebaseline lifecycle,
    release the exact old lease and verify again.
-4. Record redacted receipts and resume source delivery under ordinary
-   packet-level Advisor/Kongming gates; no milestone, production, push,
-   provider, release or deploy claim follows automatically.
+4. Record redacted receipts. Source-range reconciliation then follows Phase 5;
+   no source delivery, task acceptance, milestone, production, push, provider,
+   release or deploy claim follows automatically.
 
 ## Todo
 
