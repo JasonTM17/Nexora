@@ -27,7 +27,8 @@ fails before an append or lease mutation.
 3. Run one isolated negative per case: non-descendant/wrong target SHA, changed
    target after capture, dirty integration checkout, wrong or additional active
    C0 lease, stale C0-05/hardening/code digest, malformed approval/inventory,
-   premature close and duplicate rebaseline.
+   unacknowledged historical file-list mismatch, non-equivalent old/target
+   semantic identities, premature close and duplicate rebaseline.
 4. Assert every negative leaves the cloned event count and active lease state
    unchanged; assert no forbidden R3 event type or external action is invoked.
 

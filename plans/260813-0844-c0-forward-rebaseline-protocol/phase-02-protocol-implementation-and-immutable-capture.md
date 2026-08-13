@@ -28,6 +28,10 @@ materialized after the patch, source and live-file digests are equal.
 - [ ] Bind a reproducible manifest, range inventory, user approval, source
       target SHA, patch SHA and old lineage event hashes into immutable event
       bodies.
+- [ ] Bind the old immutable file-list digest separately from both observed
+      clean-checkout semantic identities. Completion may use the observed
+      target value only if the old/target semantic identities are equivalent
+      and the user approval names the historical mismatch.
 
 ## Implementation Steps
 
