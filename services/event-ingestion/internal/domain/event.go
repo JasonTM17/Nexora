@@ -1,6 +1,6 @@
 // Package domain contains the Go-owned projection of the frozen canonical
-// envelope. This type accepts no input yet; validation and NATS publishing are
-// introduced in their dedicated follow-up commit.
+// envelope. Ingested events are validated against Spring's admission decision
+// and published to NATS only after a JetStream acknowledgement.
 package domain
 
 import "time"

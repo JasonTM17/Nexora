@@ -23,6 +23,9 @@ func TestLoadUsesBoundedLocalDefaults(t *testing.T) {
 	if settings.RateLimitPerMinute != 60 || settings.RateLimitKeys != 10_000 {
 		t.Fatalf("unexpected default rate limits: %#v", settings)
 	}
+	if settings.MaxConcurrency != 128 {
+		t.Fatalf("MaxConcurrency = %d", settings.MaxConcurrency)
+	}
 	if settings.PublishTimeout != 2*time.Second {
 		t.Fatalf("PublishTimeout = %s", settings.PublishTimeout)
 	}
@@ -125,6 +128,8 @@ func TestLoadRejectsUnsafeOverrides(t *testing.T) {
 		{name: "large rate limit", key: "NEXORA_EVENT_INGESTION_RATE_LIMIT_PER_MINUTE", value: "10001"},
 		{name: "zero rate keys", key: "NEXORA_EVENT_INGESTION_RATE_LIMIT_KEYS", value: "0"},
 		{name: "large rate keys", key: "NEXORA_EVENT_INGESTION_RATE_LIMIT_KEYS", value: "100001"},
+		{name: "zero concurrency", key: "NEXORA_EVENT_INGESTION_MAX_CONCURRENCY", value: "0"},
+		{name: "large concurrency", key: "NEXORA_EVENT_INGESTION_MAX_CONCURRENCY", value: "10001"},
 	}
 
 	for _, test := range tests {

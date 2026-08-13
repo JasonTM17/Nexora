@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	SchemaVersion    = "1.1.0"
-	maxAuthTTL       = 5 * time.Minute
-	maxEventVersion  int64 = 9007199254740991
+	SchemaVersion         = "1.1.0"
+	maxAuthTTL            = 5 * time.Minute
+	maxEventVersion int64 = 9007199254740991
 )
 
 var (

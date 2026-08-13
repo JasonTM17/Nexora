@@ -28,13 +28,17 @@ const (
 	maximumRateLimit      = 10_000
 	minimumRateLimitKeys  = 1
 	maximumRateLimitKeys  = 100_000
+	defaultMaxConcurrency = 128
+	minimumMaxConcurrency = 1
+	maximumMaxConcurrency = 10_000
 )
 
 // LookupEnv matches os.LookupEnv and keeps configuration parsing testable.
 type LookupEnv func(string) (string, bool)
 
-// Config contains only bounded HTTP lifecycle settings. NATS and authentication
-// configuration are deliberately absent until their contract-owned packets.
+// Config contains bounded HTTP lifecycle settings plus the paired, validated
+// Spring admission and NATS dependency URLs. Ingestion fails closed unless both
+// are configured together; credentials are never accepted in either URL.
 type Config struct {
 	Address            string
 	BodyLimitBytes     int64
@@ -46,6 +50,7 @@ type Config struct {
 	PublishTimeout     time.Duration
 	RateLimitPerMinute int
 	RateLimitKeys      int
+	MaxConcurrency     int
 	AdmissionURL       string
 	NATSURL            string
 }
@@ -113,6 +118,10 @@ func Load(lookup LookupEnv) (Config, error) {
 	if err != nil || rateLimitKeys < minimumRateLimitKeys || rateLimitKeys > maximumRateLimitKeys {
 		return Config{}, fmt.Errorf("NEXORA_EVENT_INGESTION_RATE_LIMIT_KEYS must be between %d and %d", minimumRateLimitKeys, maximumRateLimitKeys)
 	}
+	maxConcurrency, err := intValue(lookup, "NEXORA_EVENT_INGESTION_MAX_CONCURRENCY", defaultMaxConcurrency)
+	if err != nil || maxConcurrency < minimumMaxConcurrency || maxConcurrency > maximumMaxConcurrency {
+		return Config{}, fmt.Errorf("NEXORA_EVENT_INGESTION_MAX_CONCURRENCY must be between %d and %d", minimumMaxConcurrency, maximumMaxConcurrency)
+	}
 	admissionURL, admissionConfigured, err := optionalStringValue(lookup, "NEXORA_EVENT_INGESTION_ADMISSION_URL")
 	if err != nil {
 		return Config{}, err
@@ -144,6 +153,7 @@ func Load(lookup LookupEnv) (Config, error) {
 		PublishTimeout:     publishTimeout,
 		RateLimitPerMinute: rateLimit,
 		RateLimitKeys:      rateLimitKeys,
+		MaxConcurrency:     maxConcurrency,
 		AdmissionURL:       admissionURL,
 		NATSURL:            natsURL,
 	}, nil
