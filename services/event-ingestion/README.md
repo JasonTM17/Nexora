@@ -48,8 +48,14 @@ All defaults are local-only and bounded:
 | `NEXORA_EVENT_INGESTION_PUBLISH_TIMEOUT` | `2s` | 1ms..30s acknowledgement deadline |
 | `NEXORA_EVENT_INGESTION_RATE_LIMIT_PER_MINUTE` | `60` | 1..10000 per trusted organization/subject |
 | `NEXORA_EVENT_INGESTION_RATE_LIMIT_KEYS` | `10000` | 1..100000 retained principals; saturation rejects new keys |
+| `NEXORA_EVENT_INGESTION_MAX_CONCURRENCY` | `128` | 1..10000 aggregate in-flight ingestion requests; excess requests receive `503 INGESTION_OVERLOADED` |
 | `NEXORA_EVENT_INGESTION_ADMISSION_URL` | unset | Exact `http(s)://host/api/v1/internal/event-admission`; paired with NATS URL |
 | `NEXORA_EVENT_INGESTION_NATS_URL` | unset | Credential-free `nats://host:port`; paired with admission URL |
+
+The rate limiter is in-memory, fixed-window and single-instance: per-principal
+limits are per-process, so horizontal scaling multiplies the effective ceiling.
+M3-R01 therefore wires exactly one ingestion replica locally; a multi-replica
+topology needs a shared or externally-coordinated limiter plus its own review.
 
 Run the local checks from this directory:
 
@@ -75,11 +81,14 @@ a private service-to-service boundary, excluded from OpenAPI/generated browser
 clients; the later runtime-wiring packet owns its network placement and any
 separate credential transport.
 
-`GET /healthz` reports process liveness and `GET /readyz` reports service
-readiness. `GET /metrics` exposes only bounded aggregate HTTP outcome, in-flight
-and duration values in Prometheus text format; it never includes credentials,
-tenant/resource IDs, event IDs, trace IDs or payload values. None of these
-endpoints implies NATS, persistence, deployment, or provider readiness.
+`GET /healthz` reports process liveness and `GET /readyz` reports this
+process's local serve state only: it turns unready during shutdown and stays
+ready through a NATS outage, because publish failures surface as bounded 503
+responses instead of silent loss. `GET /metrics` exposes only bounded aggregate
+HTTP outcome (including the `overloaded` outcome), in-flight and duration values
+in Prometheus text format; it never includes credentials, tenant/resource IDs,
+event IDs, trace IDs or payload values. None of these endpoints implies NATS,
+persistence, deployment, or provider readiness.
 After trusted validation, accepted responses and JetStream messages carry the
 validated envelope `Nexora-Trace-Id` for bounded correlation. The trusted
 backend/runtime boundary remains responsible for deriving and binding that

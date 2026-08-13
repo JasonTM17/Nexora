@@ -98,6 +98,60 @@ func TestMetricsEndpointReportsOnlyBoundedRequestOutcomes(t *testing.T) {
 	}
 }
 
+func TestEventIngestionBoundsAggregateConcurrency(t *testing.T) {
+	release := make(chan struct{})
+	started := make(chan struct{})
+	ingestor := &blockingIngestor{release: release, started: started}
+	handler := NewHandler(readinessStub(true), WithEventIngestion(ingestor, 4096), WithIngestionConcurrency(1))
+
+	body, err := json.Marshal(transportEnvelope())
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	newRequest := func() *http.Request {
+		request := httptest.NewRequest(http.MethodPost, "/v1/events", strings.NewReader(string(body)))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Authorization", "Bearer valid")
+		return request
+	}
+	first := httptest.NewRecorder()
+	firstDone := make(chan struct{})
+	go func() {
+		defer close(firstDone)
+		handler.ServeHTTP(first, newRequest())
+	}()
+	defer func() {
+		close(release)
+		<-firstDone
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first request never reached the ingestor")
+	}
+	second := httptest.NewRecorder()
+	handler.ServeHTTP(second, newRequest())
+	if second.Code != http.StatusServiceUnavailable || !strings.Contains(second.Body.String(), "INGESTION_OVERLOADED") {
+		t.Fatalf("overloaded status/body = %d %s", second.Code, second.Body.String())
+	}
+}
+
+type blockingIngestor struct {
+	release    chan struct{}
+	started    chan struct{}
+	credential string
+	envelope   domain.EventEnvelope
+}
+
+func (stub *blockingIngestor) Ingest(_ context.Context, credential string, envelope domain.EventEnvelope) (domain.PublishReceipt, error) {
+	stub.credential = credential
+	stub.envelope = envelope
+	stub.started <- struct{}{}
+	<-stub.release
+	return domain.PublishReceipt{EventID: envelope.EventID}, nil
+}
+
 func TestEventIngestionAcceptsOnlyBoundedBearerJSON(t *testing.T) {
 	ingestor := &ingestorStub{receipt: domain.PublishReceipt{EventID: "70000000-0000-4000-8000-000000000099"}}
 	handler := NewHandler(readinessStub(true), WithEventIngestion(ingestor, 4096))

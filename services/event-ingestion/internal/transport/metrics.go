@@ -14,6 +14,7 @@ const (
 	outcomeBodyTooLarge = "body_too_large"
 	outcomeRateLimited  = "rate_limited"
 	outcomeUnavailable  = "unavailable"
+	outcomeOverloaded   = "overloaded"
 	outcomeInternal     = "internal"
 )
 
@@ -24,6 +25,7 @@ var metricOutcomes = []string{
 	outcomeBodyTooLarge,
 	outcomeRateLimited,
 	outcomeUnavailable,
+	outcomeOverloaded,
 	outcomeInternal,
 }
 
@@ -63,6 +65,21 @@ func (metrics *ingestionMetrics) finish(status int, started time.Time) {
 		metrics.inFlight--
 	}
 	metrics.requests[outcomeForStatus(status)]++
+	metrics.durationCount++
+	metrics.durationNanoseconds += uint64(duration)
+}
+
+func (metrics *ingestionMetrics) finishAs(outcome string, started time.Time) {
+	duration := time.Since(started)
+	if duration < 0 {
+		duration = 0
+	}
+	metrics.mu.Lock()
+	defer metrics.mu.Unlock()
+	if metrics.inFlight > 0 {
+		metrics.inFlight--
+	}
+	metrics.requests[outcome]++
 	metrics.durationCount++
 	metrics.durationNanoseconds += uint64(duration)
 }

@@ -41,7 +41,10 @@ func main() {
 				logger.Warn("event ingestion dependencies did not close cleanly", "error", err)
 			}
 		}()
-		options = append(options, transport.WithEventIngestion(runtime.Collector, settings.BodyLimitBytes))
+		options = append(options,
+			transport.WithEventIngestion(runtime.Collector, settings.BodyLimitBytes),
+			transport.WithIngestionConcurrency(settings.MaxConcurrency),
+		)
 	}
 
 	server := application.NewServer(settings, logger, options...)

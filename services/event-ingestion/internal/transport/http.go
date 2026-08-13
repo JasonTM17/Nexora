@@ -26,9 +26,10 @@ type EventIngestor interface {
 }
 
 type handlerOptions struct {
-	ingestor  EventIngestor
-	bodyLimit int64
-	metrics   *ingestionMetrics
+	ingestor       EventIngestor
+	bodyLimit      int64
+	maxConcurrency int
+	metrics        *ingestionMetrics
 }
 
 type HandlerOption func(*handlerOptions)
@@ -40,6 +41,16 @@ func WithEventIngestion(ingestor EventIngestor, bodyLimit int64) HandlerOption {
 		if ingestor != nil && bodyLimit > 0 {
 			options.ingestor = ingestor
 			options.bodyLimit = bodyLimit
+		}
+	}
+}
+
+// WithIngestionConcurrency bounds aggregate in-flight ingestion requests.
+// Values below 1 leave the event route unbounded, which is not recommended.
+func WithIngestionConcurrency(maxConcurrency int) HandlerOption {
+	return func(options *handlerOptions) {
+		if maxConcurrency > 0 {
+			options.maxConcurrency = maxConcurrency
 		}
 	}
 }
@@ -68,17 +79,35 @@ func NewHandler(readiness Readiness, options ...HandlerOption) http.Handler {
 	})
 	mux.HandleFunc("GET /metrics", settings.metrics.writePrometheus)
 	if settings.ingestor != nil {
+		semaphore := make(chan struct{}, settings.maxConcurrency)
 		mux.HandleFunc("POST /v1/events", func(writer http.ResponseWriter, request *http.Request) {
-			handleObservedIngest(writer, request, settings.ingestor, settings.bodyLimit, settings.metrics)
+			handleObservedIngest(writer, request, settings.ingestor, settings.bodyLimit, settings.metrics, semaphore)
 		})
 	}
 	return mux
 }
 
-func handleObservedIngest(writer http.ResponseWriter, request *http.Request, ingestor EventIngestor, bodyLimit int64, metrics *ingestionMetrics) {
+func handleObservedIngest(writer http.ResponseWriter, request *http.Request, ingestor EventIngestor, bodyLimit int64, metrics *ingestionMetrics, semaphore chan struct{}) {
 	started := metrics.begin()
 	recorder := &statusRecorder{ResponseWriter: writer}
-	defer func() { metrics.finish(recorder.statusCode(), started) }()
+	outcome := ""
+	defer func() {
+		if outcome != "" {
+			metrics.finishAs(outcome, started)
+		} else {
+			metrics.finish(recorder.statusCode(), started)
+		}
+	}()
+	if cap(semaphore) > 0 {
+		select {
+		case semaphore <- struct{}{}:
+			defer func() { <-semaphore }()
+		default:
+			outcome = outcomeOverloaded
+			writeError(recorder, http.StatusServiceUnavailable, "INGESTION_OVERLOADED")
+			return
+		}
+	}
 	handleIngest(recorder, request, ingestor, bodyLimit)
 }
 
