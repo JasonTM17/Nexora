@@ -14,27 +14,27 @@ unaccepted until the explicit rebaseline event succeeds.
 
 ## Requirements
 
-- [ ] Bind the predecessor lineage: final binding event seq 60, Goal creation
+- [x] Bind the predecessor lineage: final binding event seq 60, Goal creation
       seq 61, active C0-08 lease `C0-08-g1-1dcf780dd4`, rehardening seq 81 and
       C0-05 pass seq 84.
-- [ ] Capture the target source identity, ancestry proof from old to new SHA,
+- [x] Capture the target source identity, ancestry proof from old to new SHA,
       ordered commit list, changed-path list, and deterministic per-file
       manifest from a dedicated clean target checkout.
-- [ ] Capture the semantic identity of **both** clean old and target
+- [x] Capture the semantic identity of **both** clean old and target
       checkouts. Distinguish the genesis-only standalone file-list artifact
       from the active final-binding file-list identity; neither may be
       substituted for the other.
-- [ ] Define `GOAL_REBASELINE_STARTED` and `GOAL_REBASELINED` as distinct
+- [x] Define `GOAL_REBASELINE_STARTED` and `GOAL_REBASELINED` as distinct
       forward-only events; never reinterpret them as the existing
       `GOAL_REPIN_*` lifecycle.
-- [ ] Mark both events `control_lineage_only: true`; the source range is
+- [x] Mark both events `control_lineage_only: true`; the source range is
       observed/unaccepted provenance, not a product task receipt, milestone,
       execution baseline or production assertion.
-- [ ] Require a user-approval receipt digest, target inventory digest and
+- [x] Require a user-approval receipt digest, target inventory digest and
       code-patch digest before the start event. The approval must state that
       the range is a control-baseline transition, not blanket product
       acceptance.
-- [ ] Retain `first_push`, `paid_provision`, `credentialed_provider_call`,
+- [x] Retain `first_push`, `paid_provision`, `credentialed_provider_call`,
       `release`, and `deploy` as hard prohibitions.
 
 ## Implementation Steps
@@ -47,9 +47,9 @@ unaccepted until the explicit rebaseline event succeeds.
 
 ## Todo
 
-- [ ] No live ledger event, active-lease mutation, source integration, push or
+- [x] No live ledger event, active-lease mutation, source integration, push or
       provider action occurs in this phase.
-- [ ] The source target is named but not claimed as accepted implementation.
+- [x] The source target is named but not claimed as accepted implementation.
 
 ## Success Criteria
 
