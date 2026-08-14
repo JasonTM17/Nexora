@@ -22,15 +22,19 @@ credentials or tenant IDs can be trusted here.
 
 `internal/domain/testdata/v1/publication-invalidated.json` is a local test
 fixture pinned to `packages/contracts/domain/v1/event-contract.json` SHA-256
-`7954CA52DA41EFD5E434089E2959812AED2FCCBFFA8BF77634591326879B214D` on
-the pinned M3 integration base `f6e796f1879a4332c9f954cdd7b798b2cab79e30`.
-It is not a second contract source. Any canonical contract change requires
-revalidating this fixture before a M3-T05 interface pin.
+`7954CA52DA41EFD5E434089E2959812AED2FCCBFFA8BF77634591326879B214D`. The
+fixture base was frozen at the earlier M3 integration head
+`f6e796f1879a4332c9f954cdd7b798b2cab79e30`; the current M3 line carries it
+forward unchanged and the M3-T05 consumer has since been integrated with its
+joint evidence. It is not a second contract source. Any canonical contract
+change requires revalidating this fixture before a later interface pin.
 
-The Go boundary is retained only if later M3-T04/M3-T05 joint evidence
-demonstrates a real idempotent consumer plus a reproducible comparison with
-the Spring-only path. It makes no throughput, provider, deployment, or M5
-analytics claim.
+The Go boundary is conditionally retained per the
+[Go/NATS ADR](../../docs/adr/adr-m3-go-nats-event-ingestion.md): the joint
+M3-T04/M3-T05 evidence demonstrates a real idempotent consumer plus a
+reproducible comparison with the Spring-only path, while the benchmark
+retention decision stays deferred to a later bounded load profile. It makes no
+throughput, provider, deployment, or M5 analytics claim.
 
 ## Local configuration
 
