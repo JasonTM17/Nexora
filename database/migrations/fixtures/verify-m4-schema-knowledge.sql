@@ -411,3 +411,58 @@ BEGIN
 END $$;
 
 COMMIT;
+
+-- Chunk and vector terminal guards: SUPERSEDED rows can never become ACTIVE
+-- again, and a MERGE cannot bypass the row trigger.
+
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000001', true);
+
+UPDATE nexora.chunks SET state = 'SUPERSEDED'
+WHERE id = '40000000-0000-4000-8000-000000000002';
+
+UPDATE rag.chunk_vectors SET state = 'SUPERSEDED'
+WHERE chunk_id = '40000000-0000-4000-8000-000000000002';
+
+DO $$
+DECLARE
+  resurrected boolean := false;
+BEGIN
+  BEGIN
+    UPDATE nexora.chunks SET state = 'ACTIVE'
+    WHERE id = '40000000-0000-4000-8000-000000000002';
+    resurrected := true;
+  EXCEPTION WHEN integrity_constraint_violation THEN
+    resurrected := false;
+  END;
+  IF resurrected THEN
+    RAISE EXCEPTION 'SUPERSEDED chunk was resurrected to ACTIVE';
+  END IF;
+  BEGIN
+    MERGE INTO nexora.chunks AS target
+    USING (VALUES ('40000000-0000-4000-8000-000000000002'::uuid)) AS source (id)
+    ON target.id = source.id
+    WHEN MATCHED THEN UPDATE SET state = 'ACTIVE';
+    resurrected := true;
+  EXCEPTION WHEN integrity_constraint_violation THEN
+    resurrected := false;
+  END;
+  IF resurrected THEN
+    RAISE EXCEPTION 'MERGE bypassed the chunk terminal guard';
+  END IF;
+  BEGIN
+    UPDATE rag.chunk_vectors SET state = 'ACTIVE'
+    WHERE chunk_id = '40000000-0000-4000-8000-000000000002';
+    resurrected := true;
+  EXCEPTION WHEN integrity_constraint_violation THEN
+    resurrected := false;
+  END;
+  IF resurrected THEN
+    RAISE EXCEPTION 'SUPERSEDED vector was resurrected to ACTIVE';
+  END IF;
+END $$;
+
+COMMIT;
