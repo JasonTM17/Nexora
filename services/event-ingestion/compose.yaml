@@ -1,0 +1,20 @@
+name: nexora-event-ingestion
+
+services:
+  event-ingestion:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NEXORA_EVENT_INGESTION_ADDR: 127.0.0.1:18080
+    healthcheck:
+      test: ["CMD", "/event-ingestion", "--healthcheck"]
+      interval: 5s
+      timeout: 2s
+      start_period: 2s
+      retries: 6
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"

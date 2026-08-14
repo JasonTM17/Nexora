@@ -44,9 +44,36 @@ public class OutboxEventRepository {
                 """, this::map, eventId, owner, errorCode);
     }
 
+    /**
+     * Permanently rejects a claimed event that cannot satisfy the frozen
+     * contract. V021 keeps this separate from transient transport failure so
+     * it can never be claimed or retried again.
+     */
+    public void rejectContractViolation(UUID eventId, String owner) {
+        jdbc.queryForObject("SELECT id FROM nexora.reject_claimed_outbox_event(?, ?)", UUID.class,
+                eventId, owner);
+    }
+
     public void deadLetter(UUID eventId, String errorCode) {
         jdbc.queryForObject("SELECT id FROM nexora.dead_letter_failed_outbox_event(?, ?)", UUID.class,
                 eventId, errorCode);
+    }
+
+    public long countPendingAndClaimed() {
+        Long count = jdbc.queryForObject("""
+                SELECT count(*) FROM nexora.outbox_events
+                WHERE state IN ('PENDING', 'CLAIMED')
+                """, Long.class);
+        return count == null ? 0 : count;
+    }
+
+    public double oldestPendingAgeSeconds() {
+        Double age = jdbc.queryForObject("""
+                SELECT COALESCE(EXTRACT(EPOCH FROM (clock_timestamp() - MIN(occurred_at))), 0)
+                FROM nexora.outbox_events
+                WHERE state IN ('PENDING', 'CLAIMED')
+                """, Double.class);
+        return age == null ? 0 : age;
     }
 
     private OutboxEvent map(ResultSet result, int row) throws SQLException {

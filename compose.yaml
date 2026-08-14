@@ -31,6 +31,65 @@ services:
     volumes:
       - nexora-nats-data:/data
 
+  nats-streams:
+    # M3-R01 file-backed JetStream provisioning: creates the durable streams
+    # the outbox publisher and Go ingestion depend on. File storage plus
+    # bounded retention means JetStream remains replayable after a restart;
+    # the earlier tests used Memory storage only for disposable speed. This
+    # init container owns no credentials and quits after provisioning.
+    image: nats:2.11.0-alpine
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        while ! wget -qO- http://nats:8222/healthz >/dev/null; do sleep 1; done
+        nats --server nats://nats:4222 stream add NEXORA_EVENTS \
+          --subjects "nexora.events.*" \
+          --storage file \
+          --retention limits \
+          --max-msgs-per-subject 10000 \
+          --discard old \
+          --defaults
+        nats --server nats://nats:4222 stream add NEXORA_GO_INGESTION \
+          --subjects "nexora.events.publication" \
+          --storage file \
+          --retention limits \
+          --max-msgs-per-subject 10000 \
+          --discard old \
+          --defaults
+    depends_on:
+      nats:
+        condition: service_healthy
+    restart: "no"
+
+  event-ingestion:
+    # M3-R01 wiring: image build plus bounded health/readiness proof only.
+    # The Go service enforces a literal-loopback bind and fails closed unless
+    # ADMISSION_URL and NATS_URL are both configured, so this container
+    # intentionally receives neither: the event route stays unregistered and
+    # the process serves health/metrics only. The M3-T04/T05 joint integration
+    # tests launch the binary directly with both URLs configured.
+    build:
+      context: services/event-ingestion
+      dockerfile: Dockerfile
+    environment:
+      NEXORA_EVENT_INGESTION_ADDR: 127.0.0.1:18080
+      NEXORA_EVENT_INGESTION_BODY_LIMIT_BYTES: 65536
+      NEXORA_EVENT_INGESTION_MAX_CONCURRENCY: 128
+      NEXORA_EVENT_INGESTION_RATE_LIMIT_PER_MINUTE: 60
+      NEXORA_EVENT_INGESTION_RATE_LIMIT_KEYS: 10000
+    healthcheck:
+      test: ["CMD", "/event-ingestion", "--healthcheck"]
+      interval: 5s
+      timeout: 2s
+      start_period: 2s
+      retries: 6
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
 volumes:
   nexora-postgres-data:
   nexora-nats-data:

@@ -2,9 +2,16 @@ package com.nexora.platform.cms;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.nexora.platform.auth.DomainAccessException;
 import com.nexora.platform.auth.LocalJwtIssuer;
 import com.nexora.platform.events.outbox.OutboxEvent;
@@ -12,13 +19,31 @@ import com.nexora.platform.events.outbox.OutboxEventRepository;
 import com.nexora.platform.events.outbox.OutboxPublisher;
 import com.nexora.platform.events.outbox.OutboxPublisherProperties;
 import com.nexora.platform.events.outbox.OutboxTransport;
+import com.nexora.platform.events.outbox.OutboxContractViolationException;
+import com.nexora.platform.events.outbox.EventContractV1_1;
+import com.nexora.platform.events.outbox.CmsWorkflowOutboxRecorder;
+import com.nexora.platform.events.consumer.EventEnvelopeRejectedException;
+import com.nexora.platform.events.consumer.EventLedgerConsumer;
+import com.nexora.platform.events.consumer.EventLedgerReceipt;
+import com.nexora.platform.events.consumer.NatsJetStreamEventHandler;
 import com.nexora.platform.tenant.TenantContext;
+import com.nexora.platform.tenant.TenantContextService;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jwt.SignedJWT;
 import io.nats.client.Nats;
+import io.nats.client.JetStreamSubscription;
+import io.nats.client.Message;
+import io.nats.client.PushSubscribeOptions;
+import io.nats.client.api.AckPolicy;
+import io.nats.client.api.ConsumerConfiguration;
+import io.nats.client.api.DeliverPolicy;
 import io.nats.client.api.StorageType;
 import io.nats.client.api.StreamConfiguration;
+import java.lang.management.ManagementFactory;
+import java.net.InetAddress;
 import java.net.URI;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -28,12 +53,19 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -45,6 +77,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.DockerClientFactory;
 
 @ActiveProfiles("database")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -62,6 +95,8 @@ class CmsPageIntegrationTests {
             .withExposedPorts(4222);
     private static final String OUTBOX_STREAM = "NEXORA_EVENTS";
     private static final String OUTBOX_SUBJECT = "nexora.events.workflow";
+    private static final String GO_INGESTION_STREAM = "NEXORA_GO_INGESTION";
+    private static final String GO_INGESTION_SUBJECT = "nexora.events.publication";
     private static Path migrationDirectory;
 
     @Autowired
@@ -79,6 +114,15 @@ class CmsPageIntegrationTests {
     @Autowired
     private OutboxTransport outboxTransport;
 
+    @Autowired
+    private CmsWorkflowOutboxRecorder outboxRecorder;
+
+    @Autowired
+    private EventLedgerConsumer eventLedger;
+
+    @Autowired
+    private TenantContextService tenantContexts;
+
     @LocalServerPort
     private int port;
 
@@ -92,6 +136,7 @@ class CmsPageIntegrationTests {
         prepareRuntimeRole();
         prepareMigrations();
         prepareOutboxStream();
+        prepareGoIngestionStream();
         registry.add("NEXORA_RUNTIME_DATABASE_URL", DATABASE::getJdbcUrl);
         registry.add("NEXORA_RUNTIME_DATABASE_USERNAME", () -> RUNTIME_LOGIN);
         registry.add("NEXORA_RUNTIME_DATABASE_PASSWORD", () -> RUNTIME_PASSWORD);
@@ -282,10 +327,17 @@ class CmsPageIntegrationTests {
         assertThat(envelope.path("resourceType").asText()).isEqualTo("page");
         assertThat(envelope.path("resourceId").asText()).isEqualTo(page.pageId().toString());
         assertThat(envelope.path("topic").asText()).isEqualTo("tenant:%s:workflow".formatted(tenant.organizationId()));
-        assertThat(envelope.path("traceId").asText()).isEqualTo(traceId);
-        assertThat(envelope.path("idempotencyKeyDigest").asText()).startsWith("sha256:");
-        assertThat(envelope.path("payloadDigest").asText()).startsWith("sha256:");
-        assertThat(envelope.path("safePayload").path("traceId").asText()).isEqualTo(traceId);
+        assertThat(envelope.path("schemaVersion").asText()).isEqualTo("1.1.0");
+        assertThat(envelope.path("traceId").asText()).matches("[a-f0-9]{32}");
+        assertThat(envelope.path("traceId").asText()).isNotEqualTo(traceId);
+        assertThat(envelope.path("idempotencyKeyDigest").asText()).isEqualTo(EventContractV1_1.idempotencyKeyDigest(
+                tenant.organizationId(), envelope.path("topic").asText(), page.pageId(),
+                "cms-page-archive:%s:%d".formatted(page.pageId(), 1)));
+        assertThat(envelope.path("payloadDigest").asText())
+                .isEqualTo(EventContractV1_1.payloadDigest(envelope.path("safePayload")));
+        assertThat(envelope.path("safePayload").path("traceId").asText()).isEqualTo(envelope.path("traceId").asText());
+        assertThat(envelope.path("safePayload").path("safeDisplay").toString())
+                .isEqualTo("{\"label\":\"WORKFLOW_TRANSITIONED\",\"status\":\"ARCHIVED\",\"variant\":\"neutral\"}");
         assertThat(envelope.path("safePayload").has("body")).isFalse();
         assertThat(envelope.path("safePayload").has("token")).isFalse();
         assertThat(envelope.path("occurredAt").asText()).isNotBlank();
@@ -295,6 +347,121 @@ class CmsPageIntegrationTests {
                 "safePayload", "occurredAt", "schemaVersion");
         assertThat(count("SELECT count(*) FROM nexora.outbox_events WHERE resource_id = '" + page.pageId()
                 + "' AND state = 'PUBLISHED' AND attempt_count = 1 AND published_at IS NOT NULL"))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void persistsTheVerifiedRawJetStreamEnvelopeBeforeAckAndConvergesOnReplay() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "ledger-page"),
+                "cms-ledger-create-1");
+        publish(tenant, page.pageId());
+        pages.archive(tenant.ownerContext(), page.pageId(), 1, "cms-ledger-archive-1");
+
+        try (io.nats.client.Connection connection = Nats.connect(natsUrl())) {
+            String durable = "ledger-" + UUID.randomUUID().toString().replace("-", "");
+            PushSubscribeOptions options = ConsumerConfiguration.builder()
+                    .durable(durable)
+                    .deliverPolicy(DeliverPolicy.New)
+                    .ackPolicy(AckPolicy.Explicit)
+                    .ackWait(Duration.ofMillis(250))
+                    .buildPushSubscribeOptions();
+            JetStreamSubscription subscription = connection.jetStream().subscribe(OUTBOX_SUBJECT, options);
+            OutboxPublisher.PublishResult published = publisher.publishAvailable();
+            assertThat(published.published()).isGreaterThanOrEqualTo(1);
+
+            Message delivery = subscription.nextMessage(java.time.Duration.ofSeconds(5));
+            assertThat(delivery).isNotNull();
+            JsonNode publishedEnvelope = json.readTree(delivery.getData());
+            assertThat(publishedEnvelope.path("resourceId").asText()).isEqualTo(page.pageId().toString());
+            EventLedgerReceipt persistedBeforeAck = eventLedger.consume(delivery.getData());
+            Message redelivery = subscription.nextMessage(Duration.ofSeconds(5));
+            assertThat(redelivery).isNotNull();
+            assertThat(json.readTree(redelivery.getData()).path("eventId").asText())
+                    .isEqualTo(publishedEnvelope.path("eventId").asText());
+            EventLedgerReceipt replay = new NatsJetStreamEventHandler(eventLedger).consumeAndAck(redelivery);
+
+            assertThat(persistedBeforeAck.duplicate()).isFalse();
+            assertThat(replay.eventId()).isEqualTo(persistedBeforeAck.eventId());
+            assertThat(replay.duplicate()).isTrue();
+            assertThat(count("SELECT count(*) FROM nexora.event_ledger_entries WHERE event_id = '"
+                    + persistedBeforeAck.eventId() + "'")).isEqualTo(1);
+
+            String raw = new String(delivery.getData(), StandardCharsets.UTF_8);
+            String eventId = publishedEnvelope.path("eventId").asText();
+            String duplicateEnvelopeField = raw.replace("\"eventId\":\"" + eventId + "\"",
+                    "\"eventId\":\"" + eventId + "\",\"eventId\":\"" + eventId + "\"");
+            String duplicatePayloadField = raw.replace("\"label\":\"WORKFLOW_TRANSITIONED\"",
+                    "\"label\":\"WORKFLOW_TRANSITIONED\",\"label\":\"WORKFLOW_TRANSITIONED\"");
+            assertThatThrownBy(() -> eventLedger.consume(duplicateEnvelopeField.getBytes(StandardCharsets.UTF_8)))
+                    .isInstanceOf(EventEnvelopeRejectedException.class);
+            assertThatThrownBy(() -> eventLedger.consume(duplicatePayloadField.getBytes(StandardCharsets.UTF_8)))
+                    .isInstanceOf(EventEnvelopeRejectedException.class);
+            assertThatThrownBy(() -> eventLedger.consume((raw + "{\"body\":\"secret\"}").getBytes(StandardCharsets.UTF_8)))
+                    .isInstanceOf(EventEnvelopeRejectedException.class);
+            assertThat(count("SELECT count(*) FROM nexora.event_ledger_entries WHERE event_id = '"
+                    + persistedBeforeAck.eventId() + "'")).isEqualTo(1);
+
+            Message malformedDelivery = mock(Message.class);
+            when(malformedDelivery.isJetStream()).thenReturn(true);
+            when(malformedDelivery.getData()).thenReturn(duplicatePayloadField.getBytes(StandardCharsets.UTF_8));
+            assertThatThrownBy(() -> new NatsJetStreamEventHandler(eventLedger).consumeAndAck(malformedDelivery))
+                    .isInstanceOf(EventEnvelopeRejectedException.class);
+            verify(malformedDelivery).term();
+            verify(malformedDelivery, never()).ackSync(any(java.time.Duration.class));
+
+            EventLedgerConsumer unavailableConsumer = new EventLedgerConsumer(new com.nexora.platform.events.consumer.EventLedgerRepository(null) {
+                @Override
+                public EventLedgerReceipt record(OutboxEvent ignored) {
+                    throw new IllegalStateException("simulated ledger outage");
+                }
+            });
+            Message retryDelivery = mock(Message.class);
+            when(retryDelivery.isJetStream()).thenReturn(true);
+            when(retryDelivery.getData()).thenReturn(delivery.getData());
+            assertThatThrownBy(() -> new NatsJetStreamEventHandler(unavailableConsumer).consumeAndAck(retryDelivery))
+                    .isInstanceOf(IllegalStateException.class);
+            verify(retryDelivery).nakWithDelay(java.time.Duration.ofSeconds(1));
+            verify(retryDelivery, never()).ackSync(any(java.time.Duration.class));
+
+            AtomicBoolean persisted = new AtomicBoolean();
+            EventLedgerConsumer acknowledgedConsumer = new EventLedgerConsumer(new com.nexora.platform.events.consumer.EventLedgerRepository(null) {
+                @Override
+                public EventLedgerReceipt record(OutboxEvent event) {
+                    persisted.set(true);
+                    return new EventLedgerReceipt(event.id(), false);
+                }
+            });
+            Message acknowledgedDelivery = mock(Message.class);
+            when(acknowledgedDelivery.isJetStream()).thenReturn(true);
+            when(acknowledgedDelivery.getData()).thenReturn(delivery.getData());
+            doAnswer(ignored -> {
+                assertThat(persisted).isTrue();
+                return null;
+            }).when(acknowledgedDelivery).ackSync(any(java.time.Duration.class));
+            assertThat(new NatsJetStreamEventHandler(acknowledgedConsumer).consumeAndAck(acknowledgedDelivery).duplicate())
+                    .isFalse();
+            verify(acknowledgedDelivery).ackSync(java.time.Duration.ofSeconds(3));
+            subscription.unsubscribe();
+        }
+    }
+
+    @Test
+    void reusesTheOriginalOutboxReceiptForTheSameArchiveRequest() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "outbox-idempotency"),
+                "cms-outbox-idempotency-create-1");
+        publish(tenant, page.pageId());
+        pages.archive(tenant.ownerContext(), page.pageId(), 1, "cms-outbox-idempotency-archive-1");
+        CmsPageService.PageView archived = pages.get(tenant.ownerContext(), page.pageId());
+        UUID[] replay = tenantContexts.withFreshTenant(tenant.ownerContext(), (authoritative, jdbc) -> new UUID[] {
+            outboxRecorder.recordArchivedPage(jdbc, authoritative, page.pageId(), archived.draftVersion(), archived.updatedAt()),
+            outboxRecorder.recordArchivedPage(jdbc, authoritative, page.pageId(), archived.draftVersion(), archived.updatedAt())
+        });
+
+        assertThat(replay[1]).isEqualTo(replay[0]);
+        assertThat(count("SELECT count(*) FROM nexora.outbox_events WHERE resource_id = '" + page.pageId()
+                + "' AND event_type = 'WORKFLOW_TRANSITIONED'"))
                 .isEqualTo(1);
     }
 
@@ -352,25 +519,22 @@ class CmsPageIntegrationTests {
     }
 
     @Test
-    void encodesPermittedDigestTextWithoutInjectingEnvelopeFields() throws Exception {
+    void rejectsMalformedStoredEnvelopeBeforeJetStreamPublication() throws Exception {
         String hostileDigest = "x\",\"body\":\"injected" + "z".repeat(32);
         OutboxEvent hostile = new OutboxEvent(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "page", UUID.randomUUID(), 1,
-                "tenant:00000000-0000-0000-0000-000000000001:workflow", "WORKFLOW_TRANSITIONED", "1.0.0",
+                "tenant:00000000-0000-0000-0000-000000000001:workflow", "WORKFLOW_TRANSITIONED", "1.1.0",
                 hostileDigest, hostileDigest,
                 "{\"traceId\":\"safe-trace-1\",\"safeDisplay\":{\"label\":\"Page workflow\",\"status\":\"ARCHIVED\"}}",
                 "safe-trace-1", Instant.now(), 1);
 
-        outboxTransport.publish(hostile);
+        long messagesBefore = streamMessageCount();
 
-        JsonNode envelope = latestStreamMessage();
-        assertThat(envelope.path("idempotencyKeyDigest").asText()).isEqualTo(hostileDigest);
-        assertThat(envelope.path("payloadDigest").asText()).isEqualTo(hostileDigest);
-        assertThat(envelope.has("body")).isFalse();
-        assertThat(fieldNames(envelope)).containsExactlyInAnyOrder(
-                "eventId", "eventType", "eventVersion", "organizationId", "subjectId", "resourceType",
-                "resourceId", "topic", "actorId", "traceId", "idempotencyKeyDigest", "payloadDigest",
-                "safePayload", "occurredAt", "schemaVersion");
+        assertThatThrownBy(() -> outboxTransport.publish(hostile))
+                .isInstanceOf(OutboxContractViolationException.class)
+                .hasMessageContaining("does not satisfy contract v1.1");
+
+        assertThat(streamMessageCount()).isEqualTo(messagesBefore);
     }
 
     @Test
@@ -386,9 +550,10 @@ class CmsPageIntegrationTests {
         String replacementTraceId = response.headers().firstValue("X-Trace-Id").orElseThrow();
         assertThat(replacementTraceId).isNotEqualTo("token-1");
         assertThat(replacementTraceId).matches("[A-Za-z0-9._-]{1,128}");
-        assertThat(count("SELECT count(*) FROM nexora.outbox_events WHERE resource_id = '" + page.pageId()
-                + "' AND safe_payload ->> 'traceId' = '" + replacementTraceId + "'"))
-                .isEqualTo(1);
+        String eventTraceId = scalar("SELECT safe_payload ->> 'traceId' FROM nexora.outbox_events WHERE resource_id = '"
+                + page.pageId() + "'");
+        assertThat(eventTraceId).matches("[a-f0-9]{32}");
+        assertThat(eventTraceId).isNotEqualTo(replacementTraceId);
     }
 
     @Test
@@ -417,6 +582,321 @@ class CmsPageIntegrationTests {
         assertThat(crossTenantGuess.statusCode()).isEqualTo(403);
         assertThat(json.readTree(crossTenantGuess.body()).path("code").asText()).isEqualTo("PERMISSION_DENIED");
         assertThat(ordinarySessionToken.getJWTClaimsSet().getClaim("nexora_realtime_topic")).isNull();
+    }
+
+    @Test
+    void admitsOnlyFreshAuthorizedPublicationInvalidationCandidates() throws Exception {
+        CmsFixture alpha = seedTenant();
+        CmsFixture beta = seedTenant();
+        CmsPageService.PageView alphaPage = pages.create(alpha.ownerContext(), create(alpha, "admission-alpha"),
+                "cms-admission-alpha-create");
+        CmsPageService.PageView betaPage = pages.create(beta.ownerContext(), create(beta, "admission-beta"),
+                "cms-admission-beta-create");
+        publish(alpha, alphaPage.pageId());
+        publish(beta, betaPage.pageId());
+        Instant bearerExpiry = Instant.now().plusSeconds(90);
+        UUID unprivilegedSubject = UUID.randomUUID();
+        addMembership(alpha, unprivilegedSubject, "CONTENT_CREATOR");
+
+        HttpResponse<String> allowed = admission(
+                alpha.organizationId(), alpha.ownerSubjectId(), bearerExpiry, alphaPage.pageId(),
+                "PUBLICATION_INVALIDATED", "page", 1, "1.1.0");
+        HttpResponse<String> forgedVersion = admission(
+                alpha.organizationId(), alpha.ownerSubjectId(), bearerExpiry, alphaPage.pageId(),
+                "PUBLICATION_INVALIDATED", "page", 2, "1.1.0");
+        HttpResponse<String> unowned = admission(
+                alpha.organizationId(), unprivilegedSubject, bearerExpiry, alphaPage.pageId(),
+                "PUBLICATION_INVALIDATED", "page", 7, "1.1.0");
+        HttpResponse<String> crossTenantSelection = admission(
+                beta.organizationId(), alpha.ownerSubjectId(), bearerExpiry, betaPage.pageId(),
+                "PUBLICATION_INVALIDATED", "page", 7, "1.1.0");
+        HttpResponse<String> crossTenantResource = admission(
+                alpha.organizationId(), alpha.ownerSubjectId(), bearerExpiry, betaPage.pageId(),
+                "PUBLICATION_INVALIDATED", "page", 7, "1.1.0");
+        HttpResponse<String> mismatch = admission(
+                alpha.organizationId(), alpha.ownerSubjectId(), bearerExpiry, alphaPage.pageId(),
+                "WORKFLOW_TRANSITIONED", "page", 7, "1.1.0");
+        HttpResponse<String> expired = admission(
+                alpha.organizationId(), alpha.ownerSubjectId(), Instant.now().minusSeconds(60), alphaPage.pageId(),
+                "PUBLICATION_INVALIDATED", "page", 1, "1.1.0");
+        HttpResponse<String> unauthenticated = http.send(HttpRequest.newBuilder(URI.create(
+                        "http://127.0.0.1:" + port + "/api/v1/internal/event-admission/publication-invalidated"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("""
+                        {"eventType":"PUBLICATION_INVALIDATED","resourceType":"page",
+                        "resourceId":"%s","eventVersion":7,"schemaVersion":"1.1.0"}
+                        """.formatted(alphaPage.pageId()).replaceAll("\\s+", "")))
+                .build(), HttpResponse.BodyHandlers.ofString());
+
+        assertThat(allowed.statusCode()).isEqualTo(200);
+        JsonNode decision = json.readTree(allowed.body());
+        assertThat(decision.path("organizationId").asText()).isEqualTo(alpha.organizationId().toString());
+        assertThat(decision.path("subjectId").asText()).isEqualTo(alpha.ownerSubjectId().toString());
+        assertThat(decision.path("actorId").asText()).isEqualTo(alpha.ownerSubjectId().toString());
+        assertThat(decision.path("resourceType").asText()).isEqualTo("page");
+        assertThat(decision.path("resourceId").asText()).isEqualTo(alphaPage.pageId().toString());
+        assertThat(decision.path("eventType").asText()).isEqualTo("PUBLICATION_INVALIDATED");
+        assertThat(decision.path("eventVersion").asLong()).isEqualTo(1);
+        assertThat(decision.path("schemaVersion").asText()).isEqualTo("1.1.0");
+        assertThat(decision.path("topic").asText()).isEqualTo("tenant:" + alpha.organizationId() + ":publication");
+        assertThat(Instant.parse(decision.path("validUntil").asText())).isBeforeOrEqualTo(bearerExpiry);
+        assertThat(decision.has("membershipId")).isFalse();
+        assertThat(decision.has("role")).isFalse();
+
+        for (HttpResponse<String> denied : List.of(unowned, crossTenantSelection, crossTenantResource, forgedVersion)) {
+            assertThat(denied.statusCode()).isEqualTo(403);
+            assertThat(json.readTree(denied.body()).path("code").asText()).isEqualTo("PERMISSION_DENIED");
+        }
+        assertThat(mismatch.statusCode()).isEqualTo(400);
+        assertThat(expired.statusCode()).isEqualTo(401);
+        assertThat(unauthenticated.statusCode()).isEqualTo(401);
+        assertThat(json.readTree(unauthenticated.body()).path("code").asText()).isEqualTo("AUTHENTICATION_REQUIRED");
+
+        HttpResponse<String> openApi = http.send(HttpRequest.newBuilder(URI.create(
+                        "http://127.0.0.1:" + port + "/v3/api-docs"))
+                .GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(openApi.statusCode()).isEqualTo(200);
+        assertThat(json.readTree(openApi.body()).path("paths")
+                .has("/api/v1/internal/event-admission/publication-invalidated")).isFalse();
+    }
+
+    @Test
+    void goIngressUsesSpringAdmissionThenPersistsAndConvergesThroughTheDurableConsumer() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "go-joint-ingress"),
+                "cms-go-joint-create");
+        publish(tenant, page.pageId());
+
+        GoIngestionRuntime go = startGoIngestion();
+        try (io.nats.client.Connection connection = Nats.connect(natsUrl())) {
+            HttpResponse<String> readiness = http.send(HttpRequest.newBuilder(URI.create(go.baseUrl() + "/readyz"))
+                    .GET().timeout(Duration.ofSeconds(3)).build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(readiness.statusCode()).isEqualTo(200);
+
+            String durable = "go-ledger-" + UUID.randomUUID().toString().replace("-", "");
+            PushSubscribeOptions options = ConsumerConfiguration.builder()
+                    .durable(durable)
+                    .deliverPolicy(DeliverPolicy.New)
+                    .ackPolicy(AckPolicy.Explicit)
+                    .ackWait(Duration.ofMillis(250))
+                    .buildPushSubscribeOptions();
+            JetStreamSubscription subscription = connection.jetStream().subscribe(GO_INGESTION_SUBJECT, options);
+            ObjectNode envelope = publicationInvalidationEnvelope(tenant, page);
+            HttpResponse<String> accepted = http.send(HttpRequest.newBuilder(URI.create(go.baseUrl() + "/v1/events"))
+                    .header("Authorization", "Bearer " + ISSUER.token(tenant.ownerSubjectId(), Instant.now().plusSeconds(60)))
+                    .header("Content-Type", "application/json")
+                    .timeout(Duration.ofSeconds(5))
+                    .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(envelope)))
+                    .build(), HttpResponse.BodyHandlers.ofString());
+
+            assertThat(accepted.statusCode()).isEqualTo(202);
+            assertThat(accepted.headers().firstValue("Nexora-Trace-Id")).contains(envelope.path("traceId").asText());
+            Message delivery = subscription.nextMessage(Duration.ofSeconds(5));
+            assertThat(delivery).isNotNull();
+            assertThat(json.readTree(delivery.getData()).path("eventId").asText())
+                    .isEqualTo(envelope.path("eventId").asText());
+            EventLedgerReceipt persistedBeforeAck = eventLedger.consume(delivery.getData());
+            Message redelivery = subscription.nextMessage(Duration.ofSeconds(5));
+            assertThat(redelivery).isNotNull();
+            assertThat(json.readTree(redelivery.getData()).path("eventId").asText())
+                    .isEqualTo(envelope.path("eventId").asText());
+            EventLedgerReceipt replay = new NatsJetStreamEventHandler(eventLedger).consumeAndAck(redelivery);
+
+            assertThat(persistedBeforeAck.duplicate()).isFalse();
+            assertThat(replay.eventId()).isEqualTo(persistedBeforeAck.eventId());
+            assertThat(replay.duplicate()).isTrue();
+            subscription.unsubscribe();
+        } finally {
+            stopGoIngestion(go);
+        }
+    }
+
+    @Test
+    void recordsTheBoundedGoIngressAndSpringAdmissionComparisonWithoutAThroughputClaim() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "go-joint-benchmark"),
+                "cms-go-joint-benchmark-create");
+        publish(tenant, page.pageId());
+        String bearer = ISSUER.token(tenant.ownerSubjectId(), Instant.now().plusSeconds(90));
+        int concurrency = 4;
+        int warmupSamples = 4;
+        int samples = 16;
+        Instant benchmarkStarted = Instant.now();
+
+        GoIngestionRuntime go = startGoIngestion(120);
+        try (io.nats.client.Connection connection = Nats.connect(natsUrl())) {
+            String durable = "go-benchmark-" + UUID.randomUUID().toString().replace("-", "");
+            PushSubscribeOptions options = ConsumerConfiguration.builder()
+                    .durable(durable)
+                    .deliverPolicy(DeliverPolicy.New)
+                    .ackPolicy(AckPolicy.Explicit)
+                    .buildPushSubscribeOptions();
+            JetStreamSubscription subscription = connection.jetStream().subscribe(GO_INGESTION_SUBJECT, options);
+            List<HttpRequest> springWarmupRequests = new ArrayList<>();
+            List<HttpRequest> goWarmupRequests = new ArrayList<>();
+            List<HttpRequest> springRequests = new ArrayList<>();
+            List<HttpRequest> goRequests = new ArrayList<>();
+            for (int index = 0; index < warmupSamples; index++) {
+                springWarmupRequests.add(springAdmissionRequest(tenant, page, bearer));
+                goWarmupRequests.add(goIngressRequest(go, bearer,
+                        publicationInvalidationEnvelope(tenant, page, "go-joint-warmup-" + index)));
+            }
+            for (int index = 0; index < samples; index++) {
+                springRequests.add(springAdmissionRequest(tenant, page, bearer));
+                goRequests.add(goIngressRequest(go, bearer,
+                        publicationInvalidationEnvelope(tenant, page, "go-joint-benchmark-" + index)));
+            }
+            benchmark("spring-admission-warmup", springWarmupRequests, concurrency, 200);
+            benchmark("go-ingress-warmup", goWarmupRequests, concurrency, 202);
+            assertDistinctDurableGoDeliveries(subscription, warmupSamples);
+            BenchmarkResult spring = benchmark("spring-admission", springRequests, concurrency, 200);
+            long messagesBefore = goIngestionMessageCount();
+            BenchmarkResult ingress = benchmark("go-ingress", goRequests, concurrency, 202);
+
+            assertThat(goIngestionMessageCount()).isGreaterThanOrEqualTo(messagesBefore + samples);
+            assertDistinctDurableGoDeliveries(subscription, samples);
+            writeJointBenchmark(spring, ingress, concurrency, warmupSamples, samples, benchmarkStarted);
+            subscription.unsubscribe();
+        } finally {
+            stopGoIngestion(go);
+        }
+    }
+
+    @Test
+    void boundsGoIngressWhenJetStreamBecomesUnavailableWithoutPersistingTheEnvelope() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "go-joint-outage"),
+                "cms-go-joint-outage-create");
+        publish(tenant, page.pageId());
+        ObjectNode envelope = publicationInvalidationEnvelope(tenant, page, "go-joint-nats-outage");
+        GenericContainer<?> isolatedNats = new GenericContainer<>("nats:2.11.0-alpine")
+                .withCommand("-js", "-sd", "/data")
+                .withExposedPorts(4222);
+        GoIngestionRuntime go = null;
+        try {
+            isolatedNats.start();
+            String isolatedNatsUrl = "nats://" + isolatedNats.getHost() + ":" + isolatedNats.getMappedPort(4222);
+            prepareGoIngestionStream(isolatedNatsUrl);
+            go = startGoIngestion(60, isolatedNatsUrl);
+            isolatedNats.stop();
+
+            Instant started = Instant.now();
+            HttpResponse<String> response = http.send(HttpRequest.newBuilder(URI.create(go.baseUrl() + "/v1/events"))
+                    .header("Authorization", "Bearer " + ISSUER.token(tenant.ownerSubjectId(), Instant.now().plusSeconds(60)))
+                    .header("Content-Type", "application/json")
+                    .timeout(Duration.ofSeconds(5))
+                    .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(envelope)))
+                    .build(), HttpResponse.BodyHandlers.ofString());
+
+            assertThat(response.statusCode()).isEqualTo(503);
+            assertThat(json.readTree(response.body()).path("code").asText()).isEqualTo("INGESTION_UNAVAILABLE");
+            assertThat(Duration.between(started, Instant.now())).isLessThan(Duration.ofSeconds(4));
+            assertThat(count("SELECT count(*) FROM nexora.event_ledger_entries WHERE event_id = '"
+                    + envelope.path("eventId").asText() + "'")).isZero();
+        } finally {
+            stopGoIngestion(go);
+            isolatedNats.stop();
+        }
+    }
+
+    @Test
+    void boundsGoIngressWhenJetStreamAcknowledgementStallsWithoutPersistingTheEnvelope() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "go-joint-slow-nats"),
+                "cms-go-joint-slow-nats-create");
+        publish(tenant, page.pageId());
+        ObjectNode envelope = publicationInvalidationEnvelope(tenant, page, "go-joint-nats-stall");
+        GenericContainer<?> isolatedNats = new GenericContainer<>("nats:2.11.0-alpine")
+                .withCommand("-js", "-sd", "/data")
+                .withExposedPorts(4222);
+        GoIngestionRuntime go = null;
+        boolean paused = false;
+        try {
+            isolatedNats.start();
+            String isolatedNatsUrl = "nats://" + isolatedNats.getHost() + ":" + isolatedNats.getMappedPort(4222);
+            prepareGoIngestionStream(isolatedNatsUrl);
+            go = startGoIngestion(60, isolatedNatsUrl);
+            DockerClientFactory.instance().client().pauseContainerCmd(isolatedNats.getContainerId()).exec();
+            paused = true;
+
+            Instant started = Instant.now();
+            HttpResponse<String> response = http.send(HttpRequest.newBuilder(URI.create(go.baseUrl() + "/v1/events"))
+                    .header("Authorization", "Bearer " + ISSUER.token(tenant.ownerSubjectId(), Instant.now().plusSeconds(60)))
+                    .header("Content-Type", "application/json")
+                    .timeout(Duration.ofSeconds(5))
+                    .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(envelope)))
+                    .build(), HttpResponse.BodyHandlers.ofString());
+
+            assertThat(response.statusCode()).isEqualTo(503);
+            assertThat(json.readTree(response.body()).path("code").asText()).isEqualTo("INGESTION_UNAVAILABLE");
+            assertThat(Duration.between(started, Instant.now())).isBetween(Duration.ofSeconds(1), Duration.ofSeconds(4));
+            assertThat(count("SELECT count(*) FROM nexora.event_ledger_entries WHERE event_id = '"
+                    + envelope.path("eventId").asText() + "'")).isZero();
+        } finally {
+            if (paused) {
+                DockerClientFactory.instance().client().unpauseContainerCmd(isolatedNats.getContainerId()).exec();
+            }
+            stopGoIngestion(go);
+            isolatedNats.stop();
+        }
+    }
+
+    @Test
+    void clientDisconnectBeforeTheBoundedBodyCompletesDoesNotPublishAnEnvelope() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "go-joint-disconnect"),
+                "cms-go-joint-disconnect-create");
+        publish(tenant, page.pageId());
+        ObjectNode envelope = publicationInvalidationEnvelope(tenant, page, "go-joint-client-disconnect");
+        byte[] body = json.writeValueAsBytes(envelope);
+        GoIngestionRuntime go = startGoIngestion();
+        try (Socket socket = new Socket(InetAddress.getLoopbackAddress(), go.port())) {
+            long messagesBefore = goIngestionMessageCount();
+            String request = "POST /v1/events HTTP/1.1\r\n"
+                    + "Host: 127.0.0.1\r\n"
+                    + "Authorization: Bearer " + ISSUER.token(tenant.ownerSubjectId(), Instant.now().plusSeconds(60)) + "\r\n"
+                    + "Content-Type: application/json\r\n"
+                    + "Content-Length: " + body.length + "\r\n\r\n";
+            socket.getOutputStream().write(request.getBytes(StandardCharsets.US_ASCII));
+            socket.getOutputStream().write(body, 0, body.length / 2);
+            socket.getOutputStream().flush();
+            socket.close();
+
+            Thread.sleep(250);
+            assertThat(goIngestionMessageCount()).isEqualTo(messagesBefore);
+            assertThat(count("SELECT count(*) FROM nexora.event_ledger_entries WHERE event_id = '"
+                    + envelope.path("eventId").asText() + "'")).isZero();
+        } finally {
+            stopGoIngestion(go);
+        }
+    }
+
+    @Test
+    void boundsBackpressureAtTheGoIngressBeforeASecondJetStreamPublish() throws Exception {
+        CmsFixture tenant = seedTenant();
+        CmsPageService.PageView page = pages.create(tenant.ownerContext(), create(tenant, "go-joint-backpressure"),
+                "cms-go-joint-backpressure-create");
+        publish(tenant, page.pageId());
+        String bearer = ISSUER.token(tenant.ownerSubjectId(), Instant.now().plusSeconds(60));
+        ObjectNode firstEnvelope = publicationInvalidationEnvelope(tenant, page, "go-joint-backpressure-1");
+        ObjectNode rejectedEnvelope = publicationInvalidationEnvelope(tenant, page, "go-joint-backpressure-2");
+        GoIngestionRuntime go = startGoIngestion(1);
+        try {
+            long messagesBefore = goIngestionMessageCount();
+            HttpResponse<String> accepted = http.send(goIngressRequest(go, bearer, firstEnvelope),
+                    HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> rejected = http.send(goIngressRequest(go, bearer, rejectedEnvelope),
+                    HttpResponse.BodyHandlers.ofString());
+
+            assertThat(accepted.statusCode()).isEqualTo(202);
+            assertThat(rejected.statusCode()).isEqualTo(429);
+            assertThat(json.readTree(rejected.body()).path("code").asText()).isEqualTo("RATE_LIMITED");
+            assertThat(goIngestionMessageCount()).isEqualTo(messagesBefore + 1);
+            assertThat(count("SELECT count(*) FROM nexora.event_ledger_entries WHERE event_id = '"
+                    + rejectedEnvelope.path("eventId").asText() + "'")).isZero();
+        } finally {
+            stopGoIngestion(go);
+        }
     }
 
     private CmsPageService.CreateCommand create(CmsFixture tenant, String slug) {
@@ -460,6 +940,30 @@ class CmsPageIntegrationTests {
         HttpRequest request = HttpRequest.newBuilder(URI.create(
                         "http://127.0.0.1:" + port + "/api/v1/realtime/descriptors"))
                 .header("Authorization", "Bearer " + ISSUER.token(subjectId, Instant.now().plusSeconds(60)))
+                .header("X-Nexora-Organization-Id", organizationId.toString())
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        return http.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> admission(
+            UUID organizationId,
+            UUID subjectId,
+            Instant bearerExpiry,
+            UUID resourceId,
+            String eventType,
+            String resourceType,
+            long eventVersion,
+            String schemaVersion) throws Exception {
+        String body = """
+                {"eventType":"%s","resourceType":"%s","resourceId":"%s",
+                "eventVersion":%d,"schemaVersion":"%s"}
+                """.formatted(eventType, resourceType, resourceId, eventVersion, schemaVersion)
+                .replaceAll("\\s+", "");
+        HttpRequest request = HttpRequest.newBuilder(URI.create(
+                        "http://127.0.0.1:" + port + "/api/v1/internal/event-admission/publication-invalidated"))
+                .header("Authorization", "Bearer " + ISSUER.token(subjectId, bearerExpiry))
                 .header("X-Nexora-Organization-Id", organizationId.toString())
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
@@ -561,15 +1065,314 @@ class CmsPageIntegrationTests {
         }
     }
 
+    private static void prepareGoIngestionStream() {
+        prepareGoIngestionStream(natsUrl());
+    }
+
+    private static void prepareGoIngestionStream(String endpoint) {
+        try (io.nats.client.Connection connection = Nats.connect(endpoint)) {
+            connection.jetStreamManagement().addStream(StreamConfiguration.builder()
+                    .name(GO_INGESTION_STREAM)
+                    .subjects(GO_INGESTION_SUBJECT)
+                    .storageType(StorageType.Memory)
+                    .build());
+        } catch (Exception exception) {
+            throw new IllegalStateException("Unable to prepare the disposable Go ingestion stream", exception);
+        }
+    }
+
     private static String natsUrl() {
         return "nats://" + NATS.getHost() + ":" + NATS.getMappedPort(4222);
+    }
+
+    private ObjectNode publicationInvalidationEnvelope(CmsFixture tenant, CmsPageService.PageView page) {
+        return publicationInvalidationEnvelope(tenant, page, "go-joint-event-" + UUID.randomUUID());
+    }
+
+    private ObjectNode publicationInvalidationEnvelope(
+            CmsFixture tenant, CmsPageService.PageView page, String opaqueIdempotencyKey) {
+        String traceId = "0".repeat(31) + "1";
+        ObjectNode safePayload = json.createObjectNode();
+        safePayload.put("resourceId", page.pageId().toString());
+        safePayload.put("resourceType", "page");
+        safePayload.put("organizationId", tenant.organizationId().toString());
+        safePayload.put("subjectId", tenant.ownerSubjectId().toString());
+        safePayload.put("actorId", tenant.ownerSubjectId().toString());
+        safePayload.put("eventVersion", page.draftVersion());
+        safePayload.put("traceId", traceId);
+        safePayload.put("schemaVersion", "1.1.0");
+        ObjectNode display = safePayload.putObject("safeDisplay");
+        display.put("label", "PUBLICATION_INVALIDATED");
+        display.put("status", "PUBLISHED");
+        display.put("variant", "success");
+
+        ObjectNode envelope = json.createObjectNode();
+        envelope.put("eventId", UUID.randomUUID().toString());
+        envelope.put("eventType", "PUBLICATION_INVALIDATED");
+        envelope.put("eventVersion", page.draftVersion());
+        envelope.put("organizationId", tenant.organizationId().toString());
+        envelope.put("subjectId", tenant.ownerSubjectId().toString());
+        envelope.put("resourceType", "page");
+        envelope.put("resourceId", page.pageId().toString());
+        envelope.put("topic", "tenant:" + tenant.organizationId() + ":publication");
+        envelope.put("actorId", tenant.ownerSubjectId().toString());
+        envelope.put("traceId", traceId);
+        envelope.put("idempotencyKeyDigest", EventContractV1_1.idempotencyKeyDigest(
+                tenant.organizationId(), envelope.path("topic").asText(), page.pageId(), opaqueIdempotencyKey));
+        envelope.put("payloadDigest", EventContractV1_1.payloadDigest(safePayload));
+        envelope.set("safePayload", safePayload);
+        envelope.put("occurredAt", Instant.now().toString());
+        envelope.put("schemaVersion", "1.1.0");
+        return envelope;
+    }
+
+    private GoIngestionRuntime startGoIngestion() throws Exception {
+        return startGoIngestion(60);
+    }
+
+    private GoIngestionRuntime startGoIngestion(int rateLimitPerMinute) throws Exception {
+        return startGoIngestion(rateLimitPerMinute, natsUrl());
+    }
+
+    private GoIngestionRuntime startGoIngestion(int rateLimitPerMinute, String jetStreamUrl) throws Exception {
+        Path repository = Path.of("..", "..").toAbsolutePath().normalize();
+        Path service = repository.resolve("services").resolve("event-ingestion");
+        String executableSuffix = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win")
+                ? ".exe" : "";
+        Path binary = Files.createTempFile("nexora-event-ingestion-", executableSuffix);
+        Path output = Files.createTempFile("nexora-event-ingestion-", ".log");
+        GoIngestionRuntime runtime = null;
+        try {
+            Files.deleteIfExists(binary);
+            Process build = new ProcessBuilder("go", "build", "-o", binary.toString(), "./cmd/event-ingestion")
+                    .directory(service.toFile())
+                    .redirectErrorStream(true)
+                    .redirectOutput(output.toFile())
+                    .start();
+            if (!build.waitFor(60, TimeUnit.SECONDS) || build.exitValue() != 0) {
+                build.destroyForcibly();
+                throw new IllegalStateException("Unable to build the isolated Go ingress: " + processOutput(output));
+            }
+
+            int goPort = freeLoopbackPort();
+            ProcessBuilder launch = new ProcessBuilder(binary.toString())
+                    .directory(service.toFile())
+                    .redirectErrorStream(true)
+                    .redirectOutput(output.toFile());
+            launch.environment().put("NEXORA_EVENT_INGESTION_ADDR", "127.0.0.1:" + goPort);
+            launch.environment().put("NEXORA_EVENT_INGESTION_ADMISSION_URL",
+                    "http://127.0.0.1:" + port + "/api/v1/internal/event-admission");
+            launch.environment().put("NEXORA_EVENT_INGESTION_NATS_URL", jetStreamUrl);
+            launch.environment().put("NEXORA_EVENT_INGESTION_PUBLISH_TIMEOUT", "2s");
+            launch.environment().put("NEXORA_EVENT_INGESTION_RATE_LIMIT_PER_MINUTE", Integer.toString(rateLimitPerMinute));
+            runtime = new GoIngestionRuntime(launch.start(), binary, output, goPort);
+            awaitGoHealth(runtime);
+            return runtime;
+        } catch (Exception exception) {
+            if (runtime != null) {
+                stopGoIngestion(runtime);
+            } else {
+                Files.deleteIfExists(binary);
+                Files.deleteIfExists(output);
+            }
+            throw exception;
+        }
+    }
+
+    private HttpRequest springAdmissionRequest(CmsFixture tenant, CmsPageService.PageView page, String bearer) {
+        return HttpRequest.newBuilder(URI.create(
+                        "http://127.0.0.1:" + port + "/api/v1/internal/event-admission/publication-invalidated"))
+                .header("Authorization", "Bearer " + bearer)
+                .header("X-Nexora-Organization-Id", tenant.organizationId().toString())
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(5))
+                .POST(HttpRequest.BodyPublishers.ofString("""
+                        {"eventType":"PUBLICATION_INVALIDATED","resourceType":"page",
+                        "resourceId":"%s","eventVersion":%d,"schemaVersion":"1.1.0"}
+                        """.formatted(page.pageId(), page.draftVersion()).replaceAll("\\s+", "")))
+                .build();
+    }
+
+    private HttpRequest goIngressRequest(GoIngestionRuntime go, String bearer, ObjectNode envelope) throws Exception {
+        return HttpRequest.newBuilder(URI.create(go.baseUrl() + "/v1/events"))
+                .header("Authorization", "Bearer " + bearer)
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(5))
+                .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(envelope)))
+                .build();
+    }
+
+    private BenchmarkResult benchmark(String name, List<HttpRequest> requests, int concurrency, int expectedStatus)
+            throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(concurrency);
+        try {
+            long started = System.nanoTime();
+            List<Future<BenchmarkSample>> futures = new ArrayList<>();
+            for (HttpRequest request : requests) {
+                futures.add(executor.submit(() -> {
+                    long requestStarted = System.nanoTime();
+                    HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+                    return new BenchmarkSample(response.statusCode(), (System.nanoTime() - requestStarted) / 1_000_000);
+                }));
+            }
+            List<BenchmarkSample> samples = new ArrayList<>();
+            for (Future<BenchmarkSample> future : futures) {
+                BenchmarkSample sample = future.get(10, TimeUnit.SECONDS);
+                assertThat(sample.status()).isEqualTo(expectedStatus);
+                samples.add(sample);
+            }
+            return new BenchmarkResult(name, (System.nanoTime() - started) / 1_000_000, samples);
+        } finally {
+            executor.shutdownNow();
+            executor.awaitTermination(5, TimeUnit.SECONDS);
+        }
+    }
+
+    private void assertDistinctDurableGoDeliveries(JetStreamSubscription subscription, int expectedDeliveries)
+            throws Exception {
+        Set<String> deliveredEventIds = new HashSet<>();
+        Set<String> deliveredIdempotencyDigests = new HashSet<>();
+        for (int index = 0; index < expectedDeliveries; index++) {
+            Message delivery = subscription.nextMessage(Duration.ofSeconds(5));
+            assertThat(delivery).isNotNull();
+            JsonNode envelope = json.readTree(delivery.getData());
+            EventLedgerReceipt receipt = new NatsJetStreamEventHandler(eventLedger).consumeAndAck(delivery);
+            assertThat(receipt.duplicate()).isFalse();
+            deliveredEventIds.add(receipt.eventId().toString());
+            deliveredIdempotencyDigests.add(envelope.path("idempotencyKeyDigest").asText());
+        }
+        assertThat(deliveredEventIds).hasSize(expectedDeliveries);
+        assertThat(deliveredIdempotencyDigests).hasSize(expectedDeliveries);
+    }
+
+    private void writeJointBenchmark(
+            BenchmarkResult spring,
+            BenchmarkResult ingress,
+            int concurrency,
+            int warmupSamples,
+            int samples,
+            Instant started) throws Exception {
+        ObjectNode report = json.createObjectNode();
+        report.put("kind", "m3-go-spring-joint-local-benchmark");
+        report.put("sourceSha", gitHead());
+        report.put("recordedAt", Instant.now().toString());
+        report.put("elapsedMillis", Duration.between(started, Instant.now()).toMillis());
+        report.put("dataset", "one published page and one active OWNER bearer; PUBLICATION_INVALIDATED/page");
+        report.put("concurrency", concurrency);
+        report.put("warmupSamplesPerPath", warmupSamples);
+        report.put("samplesPerPath", samples);
+        report.put("comparison", "Go full ingress versus Spring admission baseline; local bounded diagnostic, not a throughput or production claim");
+        report.put("retentionCriterion", "Retain Go only after all authorization, durable-failure, and an approved longer load profile pass; this probe deliberately makes no retention decision.");
+        ObjectNode environment = report.putObject("environment");
+        environment.put("javaVersion", System.getProperty("java.version"));
+        environment.put("os", System.getProperty("os.name") + " " + System.getProperty("os.arch"));
+        environment.put("availableProcessors", Runtime.getRuntime().availableProcessors());
+        environment.put("jvmMaxMemoryBytes", Runtime.getRuntime().maxMemory());
+        environment.put("jvmVendor", System.getProperty("java.vendor"));
+        environment.put("goVersion", commandOutput("go", "version"));
+        environment.put("postgresImage", "postgres:17.5-alpine");
+        environment.put("natsImage", "nats:2.11.0-alpine");
+        environment.put("jetStream", true);
+        environment.put("managementRuntime", ManagementFactory.getRuntimeMXBean().getName());
+        ObjectNode protocol = report.putObject("protocol");
+        protocol.put("warmup", "Each path receives four successful warmup requests before measurement.");
+        protocol.put("successCondition", "Every measured response has the expected status; every Go ingress event has a unique event ID and idempotency digest, then persists and ACKs through the durable consumer.");
+        protocol.put("changedVariable", "ingress path: Go full ingress versus direct Spring admission baseline");
+        protocol.put("limitation", "The paths are not equivalent end-to-end services; result is diagnostic raw data only.");
+        report.set("springAdmission", json.valueToTree(spring));
+        report.set("goIngress", json.valueToTree(ingress));
+        Path output = Path.of("target", "m3-go-spring-joint-benchmark.json");
+        Files.createDirectories(output.getParent());
+        Files.writeString(output, json.writerWithDefaultPrettyPrinter().writeValueAsString(report), StandardCharsets.UTF_8);
+    }
+
+    private static String gitHead() throws Exception {
+        return commandOutput("git", "rev-parse", "HEAD");
+    }
+
+    private static String commandOutput(String... commandLine) throws Exception {
+        Process command = new ProcessBuilder(commandLine)
+                .directory(Path.of("..", "..").toAbsolutePath().normalize().toFile())
+                .redirectErrorStream(true)
+                .start();
+        if (!command.waitFor(5, TimeUnit.SECONDS) || command.exitValue() != 0) {
+            command.destroyForcibly();
+            throw new IllegalStateException("Unable to read local test environment metadata");
+        }
+        return new String(command.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+    }
+
+    private long goIngestionMessageCount() throws Exception {
+        try (io.nats.client.Connection connection = Nats.connect(natsUrl())) {
+            return connection.jetStreamManagement().getStreamInfo(GO_INGESTION_STREAM).getStreamState().getMsgCount();
+        }
+    }
+
+    private void awaitGoHealth(GoIngestionRuntime runtime) throws Exception {
+        Instant deadline = Instant.now().plusSeconds(10);
+        while (Instant.now().isBefore(deadline)) {
+            if (!runtime.process().isAlive()) {
+                throw new IllegalStateException("Go ingress exited before health became available: "
+                        + processOutput(runtime.output()));
+            }
+            try {
+                HttpResponse<String> response = http.send(HttpRequest.newBuilder(URI.create(runtime.baseUrl() + "/healthz"))
+                        .GET().timeout(Duration.ofSeconds(1)).build(), HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() == 200) {
+                    return;
+                }
+            } catch (java.io.IOException ignored) {
+                // The loopback listener is still starting.
+            }
+            Thread.sleep(50);
+        }
+        throw new IllegalStateException("Go ingress did not become healthy: " + processOutput(runtime.output()));
+    }
+
+    private static int freeLoopbackPort() throws Exception {
+        try (ServerSocket socket = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            return socket.getLocalPort();
+        }
+    }
+
+    private static String processOutput(Path output) {
+        try {
+            return Files.readString(output, StandardCharsets.UTF_8);
+        } catch (Exception ignored) {
+            return "<unavailable>";
+        }
+    }
+
+    private static void stopGoIngestion(GoIngestionRuntime runtime) throws Exception {
+        if (runtime == null) {
+            return;
+        }
+        runtime.process().destroy();
+        if (!runtime.process().waitFor(5, TimeUnit.SECONDS)) {
+            runtime.process().destroyForcibly();
+            runtime.process().waitFor(5, TimeUnit.SECONDS);
+        }
+        Files.deleteIfExists(runtime.binary());
+        Files.deleteIfExists(runtime.output());
+    }
+
+    private record GoIngestionRuntime(Process process, Path binary, Path output, int port) {
+        String baseUrl() {
+            return "http://127.0.0.1:" + port;
+        }
+    }
+
+    private record BenchmarkSample(int status, long durationMillis) {
+    }
+
+    private record BenchmarkResult(String path, long elapsedMillis, List<BenchmarkSample> samples) {
     }
 
     private static void prepareMigrations() {
         try {
             migrationDirectory = Files.createTempDirectory("nexora-cms-flyway-");
             Path source = Path.of("..", "..", "database", "migrations").toAbsolutePath().normalize();
-            for (int version = 1; version <= 19; version++) {
+            for (int version = 1; version <= 21; version++) {
                 String prefix = "V%03d__".formatted(version);
                 try (Stream<Path> candidates = Files.list(source)) {
                     Path migration = candidates.filter(path -> path.getFileName().toString().startsWith(prefix))
@@ -627,6 +1430,16 @@ class CmsPageIntegrationTests {
              var rows = statement.executeQuery(sql)) {
             rows.next();
             return rows.getInt(1);
+        }
+    }
+
+    private String scalar(String sql) throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                DATABASE.getJdbcUrl(), DATABASE.getUsername(), DATABASE.getPassword());
+             Statement statement = connection.createStatement();
+             var rows = statement.executeQuery(sql)) {
+            rows.next();
+            return rows.getString(1);
         }
     }
 

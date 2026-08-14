@@ -189,9 +189,42 @@ to execute arbitrary SQL as `nexora_runtime` could already forge that tuple
 against every runtime RLS policy. V019 therefore accepts only the four frozen
 route shapes and never accepts caller-selected subject identity.
 
+`V020__event_contract_v1_1_and_consumer_ledger.sql` is the forward-only
+contract-boundary expansion for M3-T01 `1.1.0`. It replaces the runtime outbox
+record path with exact route, digest-wire-format, finite resource-type and
+fixed `safeDisplay` catalog checks. The payload digest remains a runtime
+canonical-JCS obligation: M3-T05 must recompute it before invoking the record
+function; the database checks its exact wire shape, identity mirrors and the
+durable receipt boundary but never pretends to implement RFC 8785.
+
+Outstanding `1.0.0` rows are never reserialized. The migration preserves
+terminal historical rows and moves only active legacy rows to `DEAD_LETTER`
+with `LEGACY_SCHEMA_REJECTED` plus bounded retention. New producers must emit
+only `1.1.0`; M3-T02 owns that application upgrade. `event_ledger_entries` is
+the private, forced-RLS, function-only receipt ledger for M3-T05. Its record
+function is a backend-worker boundary rather than a browser/user-authorization
+endpoint: M3-T05 validates the trusted NATS envelope and canonical digest
+before calling it, because delayed delivery may occur after the originating
+membership changes. The function returns a duplicate receipt only for the exact
+stored envelope (other than receipt persistence time) and rejects changed
+event-ID or idempotency reuse. It is not an analytics, browser, Data
+API, provider or hosted-product surface.
+
+`V021__event_version_boundary_and_terminal_contract_rejections.sql` binds every
+durable 1.1 event version to the RFC 7493/JCS-safe integer range
+`1..9007199254740991`, shared by the contract, Java producer and consumer
+ledger. It also makes a known `EVENT_CONTRACT_REJECTED` a first-attempt terminal
+outcome through a dedicated function-only runtime transition. Such a row is
+retained for investigation and cannot re-enter the bounded transient transport
+retry queue; retries remain exclusively for failures whose payload validity is
+not already disproven. Before those CHECK constraints are installed, any
+pre-existing V020 overflow row is copied as an immutable, operator-only record
+in `event_version_boundary_quarantine`; its event ID and idempotency scope stay
+reserved so a replay cannot silently replace the quarantined envelope.
+
 The M3 proof script creates a disposable local stand-in for `auth.uid()`,
 `auth.jwt()`, `realtime.topic()`, and `realtime.messages`, applies `V001`
-through `V019`, reruns the M2 tenant/CMS fixtures, then executes the actual
+through `V021`, reruns the M2 tenant/CMS fixtures, then executes the actual
 private-channel RLS expression plus the outbox fixture. The stand-in is torn
 down with the Compose project; it is policy-conformance evidence, not hosted
 Supabase proof.
