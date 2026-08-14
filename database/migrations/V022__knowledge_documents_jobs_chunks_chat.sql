@@ -97,8 +97,7 @@ CREATE TABLE nexora.documents (
   version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
   CONSTRAINT documents_knowledge_base_fk FOREIGN KEY (knowledge_base_id, organization_id)
     REFERENCES nexora.knowledge_bases (id, organization_id),
-  CONSTRAINT documents_tenant_key UNIQUE (organization_id, id),
-  CONSTRAINT documents_dedup_key UNIQUE (organization_id, sha256, original_name)
+  CONSTRAINT documents_tenant_key UNIQUE (organization_id, id)
 );
 
 CREATE TABLE nexora.document_jobs (
@@ -120,8 +119,10 @@ CREATE TABLE nexora.document_jobs (
     (state = 'RUNNING') = (heartbeat_at IS NOT NULL)
   ),
   CONSTRAINT document_jobs_terminal_shape_check CHECK (
-    state NOT IN ('SUCCEEDED', 'FAILED', 'CANCELLED')
-    OR last_error_code IS NULL
+    state <> 'FAILED' OR last_error_code IS NOT NULL
+  ),
+  CONSTRAINT document_jobs_clean_terminal_shape_check CHECK (
+    state IN ('SUCCEEDED', 'CANCELLED') OR last_error_code IS NULL
   )
 );
 
@@ -158,6 +159,7 @@ CREATE TABLE nexora.chat_sessions (
   deleted_at timestamptz,
   version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
   CONSTRAINT chat_sessions_tenant_key UNIQUE (organization_id, id),
+  CONSTRAINT chat_sessions_subject_key UNIQUE (organization_id, id, subject_id),
   CONSTRAINT chat_sessions_shape_check CHECK (
     (state = 'DELETED') = (deleted_at IS NOT NULL)
   )
@@ -168,7 +170,7 @@ CREATE TABLE nexora.chat_messages (
   session_id uuid NOT NULL,
   organization_id uuid NOT NULL,
   subject_id uuid NOT NULL,
-  client_message_id text NOT NULL CHECK (char_length(client_message_id) BETWEEN 1 AND 128),
+  client_message_id text NOT NULL CHECK (char_length(client_message_id) BETWEEN 1 AND 128 AND client_message_id ~ '^[\x21-\x7E]+$'),
   client_message_id_digest text NOT NULL CHECK (client_message_id_digest ~ '^sha256:[a-f0-9]{64}$'),
   role nexora.chat_message_role NOT NULL,
   state nexora.chat_message_state NOT NULL DEFAULT 'DRAFT',
@@ -178,8 +180,8 @@ CREATE TABLE nexora.chat_messages (
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   updated_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
-  CONSTRAINT chat_messages_session_fk FOREIGN KEY (session_id, organization_id)
-    REFERENCES nexora.chat_sessions (id, organization_id),
+  CONSTRAINT chat_messages_session_fk FOREIGN KEY (session_id, organization_id, subject_id)
+    REFERENCES nexora.chat_sessions (id, organization_id, subject_id),
   CONSTRAINT chat_messages_parent_fk FOREIGN KEY (parent_message_id, organization_id)
     REFERENCES nexora.chat_messages (id, organization_id),
   CONSTRAINT chat_messages_tenant_key UNIQUE (organization_id, id),
@@ -205,12 +207,13 @@ CREATE TABLE nexora.retrieval_runs (
   token_count integer NOT NULL DEFAULT 0 CHECK (token_count >= 0),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
-  CONSTRAINT retrieval_runs_session_fk FOREIGN KEY (session_id, organization_id)
-    REFERENCES nexora.chat_sessions (id, organization_id),
+  CONSTRAINT retrieval_runs_session_fk FOREIGN KEY (session_id, organization_id, subject_id)
+    REFERENCES nexora.chat_sessions (id, organization_id, subject_id),
   CONSTRAINT retrieval_runs_tenant_key UNIQUE (organization_id, id)
 );
 
 CREATE INDEX documents_knowledge_base_idx ON nexora.documents (knowledge_base_id, organization_id) WHERE state <> 'DELETED';
+CREATE UNIQUE INDEX documents_active_dedup_idx ON nexora.documents (organization_id, sha256, original_name) WHERE state <> 'DELETED';
 CREATE INDEX document_jobs_claim_idx ON nexora.document_jobs (state, heartbeat_at) WHERE state = 'RUNNING';
 CREATE INDEX chunks_document_idx ON nexora.chunks (document_id, organization_id) WHERE state = 'ACTIVE';
 CREATE INDEX chat_messages_session_idx ON nexora.chat_messages (session_id, organization_id, created_at) WHERE state <> 'DELETED';
