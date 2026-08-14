@@ -56,4 +56,4 @@ jobs:
           java-version-file: .java-version
           cache: maven
       - name: Compile and run unit tests
-        run: ./mvnw -q test -Dtest='JwtValidationTests,EventContractV1_1Test,OutboxPublisherSchedulerTest,OutboxPublisherTest,EventAdmissionServiceTest,EventConsumerWiringTest'
+        run: sh mvnw -q test -Dtest='JwtValidationTests,EventContractV1_1Test,OutboxPublisherSchedulerTest,OutboxPublisherTest,EventAdmissionServiceTest,EventConsumerWiringTest'
