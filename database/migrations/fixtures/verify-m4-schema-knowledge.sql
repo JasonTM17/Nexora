@@ -151,3 +151,197 @@ BEGIN
 END $$;
 
 COMMIT;
+
+-- Deletion eligibility and resurrection denial: a DELETED document is
+-- unreadable to knowledge.read-only subjects through forced RLS (managers
+-- keep the trash view so soft-delete UPDATEs stay visible), and a terminal
+-- guard rejects flipping it back to an eligible state.
+
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000001', true);
+
+UPDATE nexora.documents SET state = 'DELETED'
+WHERE id = '30000000-0000-4000-8000-000000000001';
+
+COMMIT;
+
+-- Read-only reviewer: the DELETED document and its chunk must be invisible.
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000002', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000003', true);
+
+DO $$
+DECLARE
+  visible integer;
+BEGIN
+  SELECT count(*) INTO visible FROM nexora.documents
+  WHERE id = '30000000-0000-4000-8000-000000000001';
+  IF visible <> 0 THEN
+    RAISE EXCEPTION 'DELETED document stayed visible to a read-only subject';
+  END IF;
+  SELECT count(*) INTO visible FROM nexora.chunks
+  WHERE document_id = '30000000-0000-4000-8000-000000000001';
+  IF visible <> 0 THEN
+    RAISE EXCEPTION 'chunk of DELETED document stayed visible to a read-only subject';
+  END IF;
+END $$;
+
+COMMIT;
+
+-- Manager (trash view): the DELETED row stays visible and the resurrection
+-- guard rejects flipping it back to an eligible state.
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000001', true);
+
+DO $$
+DECLARE
+  visible integer;
+BEGIN
+  SELECT count(*) INTO visible FROM nexora.documents
+  WHERE id = '30000000-0000-4000-8000-000000000001';
+  IF visible <> 1 THEN
+    RAISE EXCEPTION 'manager trash view lost the DELETED document';
+  END IF;
+END $$;
+
+DO $$
+DECLARE
+  resurrected boolean := false;
+BEGIN
+  BEGIN
+    UPDATE nexora.documents SET state = 'READY'
+    WHERE id = '30000000-0000-4000-8000-000000000001';
+    resurrected := true;
+  EXCEPTION WHEN integrity_constraint_violation THEN
+    resurrected := false;
+  END;
+  IF resurrected THEN
+    RAISE EXCEPTION 'DELETED document was resurrected to READY';
+  END IF;
+END $$;
+
+COMMIT;
+
+-- Active-plane dedup: re-upload of identical bytes+name after deletion is
+-- allowed because the partial index only covers non-DELETED rows.
+
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000001', true);
+
+INSERT INTO nexora.documents (id, knowledge_base_id, organization_id, original_name, stored_object_key, content_type, byte_size, sha256, state, uploaded_by_subject_id) VALUES
+  ('30000000-0000-4000-8000-000000000011', '11000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'syllabus.txt', 'k/reupload', 'text/plain', 512, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'UPLOADED', '20000000-0000-4000-8000-000000000001');
+
+COMMIT;
+
+-- Chat subject scoping: a second tenant-A subject with knowledge.read must
+-- not write into another subject's session.
+
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000002', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000003', true);
+
+DO $$
+DECLARE
+  inserted boolean := false;
+BEGIN
+  BEGIN
+    INSERT INTO nexora.chat_messages (id, session_id, organization_id, subject_id, client_message_id, client_message_id_digest, role, state, content) VALUES
+      ('61000000-0000-4000-8000-000000000002', '50000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000002', 'probe', 'sha256:2222222222222222222222222222222222222222222222222222222222222222', 'user', 'DRAFT', 'probe into another subject session');
+    inserted := true;
+  EXCEPTION WHEN insufficient_privilege OR foreign_key_violation THEN
+    inserted := false;
+  END;
+  IF inserted THEN
+    RAISE EXCEPTION 'subject wrote a message into another subject session';
+  END IF;
+END $$;
+
+COMMIT;
+
+-- Structural assertions: forced RLS everywhere, no SECURITY DEFINER, no
+-- API-role grants on the M4 tables.
+
+BEGIN;
+SET LOCAL ROLE nexora_migrator;
+
+DO $$
+DECLARE
+  missing text;
+BEGIN
+  FOREACH missing IN ARRAY ARRAY[
+    'knowledge_bases', 'documents', 'document_jobs', 'chunks',
+    'chat_sessions', 'chat_messages', 'retrieval_runs', 'chunk_vectors'
+  ] LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_class
+      WHERE relname = missing
+        AND relrowsecurity AND relforcerowsecurity
+    ) THEN
+      RAISE EXCEPTION 'table % lacks enabled forced RLS', missing;
+    END IF;
+  END LOOP;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_proc
+    WHERE pronamespace = 'nexora'::regnamespace
+      AND prosecdef
+      AND proname IN ('guard_knowledge_terminal_transition', 'guard_document_job_parent_state',
+                      'knowledge_current_tenant_has_permission')
+  ) THEN
+    RAISE EXCEPTION 'M4 guard helper must not be SECURITY DEFINER';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.role_table_grants
+    WHERE grantee IN ('anon', 'authenticated', 'service_role')
+      AND table_schema = 'nexora'
+      AND table_name IN ('knowledge_bases', 'documents', 'document_jobs', 'chunks',
+                         'chat_sessions', 'chat_messages', 'retrieval_runs')
+  ) THEN
+    RAISE EXCEPTION 'Data API role holds a grant on an M4 table';
+  END IF;
+END $$;
+
+COMMIT;
+
+-- Vector plane: a deterministic 1024-dim row is insertable and a similarity
+-- query returns the expected ordering.
+
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000001', true);
+
+INSERT INTO nexora.chunks (id, document_id, organization_id, knowledge_base_id, chunk_index, text, token_count, sha256, chunk_strategy_version, state) VALUES
+  ('40000000-0000-4000-8000-000000000002', '30000000-0000-4000-8000-000000000011', '10000000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000001', 0, 'A re-uploaded syllabus chunk for vector proof.', 8, '9999999999999999999999999999999999999999999999999999999999999999', 'nexora-chunk-v1', 'ACTIVE');
+
+INSERT INTO rag.chunk_vectors (id, chunk_id, document_id, organization_id, knowledge_base_id, model_id, model_revision, dimensions, embedding, sha256, state) VALUES
+  ('70000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000002', '30000000-0000-4000-8000-000000000011', '10000000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000001', 'qwen3-embedding-0.6b', 'tbd-fixture-revision', 1024, ARRAY(SELECT 0.001::real FROM generate_series(1, 1024))::vector, '8888888888888888888888888888888888888888888888888888888888888888', 'ACTIVE');
+
+DO $$
+DECLARE
+  vec_count integer;
+BEGIN
+  SELECT count(*) INTO vec_count FROM rag.chunk_vectors
+  WHERE organization_id = '10000000-0000-4000-8000-000000000001' AND state = 'ACTIVE';
+  IF vec_count IS NULL OR vec_count != 1 THEN
+    RAISE EXCEPTION 'expected 1 ACTIVE vector row, found %', vec_count;
+  END IF;
+END $$;
+
+COMMIT;

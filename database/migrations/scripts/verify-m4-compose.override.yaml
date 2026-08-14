@@ -1,0 +1,8 @@
+# M4 verification override only: builds the disposable 17.5 + pgvector image
+# the M4 proof needs. Referenced only by verify-m4-schema-knowledge.ps1.
+services:
+  postgres:
+    build:
+      context: database/migrations/scripts
+      dockerfile: verify-m4-postgres.Dockerfile
+    image: nexora-verify-postgres-pgvector:17.5

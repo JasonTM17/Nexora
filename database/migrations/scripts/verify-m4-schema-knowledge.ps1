@@ -12,6 +12,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $composeFile = Join-Path $repoRoot 'compose.yaml'
+$composeOverride = Join-Path $PSScriptRoot 'verify-m4-compose.override.yaml'
 $migrationDirectory = Join-Path $repoRoot 'database\migrations'
 $foundationFixture = Join-Path $migrationDirectory 'fixtures\verify-foundation.sql'
 $m2Fixture = Join-Path $migrationDirectory 'fixtures\verify-m2-schema-auth.sql'
@@ -25,7 +26,7 @@ $succeeded = $false
 function Invoke-Compose {
     param([Parameter(Mandatory)][string[]]$Arguments)
 
-    & docker compose --project-name $projectName -f $composeFile @Arguments
+    & docker compose --project-name $projectName -f $composeFile -f $composeOverride @Arguments
     if ($LASTEXITCODE -ne 0) {
         throw "docker compose failed: $($Arguments -join ' ')"
     }
@@ -34,7 +35,7 @@ function Invoke-Compose {
 function Invoke-PsqlText {
     param([Parameter(Mandatory)][string]$Sql)
 
-    $Sql | & docker compose --project-name $projectName -f $composeFile exec -T postgres `
+    $Sql | & docker compose --project-name $projectName -f $composeFile -f $composeOverride exec -T postgres `
         psql -X -v ON_ERROR_STOP=1 -U nexora -d nexora
     if ($LASTEXITCODE -ne 0) {
         throw 'psql command failed'
@@ -61,8 +62,8 @@ try {
 
     $migrationFiles = Get-ChildItem -LiteralPath $migrationDirectory -File -Filter 'V*__*.sql' |
         Sort-Object Name
-    if ($migrationFiles.Count -ne 23) {
-        throw "Expected exactly twenty-three ordered migrations through the M4 knowledge boundary; found $($migrationFiles.Count)"
+    if ($migrationFiles.Count -ne 24) {
+        throw "Expected exactly twenty-four ordered migrations through the M4 knowledge/vector boundary; found $($migrationFiles.Count)"
     }
 
     $env:NEXORA_POSTGRES_PORT = $PostgresPort
@@ -167,7 +168,8 @@ GRANT SELECT, INSERT ON realtime.messages TO authenticated;
             $migration.Name -like 'V016*' -or $migration.Name -like 'V017*' -or
             $migration.Name -like 'V018*' -or $migration.Name -like 'V019*' -or
             $migration.Name -like 'V020*' -or $migration.Name -like 'V021*' -or
-            $migration.Name -like 'V022*' -or $migration.Name -like 'V023*') {
+            $migration.Name -like 'V022*' -or $migration.Name -like 'V023*' -or
+            $migration.Name -like 'V024*') {
             continue
         }
         Write-Output "Applying $($migration.Name)"
@@ -193,11 +195,12 @@ GRANT SELECT, INSERT ON realtime.messages TO authenticated;
     $v021Migration = @($migrationFiles | Where-Object Name -eq 'V021__event_version_boundary_and_terminal_contract_rejections.sql')
     $v022Migration = @($migrationFiles | Where-Object Name -eq 'V022__knowledge_documents_jobs_chunks_chat.sql')
     $v023Migration = @($migrationFiles | Where-Object Name -eq 'V023__knowledge_rag_tenant_rls.sql')
+    $v024Migration = @($migrationFiles | Where-Object Name -eq 'V024__knowledge_terminal_guards_and_vector_plane.sql')
     if ($m3PreV020Migrations.Count -ne 6 -or $v020Migration.Count -ne 1 -or $v021Migration.Count -ne 1) {
         throw 'Expected ordered V014 through V021 M3 event-contract migrations.'
     }
-    if ($v022Migration.Count -ne 1 -or $v023Migration.Count -ne 1) {
-        throw 'Expected V022 and V023 M4 knowledge migrations.'
+    if ($v022Migration.Count -ne 1 -or $v023Migration.Count -ne 1 -or $v024Migration.Count -ne 1) {
+        throw 'Expected V022, V023 and V024 M4 knowledge migrations.'
     }
 
     foreach ($migration in $m3PreV020Migrations) {
@@ -311,6 +314,10 @@ COMMIT;
     Invoke-PsqlText (Get-Content -LiteralPath $v022Migration[0].FullName -Raw)
     Write-Output "Applying $($v023Migration[0].Name)"
     Invoke-PsqlText (Get-Content -LiteralPath $v023Migration[0].FullName -Raw)
+    Write-Output 'Provisioning the vector extension (operator stand-in)'
+    Invoke-PsqlText "CREATE EXTENSION IF NOT EXISTS vector SCHEMA public;"
+    Write-Output "Applying $($v024Migration[0].Name)"
+    Invoke-PsqlText (Get-Content -LiteralPath $v024Migration[0].FullName -Raw)
     Write-Output 'Running M4 knowledge/chat/RLS fixture'
     Invoke-PsqlText (Get-Content -LiteralPath $m4Fixture -Raw)
 
