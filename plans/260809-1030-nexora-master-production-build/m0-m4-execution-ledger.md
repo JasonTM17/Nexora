@@ -2,8 +2,12 @@
 
 ## Status
 
-- Planning state: `PROPOSED — NOT DISPATCHED`.
+- Planning state: `DISPATCHED — M3 INTEGRATION IN PROGRESS`.
 - Goal scope: v0.1 M0-M4 / Prompt Phases 0-21.
+- M0-M2 and M3-T01/T02/T03 are accepted on `main`; M3-T04 (Go ingestion),
+  M3-T05 (persistence consumer), M3-R01 (runtime wiring) and the admission
+  guard coverage are `INTEGRATED` on `integration/v0.1-m3` and provisional
+  until the M3-I01 gate closes.
 - Every task below becomes runnable only after its dependency, decision, branch, worktree, ownership and acceptance packet is materialized against a real Git SHA.
 - A table row is not proof that an agent, branch, worktree, test or capability exists.
 
