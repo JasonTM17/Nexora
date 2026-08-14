@@ -81,6 +81,52 @@ export type UpdateProfileRequest = { readonly "displayName": string; readonly "l
 
 export type UserProfile = { readonly "subjectId": SubjectId; readonly "displayName": string; readonly "locale": string; readonly "reducedMotion": boolean; readonly "highContrast": boolean; readonly "version": number; };
 
+export type ResolveTenantRequest = { readonly "organizationId": string; };
+
+export type DescriptorRequest = { readonly "eventType": "PUBLICATION_INVALIDATED" | "WORKFLOW_TRANSITIONED" | "JOB_PROGRESS_CHANGED" | "PRESENCE_CHANGED"; readonly "resourceId"?: string; };
+
+export type Descriptor = { readonly "topic"?: string; readonly "eventType"?: string; readonly "eventVersion"?: number; readonly "authorizationEpoch"?: number; readonly "expiresAt"?: string; readonly "transportToken"?: string; readonly "privateChannel"?: boolean; readonly "delivery"?: string; readonly "reconnectBackoffMs"?: ReadonlyArray<number>; readonly "onEvent"?: string; };
+
+export type CreateSessionRequest = { readonly "title": string; };
+
+export type SessionView = { readonly "id"?: string; readonly "title"?: string; readonly "state"?: string; readonly "version"?: number; readonly "updatedAt"?: string; };
+
+export type SendMessageRequest = { readonly "clientMessageId": string; readonly "content": string; };
+
+export type MessageView = { readonly "id"?: string; readonly "sessionId"?: string; readonly "role"?: string; readonly "state"?: string; readonly "revision"?: number; readonly "content"?: string; };
+
+export type AskRequest = { readonly "query": string; };
+
+export type RagAnswer = { readonly "runId"?: string; readonly "query"?: string; readonly "content"?: string; readonly "outcome"?: string; readonly "citations"?: ReadonlyArray<string>; readonly "tokenCount"?: number; readonly "modelId"?: string; readonly "modelRevision"?: string; readonly "answeredAt"?: string; };
+
+export type CreateKnowledgeBaseRequest = { readonly "name": string; readonly "description"?: string; };
+
+export type KnowledgeBaseView = { readonly "id"?: string; readonly "name"?: string; readonly "description"?: string; readonly "state"?: string; readonly "version"?: number; readonly "updatedAt"?: string; };
+
+export type RegisterDocumentRequest = { readonly "originalName": string; readonly "contentType": string; readonly "byteSize"?: number; readonly "sha256": string; };
+
+export type DocumentView = { readonly "id"?: string; readonly "knowledgeBaseId"?: string; readonly "originalName"?: string; readonly "contentType"?: string; readonly "byteSize"?: number; readonly "sha256"?: string; readonly "state"?: string; readonly "version"?: number; readonly "updatedAt"?: string; };
+
+export type OpenGraphRequest = { readonly "title": string; readonly "description": string; readonly "imageAssetId"?: string; readonly "type": string; };
+
+export type SeoRequest = { readonly "title": string; readonly "description": string; readonly "locale": string; readonly "canonicalPath": string; readonly "openGraph": OpenGraphRequest; readonly "twitter": TwitterRequest; readonly "jsonLdType": string; };
+
+export type TwitterRequest = { readonly "card": string; readonly "title": string; readonly "description": string; readonly "imageAssetId"?: string; };
+
+export type PageView = { readonly "pageId"?: string; readonly "siteId"?: string; readonly "slug"?: string; readonly "title"?: string; readonly "state"?: string; readonly "draftVersion"?: number; readonly "updatedAt"?: string; readonly "schemaVersion"?: string; readonly "contentDigest"?: string; readonly "themeVersionId"?: string; readonly "seo"?: SeoSnapshot; readonly "publishedVersionId"?: string; };
+
+export type MembershipView = { readonly "membershipId"?: string; readonly "organizationId"?: string; readonly "subjectId"?: string; readonly "status"?: string; readonly "role"?: string; readonly "version"?: number; };
+
+export type KnowledgeBaseList = { readonly "items"?: ReadonlyArray<KnowledgeBaseView>; readonly "nextCursor"?: string; };
+
+export type DocumentList = { readonly "items"?: ReadonlyArray<DocumentView>; readonly "nextCursor"?: string; };
+
+export type MembershipResponse = { readonly "organizationId"?: string; readonly "membershipId"?: string; readonly "membershipVersion"?: number; readonly "role"?: string; };
+
+export type PageList = { readonly "items"?: ReadonlyArray<PageSummary>; readonly "nextCursor"?: string; };
+
+export type ArchiveResult = { readonly "pageId"?: string; readonly "state"?: string; readonly "archivedAt"?: string; };
+
 export interface GetTenantContextHeaders {
   readonly "organizationId"?: OrganizationId;
 }
@@ -130,6 +176,58 @@ export interface GetCmsThemeVersionHeaders {
   readonly "organizationId": OrganizationId;
 }
 
+export interface IssueHeaders {
+  readonly "X-Nexora-Organization-Id": string;
+}
+
+export interface CreateHeaders {
+  readonly "X-Nexora-Organization-Id": string;
+}
+
+export interface HistoryHeaders {
+  readonly "X-Nexora-Organization-Id": string;
+}
+
+export interface SendHeaders {
+  readonly "X-Nexora-Organization-Id": string;
+}
+
+export interface AskHeaders {
+  readonly "X-Nexora-Organization-Id": string;
+}
+
+export interface ListKnowledgeBasesHeaders {
+  readonly "X-Nexora-Organization-Id": string;
+}
+
+export interface CreateKnowledgeBaseHeaders {
+  readonly "X-Nexora-Organization-Id": string;
+}
+
+export interface ListDocumentsHeaders {
+  readonly "X-Nexora-Organization-Id": string;
+}
+
+export interface RegisterDocumentHeaders {
+  readonly "X-Nexora-Organization-Id": string;
+}
+
+export interface QueueDocumentHeaders {
+  readonly "X-Nexora-Organization-Id": string;
+}
+
+export interface DeleteHeaders {
+  readonly "X-Nexora-Organization-Id": string;
+}
+
+export interface DeleteKnowledgeBaseHeaders {
+  readonly "X-Nexora-Organization-Id": string;
+}
+
+export interface DeleteDocumentHeaders {
+  readonly "X-Nexora-Organization-Id": string;
+}
+
 export interface UpdateMembershipPath {
   readonly "membershipId": MembershipId;
 }
@@ -158,6 +256,38 @@ export interface GetCmsThemeVersionPath {
   readonly "themeVersionId": ThemeVersionId;
 }
 
+export interface HistoryPath {
+  readonly "sessionId": string;
+}
+
+export interface SendPath {
+  readonly "sessionId": string;
+}
+
+export interface ListDocumentsPath {
+  readonly "knowledgeBaseId": string;
+}
+
+export interface RegisterDocumentPath {
+  readonly "knowledgeBaseId": string;
+}
+
+export interface QueueDocumentPath {
+  readonly "documentId": string;
+}
+
+export interface DeletePath {
+  readonly "sessionId": string;
+}
+
+export interface DeleteKnowledgeBasePath {
+  readonly "knowledgeBaseId": string;
+}
+
+export interface DeleteDocumentPath {
+  readonly "documentId": string;
+}
+
 export interface ListCmsPagesQuery {
   readonly "cursor"?: string;
   readonly "limit"?: number;
@@ -165,6 +295,21 @@ export interface ListCmsPagesQuery {
 
 export interface ArchiveCmsPageQuery {
   readonly "expectedDraftVersion": number;
+}
+
+export interface HistoryQuery {
+  readonly "cursor"?: string;
+  readonly "limit"?: number;
+}
+
+export interface ListKnowledgeBasesQuery {
+  readonly "cursor"?: string;
+  readonly "limit"?: number;
+}
+
+export interface ListDocumentsQuery {
+  readonly "cursor"?: string;
+  readonly "limit"?: number;
 }
 
 export interface ApiResponse<T> {
@@ -328,6 +473,73 @@ export class PlatformApiClient {
 
   async getCmsThemeVersion(path: GetCmsThemeVersionPath, headers: GetCmsThemeVersionHeaders, options: RequestOptions = {}): Promise<ApiResponse<ThemeVersion>> {
     return this.request<ThemeVersion>(`/api/v1/cms/themes/${encodeURIComponent(String(path["themeVersionId"]))}`, { method: "GET", headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
+  }
+
+  async issue(body: DescriptorRequest, headers: IssueHeaders, options: RequestOptions = {}): Promise<ApiResponse<Descriptor>> {
+    return this.request<Descriptor>(`/api/v1/realtime/descriptors`, { method: "POST", body, headers: { "X-Nexora-Organization-Id": headers["X-Nexora-Organization-Id"] } }, options, true);
+  }
+
+  async create(body: CreateSessionRequest, headers: CreateHeaders, options: RequestOptions = {}): Promise<ApiResponse<SessionView>> {
+    return this.request<SessionView>(`/api/v1/rag/conversations`, { method: "POST", body, headers: { "X-Nexora-Organization-Id": headers["X-Nexora-Organization-Id"] } }, options, true);
+  }
+
+  async history(path: HistoryPath, headers: HistoryHeaders, query: HistoryQuery = {}, options: RequestOptions = {}): Promise<ApiResponse<ReadonlyArray<MessageView>>> {
+    const queryParameters = new URLSearchParams();
+    if (query["cursor"] !== undefined) queryParameters.set("cursor", String(query["cursor"]));
+    if (query["limit"] !== undefined) queryParameters.set("limit", String(query["limit"]));
+    const queryString = queryParameters.toString();
+    const requestPath = `/api/v1/rag/conversations/${encodeURIComponent(String(path["sessionId"]))}/messages${queryString ? `?${queryString}` : ""}`;
+    return this.request<ReadonlyArray<MessageView>>(requestPath, { method: "GET", headers: { "X-Nexora-Organization-Id": headers["X-Nexora-Organization-Id"] } }, options, true);
+  }
+
+  async send(path: SendPath, body: SendMessageRequest, headers: SendHeaders, options: RequestOptions = {}): Promise<ApiResponse<MessageView>> {
+    return this.request<MessageView>(`/api/v1/rag/conversations/${encodeURIComponent(String(path["sessionId"]))}/messages`, { method: "POST", body, headers: { "X-Nexora-Organization-Id": headers["X-Nexora-Organization-Id"] } }, options, true);
+  }
+
+  async ask(body: AskRequest, headers: AskHeaders, options: RequestOptions = {}): Promise<ApiResponse<RagAnswer>> {
+    return this.request<RagAnswer>(`/api/v1/rag/ask`, { method: "POST", body, headers: { "X-Nexora-Organization-Id": headers["X-Nexora-Organization-Id"] } }, options, true);
+  }
+
+  async listKnowledgeBases(headers: ListKnowledgeBasesHeaders, query: ListKnowledgeBasesQuery = {}, options: RequestOptions = {}): Promise<ApiResponse<KnowledgeBaseList>> {
+    const queryParameters = new URLSearchParams();
+    if (query["cursor"] !== undefined) queryParameters.set("cursor", String(query["cursor"]));
+    if (query["limit"] !== undefined) queryParameters.set("limit", String(query["limit"]));
+    const queryString = queryParameters.toString();
+    const requestPath = `/api/v1/knowledge/knowledge-bases${queryString ? `?${queryString}` : ""}`;
+    return this.request<KnowledgeBaseList>(requestPath, { method: "GET", headers: { "X-Nexora-Organization-Id": headers["X-Nexora-Organization-Id"] } }, options, true);
+  }
+
+  async createKnowledgeBase(body: CreateKnowledgeBaseRequest, headers: CreateKnowledgeBaseHeaders, options: RequestOptions = {}): Promise<ApiResponse<KnowledgeBaseView>> {
+    return this.request<KnowledgeBaseView>(`/api/v1/knowledge/knowledge-bases`, { method: "POST", body, headers: { "X-Nexora-Organization-Id": headers["X-Nexora-Organization-Id"] } }, options, true);
+  }
+
+  async listDocuments(path: ListDocumentsPath, headers: ListDocumentsHeaders, query: ListDocumentsQuery = {}, options: RequestOptions = {}): Promise<ApiResponse<DocumentList>> {
+    const queryParameters = new URLSearchParams();
+    if (query["cursor"] !== undefined) queryParameters.set("cursor", String(query["cursor"]));
+    if (query["limit"] !== undefined) queryParameters.set("limit", String(query["limit"]));
+    const queryString = queryParameters.toString();
+    const requestPath = `/api/v1/knowledge/knowledge-bases/${encodeURIComponent(String(path["knowledgeBaseId"]))}/documents${queryString ? `?${queryString}` : ""}`;
+    return this.request<DocumentList>(requestPath, { method: "GET", headers: { "X-Nexora-Organization-Id": headers["X-Nexora-Organization-Id"] } }, options, true);
+  }
+
+  async registerDocument(path: RegisterDocumentPath, body: RegisterDocumentRequest, headers: RegisterDocumentHeaders, options: RequestOptions = {}): Promise<ApiResponse<DocumentView>> {
+    return this.request<DocumentView>(`/api/v1/knowledge/knowledge-bases/${encodeURIComponent(String(path["knowledgeBaseId"]))}/documents`, { method: "POST", body, headers: { "X-Nexora-Organization-Id": headers["X-Nexora-Organization-Id"] } }, options, true);
+  }
+
+  async queueDocument(path: QueueDocumentPath, headers: QueueDocumentHeaders, options: RequestOptions = {}): Promise<ApiResponse<DocumentView>> {
+    return this.request<DocumentView>(`/api/v1/knowledge/documents/${encodeURIComponent(String(path["documentId"]))}/queue`, { method: "POST", headers: { "X-Nexora-Organization-Id": headers["X-Nexora-Organization-Id"] } }, options, true);
+  }
+
+  async delete(path: DeletePath, headers: DeleteHeaders, options: RequestOptions = {}): Promise<ApiResponse<SessionView>> {
+    return this.request<SessionView>(`/api/v1/rag/conversations/${encodeURIComponent(String(path["sessionId"]))}`, { method: "DELETE", headers: { "X-Nexora-Organization-Id": headers["X-Nexora-Organization-Id"] } }, options, true);
+  }
+
+  async deleteKnowledgeBase(path: DeleteKnowledgeBasePath, headers: DeleteKnowledgeBaseHeaders, options: RequestOptions = {}): Promise<ApiResponse<KnowledgeBaseView>> {
+    return this.request<KnowledgeBaseView>(`/api/v1/knowledge/knowledge-bases/${encodeURIComponent(String(path["knowledgeBaseId"]))}`, { method: "DELETE", headers: { "X-Nexora-Organization-Id": headers["X-Nexora-Organization-Id"] } }, options, true);
+  }
+
+  async deleteDocument(path: DeleteDocumentPath, headers: DeleteDocumentHeaders, options: RequestOptions = {}): Promise<ApiResponse<DocumentView>> {
+    return this.request<DocumentView>(`/api/v1/knowledge/documents/${encodeURIComponent(String(path["documentId"]))}`, { method: "DELETE", headers: { "X-Nexora-Organization-Id": headers["X-Nexora-Organization-Id"] } }, options, true);
   }
 
   private async request<T>(
