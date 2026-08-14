@@ -1,6 +1,7 @@
 package com.nexora.platform;
 
 import com.nexora.platform.config.PlatformProperties;
+import com.nexora.platform.events.consumer.EventConsumerProperties;
 import com.nexora.platform.events.outbox.OutboxPublisherProperties;
 import com.nexora.platform.realtime.RealtimeDescriptorProperties;
 import java.time.Clock;
@@ -12,7 +13,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @ConfigurationPropertiesScan(basePackageClasses = {
-        PlatformProperties.class, OutboxPublisherProperties.class, RealtimeDescriptorProperties.class
+        PlatformProperties.class, OutboxPublisherProperties.class, RealtimeDescriptorProperties.class,
+        EventConsumerProperties.class
 })
 @EnableScheduling
 public class PlatformApiApplication {
