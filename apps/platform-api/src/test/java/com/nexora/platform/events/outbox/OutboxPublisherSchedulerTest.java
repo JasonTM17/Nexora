@@ -1,9 +1,11 @@
 package com.nexora.platform.events.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.nexora.platform.PlatformApiApplication;
 import java.lang.reflect.Method;
@@ -23,10 +25,13 @@ class OutboxPublisherSchedulerTest {
     @Test
     void enabledSchedulerDelegatesOneControlledPublisherPass() {
         OutboxPublisher publisher = mock(OutboxPublisher.class);
+        OutboxMetrics metrics = mock(OutboxMetrics.class);
+        when(publisher.publishAvailable()).thenReturn(new OutboxPublisher.PublishResult(0, 0, 0, 0, 0));
 
-        new OutboxPublisherScheduler(publisher).publishAvailable();
+        new OutboxPublisherScheduler(publisher, metrics).publishAvailable();
 
         verify(publisher).publishAvailable();
+        verify(metrics).record(any(OutboxPublisher.PublishResult.class));
     }
 
     @Test
@@ -66,6 +71,7 @@ class OutboxPublisherSchedulerTest {
                 "nexora.outbox.publisher.poll-delay-millis", "1000")));
         context.register(SchedulingConfiguration.class, OutboxPublisherScheduler.class);
         context.registerBean(OutboxPublisher.class, () -> publisher);
+        context.registerBean(OutboxMetrics.class, () -> mock(OutboxMetrics.class));
         context.refresh();
         return context;
     }

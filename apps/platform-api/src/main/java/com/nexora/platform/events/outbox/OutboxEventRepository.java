@@ -59,6 +59,23 @@ public class OutboxEventRepository {
                 eventId, errorCode);
     }
 
+    public long countPendingAndClaimed() {
+        Long count = jdbc.queryForObject("""
+                SELECT count(*) FROM nexora.outbox_events
+                WHERE state IN ('PENDING', 'CLAIMED')
+                """, Long.class);
+        return count == null ? 0 : count;
+    }
+
+    public double oldestPendingAgeSeconds() {
+        Double age = jdbc.queryForObject("""
+                SELECT COALESCE(EXTRACT(EPOCH FROM (clock_timestamp() - MIN(occurred_at))), 0)
+                FROM nexora.outbox_events
+                WHERE state IN ('PENDING', 'CLAIMED')
+                """, Double.class);
+        return age == null ? 0 : age;
+    }
+
     private OutboxEvent map(ResultSet result, int row) throws SQLException {
         return new OutboxEvent(
                 result.getObject("id", UUID.class), result.getObject("organization_id", UUID.class),
