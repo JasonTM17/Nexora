@@ -37,7 +37,7 @@ services:
     # bounded retention means JetStream remains replayable after a restart;
     # the earlier tests used Memory storage only for disposable speed. This
     # init container owns no credentials and quits after provisioning.
-    image: natsio/nats-box:latest
+    image: natsio/nats-box@sha256:ffce8bd103383f179f8c7f11cf645726acf5d17280706c530c3b342dbe16334c
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
