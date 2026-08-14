@@ -6,6 +6,8 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import org.springframework.context.annotation.Profile;
+import org.springframework.stereotype.Component;
 
 /**
  * Deterministic bounded-overlap chunking for the nexora-chunk-v1 strategy.
@@ -14,6 +16,8 @@ import java.util.List;
  * version is recorded on every chunk so a later strategy change forces a
  * full reindex instead of mutating history.
  */
+@Component
+@Profile("database")
 public final class ChunkingStrategy {
     public static final String STRATEGY_VERSION = "nexora-chunk-v1";
     private static final int DEFAULT_MAX_TOKENS = 1500;
