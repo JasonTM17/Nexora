@@ -21,7 +21,7 @@
         "The effective permission is evaluated on fresh ACTIVE membership plus the frozen M2 role matrix; stale membership denies."
       ]
     },
-    "honestyBoundary": "All retention values, limits and defaults in this contract are accepted v0.1 planning defaults, not current runtime behavior or production evidence. No production-retention or compliance claim is made by this artifact.",
+    "honestyBoundary": "All retention values, limits, defaults and provisional identifiers (including the tbd revision placeholder and runtime-verified model ids) in this contract are accepted v0.1 planning defaults, not current runtime behavior or production evidence. No production-retention or compliance claim is made by this artifact.",
     "apiProjection": "packages/contracts/fixtures/v1/knowledge-rag.json"
   },
   "knowledgeBase": {
@@ -96,7 +96,7 @@
       "The stored object key is derived from organizationId + knowledgeBaseId + documentId; path guessing never grants access.",
       "MIME is sniffed from bytes and must match the accepted format; the client filename and its extension are never trusted.",
       "sha256 is computed server-side over the raw bytes and stored for provenance and deduplication.",
-      "Deletion makes the document retrieval-ineligible first (state DELETED), then propagates to object, chunk, vector, job and cache planes with a durable receipt.",
+      "Deletion makes the document retrieval-ineligible first (state DELETED), then propagates per the lifecycle.deletionOrder planes with a durable receipt.",
       "A FAILED document can never become partially searchable as READY."
     ]
   },
@@ -184,6 +184,8 @@
       "v01Accepted": {
         "modelId": "qwen3-embedding-0.6b",
         "revision": "tbd-by-m4-t03-concrete-immutable-digest",
+        "revisionIsPlaceholder": true,
+        "replacementOwner": "M4-T03",
         "dimensions": 1024
       },
       "rules": [
@@ -301,7 +303,7 @@
         "A streaming, canceled or failed assistant draft is never labeled COMPLETED.",
         "Regenerate creates a new revision linked through parentMessageId; the prior revision is preserved.",
         "Sending is idempotent via clientMessageId scoped to session plus subject; a duplicate send returns the existing message.",
-        "clientMessageId is bounded printable input; clientMessageIdDigest follows the M3 sha256 wire format and is the persisted deduplication key. The raw clientMessageId is never logged or placed in traces.",
+        "clientMessageId is bounded printable input; clientMessageIdDigest is sha256:<64 lowercase hex> computed over the exact UTF-8 bytes of clientMessageId and is the persisted deduplication key. The raw clientMessageId is never logged or placed in traces.",
         "Pagination uses stable cursors; deleted messages disappear from history after propagation."
       ]
     },

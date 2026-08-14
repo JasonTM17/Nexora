@@ -73,6 +73,35 @@ test("chat messages never mislabel drafts and regenerate preserves lineage", () 
     domain.chat.message.rules.some((rule) => rule.includes("parentMessageId")),
     true,
   );
+  assert.equal(
+    domain.chat.message.rules.some((rule) => rule.includes("exact UTF-8 bytes of clientMessageId")),
+    true,
+  );
+  assert.equal(
+    domain.chat.message.rules.some((rule) => rule.includes("never logged")),
+    true,
+  );
+});
+
+test("permission bindings and predicate definition are frozen", () => {
+  assert.equal(domain.authority.permissions.manage, "knowledge.manage");
+  assert.equal(domain.authority.permissions.read, "knowledge.read");
+  assert.equal(
+    domain.authority.permissions.operations["knowledge.manage"].includes("document.upload"),
+    true,
+  );
+  assert.equal(
+    domain.authority.permissions.operations["knowledge.read"].includes("retrieval.query"),
+    true,
+  );
+  assert.equal(
+    domain.retrieval.resultContract.predicate.definition.includes("knowledge.read"),
+    true,
+  );
+  assert.equal(
+    domain.retrieval.resultContract.predicate.definition.includes("retrievalEligibleStates"),
+    true,
+  );
 });
 
 test("citation rules require resolvable authorized sources", () => {
@@ -98,8 +127,13 @@ test("deletion order makes sources retrieval-ineligible first", () => {
     true,
   );
   assert.equal(domain.lifecycle.chatDeletionOrder.length >= 4, true);
+  assert.equal(domain.lifecycle.activePlaneDeletionTarget.includes("24h"), true);
   assert.equal(
     domain.lifecycle.rules.some((rule) => rule.includes("never remain retrievable")),
+    true,
+  );
+  assert.equal(
+    domain.lifecycle.rules.some((rule) => rule.includes("predicates on eligible states")),
     true,
   );
 });
@@ -109,6 +143,10 @@ test("security invariants cover the stop conditions", () => {
   assert.equal(invariants.some((rule) => rule.includes("rechecked before context assembly")), true);
   assert.equal(invariants.some((rule) => rule.includes("untrusted data")), true);
   assert.equal(invariants.some((rule) => rule.includes("tenant plus subject")), true);
+  assert.equal(invariants.some((rule) => rule.includes("denied at default log")), true);
+  assert.equal(invariants.some((rule) => rule.includes("R3 decision")), true);
+  assert.equal(domain.vector.model.v01Accepted.revisionIsPlaceholder, true);
+  assert.equal(domain.vector.model.v01Accepted.replacementOwner, "M4-T03");
 });
 
 test("fixture keeps the two tenants disjoint with a positive control", () => {
