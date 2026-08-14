@@ -1,0 +1,90 @@
+{
+  "fixtureVersion": "1.0.0",
+  "contractVersion": "1.0.0",
+  "task": "M4-C01",
+  "purpose": "Deterministic two-tenant knowledge/RAG contract fixtures. Values are synthetic test vectors only; no production data or credential appears here.",
+  "organizationA": {
+    "organizationId": "10000000-0000-4000-8000-000000000001",
+    "knowledgeBaseId": "11000000-0000-4000-8000-000000000001",
+    "ownerSubjectId": "90000000-0000-4000-8000-000000000001",
+    "memberSubjectId": "90000000-0000-4000-8000-000000000002"
+  },
+  "organizationB": {
+    "organizationId": "20000000-0000-4000-8000-000000000001",
+    "knowledgeBaseId": "21000000-0000-4000-8000-000000000001",
+    "ownerSubjectId": "91000000-0000-4000-8000-000000000001"
+  },
+  "documents": {
+    "orgAText": {
+      "documentId": "30000000-0000-4000-8000-000000000001",
+      "originalName": "nexora-university-syllabus.txt",
+      "contentType": "text/plain",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "state": "READY"
+    },
+    "orgAPdf": {
+      "documentId": "30000000-0000-4000-8000-000000000002",
+      "originalName": "publishing-guide.pdf",
+      "contentType": "application/pdf",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "state": "QUEUED"
+    },
+    "orgBSecret": {
+      "documentId": "31000000-0000-4000-8000-000000000001",
+      "originalName": "internal-roadmap.md",
+      "contentType": "text/markdown",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "state": "READY"
+    }
+  },
+  "chunks": {
+    "orgAChunk1": {
+      "chunkId": "40000000-0000-4000-8000-000000000001",
+      "documentId": "30000000-0000-4000-8000-000000000001",
+      "chunkIndex": 0,
+      "text": "Nexora University publishes immutable page versions through a review workflow.",
+      "chunkStrategyVersion": "nexora-chunk-v1",
+      "state": "ACTIVE"
+    },
+    "orgAChunk2": {
+      "chunkId": "40000000-0000-4000-8000-000000000002",
+      "documentId": "30000000-0000-4000-8000-000000000001",
+      "chunkIndex": 1,
+      "text": "Rollback creates a new version and preserves the immutable publication history.",
+      "chunkStrategyVersion": "nexora-chunk-v1",
+      "state": "ACTIVE"
+    },
+    "orgBSecretChunk": {
+      "chunkId": "41000000-0000-4000-8000-000000000001",
+      "documentId": "31000000-0000-4000-8000-000000000001",
+      "chunkIndex": 0,
+      "text": "The internal roadmap names the next quarter's private release targets.",
+      "chunkStrategyVersion": "nexora-chunk-v1",
+      "state": "ACTIVE"
+    }
+  },
+  "queries": {
+    "exactMatchOrgA": "immutable page versions review workflow",
+    "semanticMatchOrgA": "how do I undo a bad publish",
+    "crossTenantProbe": "private release targets roadmap",
+    "noMatch": "quantum llama scheduling"
+  },
+  "expectedRetrieval": {
+    "exactMatchOrgA": ["40000000-0000-4000-8000-000000000001"],
+    "semanticMatchOrgA": ["40000000-0000-4000-8000-000000000002"],
+    "crossTenantProbeForOrgA": [],
+    "noMatch": []
+  },
+  "chat": {
+    "orgASession": {
+      "sessionId": "50000000-0000-4000-8000-000000000001",
+      "subjectId": "90000000-0000-4000-8000-000000000001",
+      "state": "ACTIVE"
+    },
+    "orgBMemberProbeSession": {
+      "sessionId": "51000000-0000-4000-8000-000000000001",
+      "subjectId": "91000000-0000-4000-8000-000000000001",
+      "state": "ACTIVE"
+    }
+  }
+}
