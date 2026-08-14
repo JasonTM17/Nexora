@@ -121,3 +121,11 @@ cleanup runs as a later owned job per the lifecycle contract and must never
 resurrect a marked row. Any corrective change is a new reviewed forward
 migration after dependency and backup/restore assessment; hosted rollback,
 provider configuration and deployment remain outside M4-DB01.
+
+\V024\ adds invoker-owned terminal-transition triggers. A DELETED knowledge
+base, document, chat session or chat message can never be flipped back to an
+eligible state, a FAILED document may only re-queue, and a document job cannot
+mutate a DELETED parent. The \ag.chunk_vectors\ table is application-owned
+with forced RLS; the \ector\ extension itself is operator-provisioned before
+V024 applies and is never pinned by SQL. Any corrective change is a new
+reviewed forward migration after dependency and backup/restore assessment.

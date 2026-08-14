@@ -63,14 +63,17 @@ GRANT SELECT, INSERT, UPDATE ON nexora.chat_sessions TO nexora_runtime;
 GRANT SELECT, INSERT, UPDATE ON nexora.chat_messages TO nexora_runtime;
 GRANT SELECT, INSERT ON nexora.retrieval_runs TO nexora_runtime;
 
--- Knowledge bases: read for knowledge.read; create/update/archive/delete for
--- knowledge.manage. A DELETED knowledge base is never readable.
+-- Knowledge bases: readers see non-DELETED rows only; managers additionally
+-- see DELETED rows so the soft-delete UPDATE keeps its NEW row visible under
+-- forced RLS. A DELETED knowledge base is never retrieval-eligible.
 CREATE POLICY knowledge_bases_select_tenant
 ON nexora.knowledge_bases FOR SELECT TO nexora_runtime
 USING (
   organization_id = NULLIF(current_setting('nexora.organization_id', true), '')::uuid
-  AND state <> 'DELETED'
-  AND nexora.knowledge_current_tenant_has_permission('knowledge.read')
+  AND (
+    (state <> 'DELETED' AND nexora.knowledge_current_tenant_has_permission('knowledge.read'))
+    OR nexora.knowledge_current_tenant_has_permission('knowledge.manage')
+  )
 );
 
 CREATE POLICY knowledge_bases_insert_tenant
@@ -91,15 +94,18 @@ WITH CHECK (
   AND nexora.knowledge_current_tenant_has_permission('knowledge.manage')
 );
 
--- Documents: knowledge.read for listing/reading, knowledge.manage for
--- upload/state mutations. A DELETED document is never readable through this
--- policy, so retrieval eligibility dies with the state change.
+-- Documents: readers see non-DELETED rows; managers additionally see DELETED
+-- rows so the soft-delete UPDATE keeps its NEW row visible under forced RLS.
+-- Retrieval eligibility dies with the state change because retrieval always
+-- filters to non-DELETED states.
 CREATE POLICY documents_select_tenant
 ON nexora.documents FOR SELECT TO nexora_runtime
 USING (
   organization_id = NULLIF(current_setting('nexora.organization_id', true), '')::uuid
-  AND state <> 'DELETED'
-  AND nexora.knowledge_current_tenant_has_permission('knowledge.read')
+  AND (
+    (state <> 'DELETED' AND nexora.knowledge_current_tenant_has_permission('knowledge.read'))
+    OR nexora.knowledge_current_tenant_has_permission('knowledge.manage')
+  )
 );
 
 CREATE POLICY documents_insert_tenant
@@ -147,14 +153,24 @@ WITH CHECK (
   AND nexora.knowledge_current_tenant_has_permission('knowledge.manage')
 );
 
--- Chunks: readable only while ACTIVE and under knowledge.read; mutations
--- (supersede/delete) need knowledge.manage.
+-- Chunks: readers see ACTIVE rows whose parent document is not DELETED;
+-- managers additionally see SUPERSEDED/DELETED rows so supersede/delete
+-- UPDATEs keep their NEW row visible under forced RLS. Retrieval eligibility
+-- always filters to ACTIVE.
 CREATE POLICY chunks_select_tenant
 ON nexora.chunks FOR SELECT TO nexora_runtime
 USING (
   organization_id = NULLIF(current_setting('nexora.organization_id', true), '')::uuid
-  AND state = 'ACTIVE'
-  AND nexora.knowledge_current_tenant_has_permission('knowledge.read')
+  AND EXISTS (
+    SELECT 1 FROM nexora.documents AS parent
+    WHERE parent.id = chunks.document_id
+      AND parent.organization_id = chunks.organization_id
+      AND parent.state <> 'DELETED'
+  )
+  AND (
+    (state = 'ACTIVE' AND nexora.knowledge_current_tenant_has_permission('knowledge.read'))
+    OR nexora.knowledge_current_tenant_has_permission('knowledge.manage')
+  )
 );
 
 CREATE POLICY chunks_insert_tenant
@@ -175,15 +191,18 @@ WITH CHECK (
   AND nexora.knowledge_current_tenant_has_permission('knowledge.manage')
 );
 
--- Chat: a subject may read only its own ACTIVE sessions and non-DELETED
--- messages under knowledge.read; both owner and tenant context must match.
+-- Chat: a subject sees its own non-DELETED sessions/messages; the owner
+-- additionally sees its own DELETED rows so the soft-delete UPDATE keeps the
+-- NEW row visible under forced RLS. Both owner and tenant context must match.
 CREATE POLICY chat_sessions_select_tenant
 ON nexora.chat_sessions FOR SELECT TO nexora_runtime
 USING (
   organization_id = NULLIF(current_setting('nexora.organization_id', true), '')::uuid
   AND subject_id = NULLIF(current_setting('nexora.subject_id', true), '')::uuid
-  AND state <> 'DELETED'
-  AND nexora.knowledge_current_tenant_has_permission('knowledge.read')
+  AND (
+    (state <> 'DELETED' AND nexora.knowledge_current_tenant_has_permission('knowledge.read'))
+    OR nexora.knowledge_current_tenant_has_permission('knowledge.manage')
+  )
 );
 
 CREATE POLICY chat_sessions_insert_tenant
@@ -212,8 +231,10 @@ ON nexora.chat_messages FOR SELECT TO nexora_runtime
 USING (
   organization_id = NULLIF(current_setting('nexora.organization_id', true), '')::uuid
   AND subject_id = NULLIF(current_setting('nexora.subject_id', true), '')::uuid
-  AND state <> 'DELETED'
-  AND nexora.knowledge_current_tenant_has_permission('knowledge.read')
+  AND (
+    (state <> 'DELETED' AND nexora.knowledge_current_tenant_has_permission('knowledge.read'))
+    OR nexora.knowledge_current_tenant_has_permission('knowledge.manage')
+  )
 );
 
 CREATE POLICY chat_messages_insert_tenant
