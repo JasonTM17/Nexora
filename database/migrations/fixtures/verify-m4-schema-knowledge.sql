@@ -318,8 +318,74 @@ END $$;
 
 COMMIT;
 
--- Vector plane: a deterministic 1024-dim row is insertable and a similarity
--- query returns the expected ordering.
+-- Document jobs: the terminal shape checks are enforced and the parent guard
+-- blocks a job mutation after its document is DELETED.
+
+BEGIN;
+SET LOCAL ROLE nexora_runtime;
+SELECT set_config('nexora.subject_id', '20000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.organization_id', '10000000-0000-4000-8000-000000000001', true);
+SELECT set_config('nexora.membership_id', '30000000-0000-4000-8000-000000000001', true);
+
+INSERT INTO nexora.document_jobs (id, document_id, organization_id, state, max_attempts) VALUES
+  ('80000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000011', '10000000-0000-4000-8000-000000000001', 'QUEUED', 5);
+
+UPDATE nexora.document_jobs SET state = 'RUNNING', heartbeat_at = transaction_timestamp()
+WHERE id = '80000000-0000-4000-8000-000000000001';
+
+DO $$
+DECLARE
+  bad_shape boolean := false;
+BEGIN
+  BEGIN
+    UPDATE nexora.document_jobs SET state = 'SUCCEEDED', last_error_code = 'INGESTION_FAILED'
+    WHERE id = '80000000-0000-4000-8000-000000000001';
+    bad_shape := true;
+  EXCEPTION WHEN check_violation THEN
+    bad_shape := false;
+  END;
+  IF bad_shape THEN
+    RAISE EXCEPTION 'SUCCEEDED job accepted a last_error_code';
+  END IF;
+END $$;
+
+UPDATE nexora.document_jobs SET state = 'FAILED', last_error_code = 'INGESTION_FAILED', heartbeat_at = NULL
+WHERE id = '80000000-0000-4000-8000-000000000001';
+
+DO $$
+DECLARE
+  failed_count integer;
+BEGIN
+  SELECT count(*) INTO failed_count FROM nexora.document_jobs
+  WHERE id = '80000000-0000-4000-8000-000000000001'
+    AND state = 'FAILED' AND last_error_code = 'INGESTION_FAILED';
+  IF failed_count IS NULL OR failed_count != 1 THEN
+    RAISE EXCEPTION 'FAILED job did not persist its error code';
+  END IF;
+END $$;
+
+COMMIT;
+
+-- Vector plane: a deterministic 1024-dim row is insertable, the installed
+-- pgvector version is observed and recorded, and the runtime can see the row
+-- through forced RLS.
+
+BEGIN;
+SET LOCAL ROLE nexora_migrator;
+
+DO $$
+DECLARE
+  installed text;
+BEGIN
+  SELECT default_version INTO installed FROM pg_available_extensions
+  WHERE name = 'vector';
+  IF installed IS NULL OR installed = '' THEN
+    RAISE EXCEPTION 'vector extension is not available in this environment';
+  END IF;
+  RAISE NOTICE 'observed pgvector version: %', installed;
+END $$;
+
+COMMIT;
 
 BEGIN;
 SET LOCAL ROLE nexora_runtime;
