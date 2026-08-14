@@ -176,6 +176,7 @@ ALTER TABLE rag.chunk_vectors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rag.chunk_vectors FORCE ROW LEVEL SECURITY;
 
 REVOKE USAGE ON TYPE nexora.vector_state FROM PUBLIC;
+GRANT USAGE ON TYPE nexora.vector_state TO nexora_runtime;
 REVOKE ALL ON TABLE rag.chunk_vectors FROM PUBLIC;
 
 GRANT SELECT, INSERT, UPDATE ON rag.chunk_vectors TO nexora_runtime;
@@ -223,6 +224,6 @@ FOR EACH ROW
 EXECUTE FUNCTION nexora.advance_row_version();
 
 COMMENT ON TABLE rag.chunk_vectors IS
-  'Application-owned vector rows. The vector extension is operator-provisioned before V024 applies; the verify fixture records the observed installed version and proves a representative similarity query, and a version outside the application-tested range blocks acceptance.';
+  'Application-owned vector rows. The vector extension is operator-provisioned before V024 applies; the verify fixture records the observed installed version via pg_available_extensions and the application compatibility range is tested by the M4-T03 worker, never by SQL pinning.';
 
 COMMIT;
