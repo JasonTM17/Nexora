@@ -1,0 +1,356 @@
+{
+  "contractVersion": "1.0.0",
+  "task": "M4-C01",
+  "status": "frozen-contract-only",
+  "authority": {
+    "tenantAuthority": "Knowledge sources, documents, chunks, vectors, jobs, chat sessions and messages are tenant-scoped domain rows. Only a current ACTIVE membership resolves tenant authority; a browser-supplied organization identifier is never authority.",
+    "storageAuthority": "Object bytes live in a private storage bucket under tenant-derived object keys. A signed operation is issued only after server-side tenant/resource checks and is short-lived and single-purpose.",
+    "retrievalAuthority": "Authorization predicates run inside both lexical and vector retrieval before candidates leave storage, and are rechecked again before context assembly. An unauthorized candidate reaching provider context is a STOP.",
+    "chatAuthority": "Sessions and messages are owned by tenant plus subject. Every history, export, resume, regenerate and source-open path reauthorizes current membership and source access.",
+    "providerAuthority": "The provider receives only minimal authorized context. Prompts, source text and raw provider output never enter default logs, traces or metrics.",
+    "apiProjection": "packages/contracts/fixtures/v1/knowledge-rag.json"
+  },
+  "knowledgeBase": {
+    "fields": [
+      "id",
+      "organizationId",
+      "name",
+      "description",
+      "state",
+      "createdBySubjectId",
+      "createdAt",
+      "updatedAt",
+      "version"
+    ],
+    "states": ["ACTIVE", "ARCHIVED", "DELETED"],
+    "rules": [
+      "organizationId is server-derived from the resolved tenant context, never from the request body.",
+      "Deletion sets DELETED and makes every contained document retrieval-ineligible before cleanup completes.",
+      "A DELETED knowledge base rejects new documents and new retrieval eligibility.",
+      "name is bounded 1..200 characters; description is bounded 0..2000 characters."
+    ]
+  },
+  "document": {
+    "fields": [
+      "id",
+      "knowledgeBaseId",
+      "organizationId",
+      "originalName",
+      "storedObjectKey",
+      "contentType",
+      "byteSize",
+      "sha256",
+      "state",
+      "uploadedBySubjectId",
+      "createdAt",
+      "updatedAt",
+      "version"
+    ],
+    "states": [
+      "UPLOADED",
+      "QUEUED",
+      "EXTRACTING",
+      "NORMALIZING",
+      "CHUNKING",
+      "EMBEDDING",
+      "INDEXING",
+      "READY",
+      "FAILED",
+      "CANCELLED",
+      "DELETED"
+    ],
+    "terminalStates": ["READY", "FAILED", "CANCELLED", "DELETED"],
+    "retrievalEligibleStates": ["READY"],
+    "formats": {
+      "accepted": ["application/pdf", "text/markdown", "text/plain"],
+      "rejectedOthers": true,
+      "urlIngestion": "disabled-until-independent-ssrf-gate"
+    },
+    "limits": {
+      "maxBytesPerDocument": 52428800,
+      "maxDocumentsPerBatch": 20,
+      "maxPagesPerDocument": 2000,
+      "maxCharactersPerDocument": 5000000,
+      "maxChunksPerDocument": 5000,
+      "maxTokensPerChunk": 1500
+    },
+    "deduplication": {
+      "key": "organizationId + sha256 + originalName",
+      "rule": "A duplicate upload for an existing non-DELETED document with the same digest is idempotent and returns the existing record instead of creating a second one."
+    },
+    "rules": [
+      "The stored object key is derived from organizationId + knowledgeBaseId + documentId; path guessing never grants access.",
+      "MIME is sniffed from bytes and must match the accepted format; the client filename and its extension are never trusted.",
+      "sha256 is computed server-side over the raw bytes and stored for provenance and deduplication.",
+      "Deletion makes the document retrieval-ineligible first (state DELETED), then propagates to object, chunk, vector, job and cache planes with a durable receipt.",
+      "A FAILED document can never become partially searchable as READY."
+    ]
+  },
+  "documentJob": {
+    "fields": [
+      "id",
+      "documentId",
+      "organizationId",
+      "state",
+      "attemptCount",
+      "maxAttempts",
+      "lastErrorCode",
+      "createdAt",
+      "updatedAt",
+      "heartbeatAt",
+      "version"
+    ],
+    "states": ["QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED"],
+    "terminalStates": ["SUCCEEDED", "FAILED", "CANCELLED"],
+    "maxAttempts": 5,
+    "rules": [
+      "The job row and the document row transition in the same database transaction wherever the state moves.",
+      "Claim uses bounded lease semantics; a crashed worker's lease expires and the job becomes claimable again.",
+      "Cancellation is idempotent and only valid from QUEUED or RUNNING.",
+      "Job progress is read from the durable API; Realtime only shortens perceived latency.",
+      "Attempts are bounded; the last safe error code is stored without stack traces or secrets."
+    ]
+  },
+  "chunk": {
+    "fields": [
+      "id",
+      "documentId",
+      "organizationId",
+      "knowledgeBaseId",
+      "chunkIndex",
+      "text",
+      "tokenCount",
+      "sourcePageStart",
+      "sourcePageEnd",
+      "sourceSection",
+      "sha256",
+      "chunkStrategyVersion",
+      "state",
+      "createdAt",
+      "version"
+    ],
+    "states": ["ACTIVE", "SUPERSEDED", "DELETED"],
+    "retrievalEligibleStates": ["ACTIVE"],
+    "chunking": {
+      "strategyVersion": "nexora-chunk-v1",
+      "kind": "deterministic-bounded-overlap",
+      "maxTokens": 1500,
+      "overlapTokens": 100,
+      "encoding": "cl100k-equivalent-token-budget",
+      "rules": [
+        "Chunking is deterministic for identical input bytes and strategy version.",
+        "Every chunk records source page range and section provenance.",
+        "A strategy version change requires a full versioned reindex; old chunks are superseded, never mutated in place."
+      ]
+    },
+    "rules": [
+      "chunk.text is never logged or placed in default traces.",
+      "A superseded or deleted chunk is never retrieval-eligible.",
+      "Document deletion marks every chunk DELETED before vector cleanup."
+    ]
+  },
+  "vector": {
+    "fields": [
+      "id",
+      "chunkId",
+      "documentId",
+      "organizationId",
+      "knowledgeBaseId",
+      "modelId",
+      "modelRevision",
+      "dimensions",
+      "embedding",
+      "sha256",
+      "state",
+      "createdAt",
+      "version"
+    ],
+    "model": {
+      "v01Accepted": {
+        "modelId": "qwen3-embedding-0.6b",
+        "revision": "pinned-by-m4-t03",
+        "dimensions": 1024
+      },
+      "rules": [
+        "The model id, revision and dimensions are stored on every vector row.",
+        "A dimension mismatch between query and stored vectors is rejected, not silently padded.",
+        "A model or revision change uses a new storage partition or a complete versioned reindex.",
+        "The embedding adapter has explicit timeout, concurrency, token and cost bounds."
+      ]
+    },
+    "rules": [
+      "Vector queries apply the same tenant and permission predicates as lexical retrieval before candidate output.",
+      "Source deletion removes future vector eligibility immediately and physical cleanup follows the documented job.",
+      "No provider secret or raw document body enters logs or traces."
+    ]
+  },
+  "retrieval": {
+    "resultContract": {
+      "fields": [
+        "chunkId",
+        "documentId",
+        "knowledgeBaseId",
+        "organizationId",
+        "score",
+        "rank",
+        "source",
+        "provenance"
+      ],
+      "sourceValues": ["lexical", "vector", "fused"],
+      "rules": [
+        "Lexical and vector adapters emit the same normalized result object.",
+        "Both branches apply equivalent tenant/permission predicates.",
+        "Ranking is deterministic for the same corpus, query and configuration."
+      ]
+    },
+    "fusion": {
+      "algorithm": "reciprocal-rank-fusion",
+      "version": "nexora-rrf-v1",
+      "k": 60,
+      "parameters": {
+        "lexicalTopK": 40,
+        "vectorTopK": 40,
+        "finalTopK": 10,
+        "maxCandidatesForContext": 8
+      },
+      "rules": [
+        "Top-K and candidate limits are bounded and configuration-visible.",
+        "One branch unavailable degrades to the other branch without weakening authorization.",
+        "Both branches empty produces an honest no-match result."
+      ]
+    },
+    "evaluation": {
+      "corpusVersion": "nexora-rag-corpus-v1",
+      "metrics": ["recallAtK", "mrr", "citationPrecision", "noAnswerRate"],
+      "rules": [
+        "The evaluation corpus has a pinned checksum and version.",
+        "Metrics are reported against the versioned corpus only; hand-picked examples are never a claim."
+      ]
+    }
+  },
+  "chat": {
+    "session": {
+      "fields": [
+        "id",
+        "organizationId",
+        "subjectId",
+        "title",
+        "state",
+        "createdAt",
+        "updatedAt",
+        "deletedAt",
+        "version"
+      ],
+      "states": ["ACTIVE", "ARCHIVED", "DELETED"],
+      "rules": [
+        "Sessions are owned by tenant plus subject; every read, write, export and delete reauthorizes that ownership.",
+        "Deletion propagates to messages, retrieval-run links, feedback and provider-side state Nexora controls.",
+        "Default retention is 90 days for completed sessions; canceled or failed drafts are diagnostic-retained for 7 days."
+      ]
+    },
+    "message": {
+      "fields": [
+        "id",
+        "sessionId",
+        "organizationId",
+        "subjectId",
+        "role",
+        "state",
+        "revision",
+        "parentMessageId",
+        "content",
+        "createdAt",
+        "updatedAt",
+        "version"
+      ],
+      "roles": ["user", "assistant", "system"],
+      "states": ["DRAFT", "STREAMING", "COMPLETED", "CANCELLED", "FAILED", "DELETED"],
+      "rules": [
+        "A streaming, canceled or failed assistant draft is never labeled COMPLETED.",
+        "Regenerate creates a new revision linked through parentMessageId; the prior revision is preserved.",
+        "Sending is idempotent via a client message id; a duplicate send returns the existing message.",
+        "Pagination uses stable cursors; deleted messages disappear from history after propagation."
+      ]
+    },
+    "citations": {
+      "fields": ["chunkId", "documentId", "knowledgeBaseId", "position", "resolvedText"],
+      "rules": [
+        "Every displayed citation resolves to an authorized chunk and document at access time.",
+        "A citation whose source lost access shows an unavailable-source state, never the content.",
+        "Historical citations are reauthorized when opened."
+      ]
+    },
+    "stream": {
+      "protocol": "same-origin-sse",
+      "rules": [
+        "Cancellation propagates to the provider request and persists the CANCELLED state.",
+        "Timeouts are bounded and produce a visible partial-failure state.",
+        "No provider secret or raw source text appears in the stream metadata."
+      ]
+    },
+    "provider": {
+      "acceptedAdapter": "deepseek-openai-compatible",
+      "deterministicCiProvider": "recorded-vector-provider",
+      "rules": [
+        "The deterministic CI provider is used for all automated tests; live provider smoke is separate and labeled with model, version and date.",
+        "Provider output is untrusted data and never higher-priority instructions.",
+        "No-answer or low-confidence queries return an honest no-answer state."
+      ]
+    },
+    "export": {
+      "rules": [
+        "Export reauthorizes current membership and source access at collection time.",
+        "The export artifact is encrypted, short-lived (24h) and purged after expiry.",
+        "Excluded categories are recorded with reasons in the manifest."
+      ]
+    }
+  },
+  "retrievalRun": {
+    "fields": [
+      "id",
+      "sessionId",
+      "organizationId",
+      "subjectId",
+      "queryHash",
+      "corpusVersion",
+      "modelId",
+      "modelRevision",
+      "candidateIds",
+      "selectedChunkIds",
+      "outcome",
+      "latencyMs",
+      "tokenCount",
+      "createdAt",
+      "version"
+    ],
+    "rules": [
+      "Traces record safe IDs, hashes, counts and outcomes only.",
+      "Raw prompt, context and source text are disabled from default traces.",
+      "Retention is 30 days for redacted metadata; aggregate quality metrics may live 180 days.",
+      "Trace inspection requires tenant admin authorization and is cross-tenant denied."
+    ]
+  },
+  "lifecycle": {
+    "deletionOrder": [
+      "mark document DELETED (retrieval-ineligible)",
+      "mark chunks DELETED",
+      "mark vectors DELETED",
+      "delete object bytes",
+      "remove cache entries",
+      "record durable receipt"
+    ],
+    "rules": [
+      "A deleted source can never remain retrievable while cleanup is pending.",
+      "Deletion is idempotent and resumable; partial completion is never labeled success.",
+      "Cross-tenant deletion or export is a STOP."
+    ]
+  },
+  "securityInvariants": [
+    "Authorization filters run during retrieval and are rechecked before context assembly.",
+    "Unauthorized candidates or context reaching provider construction is a STOP.",
+    "Sources are untrusted data and never higher-priority instructions.",
+    "Logs and traces redact prompts, source text and secrets by default.",
+    "Session and message ownership is tenant plus subject scoped and reauthorized on every access path.",
+    "A streaming, canceled or failed assistant draft is never labeled completed."
+  ]
+}
