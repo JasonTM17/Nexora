@@ -8,8 +8,10 @@ SET LOCAL ROLE nexora_migrator;
 SET LOCAL search_path = pg_catalog, nexora, public;
 
 -- Reject resurrection: once DELETED, a document, knowledge base, chat session
--- or chat message may never return to a retrieval-eligible state. FAILED
--- documents may only become QUEUED for a bounded re-attempt.
+-- or chat message may never return to a retrieval-eligible state. SUPERSEDED
+-- chunks and vectors are terminal as well: a replaced row can never become
+-- ACTIVE again. FAILED documents may only become QUEUED for a bounded
+-- re-attempt.
 CREATE FUNCTION nexora.guard_knowledge_terminal_transition()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -21,8 +23,14 @@ BEGIN
     RAISE EXCEPTION 'a DELETED % row cannot be resurrected', TG_TABLE_NAME
       USING ERRCODE = 'integrity_constraint_violation';
   END IF;
-  IF TG_TABLE_NAME = 'documents' AND OLD.state = 'FAILED'
-     AND NEW.state NOT IN ('FAILED', 'DELETED', 'QUEUED') THEN
+  IF TG_TABLE_NAME IN ('chunks', 'chunk_vectors')
+     AND OLD.state::text = 'SUPERSEDED'
+     AND NEW.state::text NOT IN ('SUPERSEDED', 'DELETED') THEN
+    RAISE EXCEPTION 'a SUPERSEDED % row cannot become retrieval-eligible', TG_TABLE_NAME
+      USING ERRCODE = 'integrity_constraint_violation';
+  END IF;
+  IF TG_TABLE_NAME = 'documents' AND OLD.state::text = 'FAILED'
+     AND NEW.state::text NOT IN ('FAILED', 'DELETED', 'QUEUED') THEN
     RAISE EXCEPTION 'a FAILED document may only be re-queued'
       USING ERRCODE = 'integrity_constraint_violation';
   END IF;
@@ -50,6 +58,11 @@ EXECUTE FUNCTION nexora.guard_knowledge_terminal_transition();
 
 CREATE TRIGGER chat_messages_guard_terminal
 BEFORE UPDATE ON nexora.chat_messages
+FOR EACH ROW
+EXECUTE FUNCTION nexora.guard_knowledge_terminal_transition();
+
+CREATE TRIGGER chunks_guard_terminal
+BEFORE UPDATE ON nexora.chunks
 FOR EACH ROW
 EXECUTE FUNCTION nexora.guard_knowledge_terminal_transition();
 
@@ -163,6 +176,7 @@ CREATE TABLE rag.chunk_vectors (
   sha256 text NOT NULL CHECK (sha256 ~ '^[a-f0-9]{64}$'),
   state nexora.vector_state NOT NULL DEFAULT 'ACTIVE',
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+  updated_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
   CONSTRAINT chunk_vectors_chunk_fk FOREIGN KEY (chunk_id, organization_id)
     REFERENCES nexora.chunks (id, organization_id),
