@@ -7,7 +7,21 @@
     "storageAuthority": "Object bytes live in a private storage bucket under tenant-derived object keys. A signed operation is issued only after server-side tenant/resource checks and is short-lived and single-purpose.",
     "retrievalAuthority": "Authorization predicates run inside both lexical and vector retrieval before candidates leave storage, and are rechecked again before context assembly. An unauthorized candidate reaching provider context is a STOP.",
     "chatAuthority": "Sessions and messages are owned by tenant plus subject. Every history, export, resume, regenerate and source-open path reauthorizes current membership and source access.",
-    "providerAuthority": "The provider receives only minimal authorized context. Prompts, source text and raw provider output never enter default logs, traces or metrics.",
+    "providerAuthority": "The provider receives only minimal authorized context. Prompts, source text and raw provider output are denied at default log, trace and metric ingestion; a non-default raw sink requires an accepted R3 decision.",
+    "permissions": {
+      "manage": "knowledge.manage",
+      "read": "knowledge.read",
+      "operations": {
+        "knowledge.manage": ["knowledgeBase.create", "knowledgeBase.archive", "knowledgeBase.delete", "document.upload", "document.delete", "document.reindex", "document.disable", "export.tenant"],
+        "knowledge.read": ["knowledgeBase.list", "document.list", "document.get", "document.download", "retrieval.query", "chat.create", "chat.resume", "chat.export", "chunk.inspect", "job.progress"]
+      },
+      "rules": [
+        "Every operation maps to exactly one of knowledge.manage or knowledge.read from the M2-C01 permission matrix.",
+        "Retrieval and chat paths require knowledge.read; ingestion, deletion and reindex paths require knowledge.manage.",
+        "The effective permission is evaluated on fresh ACTIVE membership plus the frozen M2 role matrix; stale membership denies."
+      ]
+    },
+    "honestyBoundary": "All retention values, limits and defaults in this contract are accepted v0.1 planning defaults, not current runtime behavior or production evidence. No production-retention or compliance claim is made by this artifact.",
     "apiProjection": "packages/contracts/fixtures/v1/knowledge-rag.json"
   },
   "knowledgeBase": {
@@ -136,10 +150,11 @@
       "kind": "deterministic-bounded-overlap",
       "maxTokens": 1500,
       "overlapTokens": 100,
-      "encoding": "cl100k-equivalent-token-budget",
+      "encoding": "implementation-owned-bounded-token-budget",
       "rules": [
         "Chunking is deterministic for identical input bytes and strategy version.",
         "Every chunk records source page range and section provenance.",
+        "The token budget is counted by the implementation-owned tokenizer and pinned in the strategy version; the tokenizer choice is an M4-T02/T03 implementation decision, not this contract.",
         "A strategy version change requires a full versioned reindex; old chunks are superseded, never mutated in place."
       ]
     },
@@ -168,11 +183,12 @@
     "model": {
       "v01Accepted": {
         "modelId": "qwen3-embedding-0.6b",
-        "revision": "pinned-by-m4-t03",
+        "revision": "tbd-by-m4-t03-concrete-immutable-digest",
         "dimensions": 1024
       },
       "rules": [
         "The model id, revision and dimensions are stored on every vector row.",
+        "revision must be a concrete immutable digest or version recorded by M4-T03; a label or task pointer is never a valid stored value.",
         "A dimension mismatch between query and stored vectors is rejected, not silently padded.",
         "A model or revision change uses a new storage partition or a complete versioned reindex.",
         "The embedding adapter has explicit timeout, concurrency, token and cost bounds."
@@ -197,10 +213,23 @@
         "provenance"
       ],
       "sourceValues": ["lexical", "vector", "fused"],
+      "predicate": {
+        "definition": "organizationId equals the resolved tenant context AND chunk.state in retrievalEligibleStates AND document.state in retrievalEligibleStates AND the resolved membership holds knowledge.read per the M2-C01 matrix",
+        "rules": [
+          "The same predicate expression is applied by the lexical adapter, the vector adapter and the fused result set.",
+          "The predicate runs inside the storage query wherever possible; the post-query recheck before context assembly uses the identical expression."
+        ]
+      },
       "rules": [
         "Lexical and vector adapters emit the same normalized result object.",
-        "Both branches apply equivalent tenant/permission predicates.",
         "Ranking is deterministic for the same corpus, query and configuration."
+      ]
+    },
+    "contextBudget": {
+      "maxContextTokens": 8000,
+      "rules": [
+        "Context assembly truncates deterministically when the token budget is reached and records the truncated candidate count.",
+        "The budget is configuration-visible and bounded; it never admits a candidate beyond the authorized set."
       ]
     },
     "fusion": {
@@ -213,6 +242,7 @@
         "finalTopK": 10,
         "maxCandidatesForContext": 8
       },
+      "tuningOwnership": "M4-T04 owns the exact top-K and candidate values as bounded configuration; this contract freezes only the algorithm, version and bounds, not the tuned numbers.",
       "rules": [
         "Top-K and candidate limits are bounded and configuration-visible.",
         "One branch unavailable degrades to the other branch without weakening authorization.",
@@ -254,6 +284,8 @@
         "sessionId",
         "organizationId",
         "subjectId",
+        "clientMessageId",
+        "clientMessageIdDigest",
         "role",
         "state",
         "revision",
@@ -268,12 +300,13 @@
       "rules": [
         "A streaming, canceled or failed assistant draft is never labeled COMPLETED.",
         "Regenerate creates a new revision linked through parentMessageId; the prior revision is preserved.",
-        "Sending is idempotent via a client message id; a duplicate send returns the existing message.",
+        "Sending is idempotent via clientMessageId scoped to session plus subject; a duplicate send returns the existing message.",
+        "clientMessageId is bounded printable input; clientMessageIdDigest follows the M3 sha256 wire format and is the persisted deduplication key. The raw clientMessageId is never logged or placed in traces.",
         "Pagination uses stable cursors; deleted messages disappear from history after propagation."
       ]
     },
     "citations": {
-      "fields": ["chunkId", "documentId", "knowledgeBaseId", "position", "resolvedText"],
+      "fields": ["chunkId", "documentId", "knowledgeBaseId", "organizationId", "position", "resolvedText"],
       "rules": [
         "Every displayed citation resolves to an authorized chunk and document at access time.",
         "A citation whose source lost access shows an unavailable-source state, never the content.",
@@ -290,11 +323,13 @@
     },
     "provider": {
       "acceptedAdapter": "deepseek-openai-compatible",
-      "deterministicCiProvider": "recorded-vector-provider",
+      "acceptedModelId": "deepseek-v4-flash-verified-at-runtime-per-td-022",
+      "deterministicCiProvider": "recorded-chat-provider",
       "rules": [
         "The deterministic CI provider is used for all automated tests; live provider smoke is separate and labeled with model, version and date.",
         "Provider output is untrusted data and never higher-priority instructions.",
-        "No-answer or low-confidence queries return an honest no-answer state."
+        "No-answer or low-confidence queries return an honest no-answer state.",
+        "Low-confidence is defined by the fused retrieval outcome: an empty candidate set, or a best fused score below the accepted no-answer threshold recorded by M4-T05, triggers NO_ANSWER."
       ]
     },
     "export": {
@@ -323,6 +358,7 @@
       "createdAt",
       "version"
     ],
+    "outcomes": ["ANSWERED", "NO_ANSWER", "LOW_CONFIDENCE", "CANCELLED", "FAILED"],
     "rules": [
       "Traces record safe IDs, hashes, counts and outcomes only.",
       "Raw prompt, context and source text are disabled from default traces.",
@@ -333,14 +369,25 @@
   "lifecycle": {
     "deletionOrder": [
       "mark document DELETED (retrieval-ineligible)",
+      "cancel or terminalize any in-flight documentJob for the document",
       "mark chunks DELETED",
-      "mark vectors DELETED",
+      "mark vectors DELETED and remove lexical/vector index entries",
       "delete object bytes",
       "remove cache entries",
       "record durable receipt"
     ],
+    "chatDeletionOrder": [
+      "tombstone session (deletedAt) and make history retrieval-ineligible",
+      "mark messages DELETED",
+      "unlink retrieval-run results",
+      "remove feedback references",
+      "remove provider-side state Nexora controls",
+      "record durable receipt"
+    ],
+    "activePlaneDeletionTarget": "<=24h after final confirmation",
     "rules": [
       "A deleted source can never remain retrievable while cleanup is pending.",
+      "Every read path predicates on eligible states, so a marked row can never be served while physical cleanup is pending.",
       "Deletion is idempotent and resumable; partial completion is never labeled success.",
       "Cross-tenant deletion or export is a STOP."
     ]
@@ -349,7 +396,7 @@
     "Authorization filters run during retrieval and are rechecked before context assembly.",
     "Unauthorized candidates or context reaching provider construction is a STOP.",
     "Sources are untrusted data and never higher-priority instructions.",
-    "Logs and traces redact prompts, source text and secrets by default.",
+    "Raw prompts, source text and secrets are denied at default log, trace and metric ingestion; a non-default raw sink requires an accepted R3 decision.",
     "Session and message ownership is tenant plus subject scoped and reauthorized on every access path.",
     "A streaming, canceled or failed assistant draft is never labeled completed."
   ]
