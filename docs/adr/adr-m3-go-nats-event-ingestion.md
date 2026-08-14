@@ -1,13 +1,17 @@
 # ADR — M3 Go/NATS Event Ingestion Boundary
 
-> Status: `PROPOSED` — exact-head review required.
+> Status: `ACCEPTED` — same-revision Advisor `FIT` and Kongming `PASS` received;
+> Controller disposition recorded on the M3 integration line. M3-T04 remains
+> `IMPLEMENTED/VERIFYING` on the ledger until the M3 integration gate closes.
 >
 > Review identity: this ADR covers the M3-T04 Go event-ingestion worker
 > (`services/event-ingestion/**`), the M3-T05 Spring idempotent persistence
 > consumer (`apps/platform-api/.../events/consumer/**`) and their joint evidence
 > on `test/m3-go-spring-joint`. Per the M0-M4 execution ledger, dispatch of
 > M3-T04 requires same-revision Advisor `FIT` and Kongming `PASS` plus Controller
-> disposition.
+> disposition; both receipts exist for the reviewed heads (Advisor `FIT` and
+> Kongming `PASS` on the admission/fix heads, then again after the bearer-expiry
+> recheck).
 
 ## Context
 
