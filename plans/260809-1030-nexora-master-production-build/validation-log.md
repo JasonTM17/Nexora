@@ -197,3 +197,70 @@ Decision counts are `ACCEPTED=5`, `PROPOSED=18`, `OPEN=2`, `LATER_GOAL=3`. `DEC-
 - `GOAL_ACTIVATION_HOLD` by design.
 
 Goal activation remains held because the user has not yet accepted/amended the activation decisions; `D:\Nexora` is not Git; the public-safe baseline SHA, canonical SQLite ledger/genesis, contention and graph receipts, expanded child catalog, final semantic/Git binding and activation warmup do not yet exist. Discussion approval does not authorize Git initialization, origin mutation, commit, push, provider/Stitch call, spend, cloud provisioning, release or deployment.
+
+## Session 4 — 2026-08-14 M3 Acceptance Receipt
+
+### Scope
+
+Closing the M3 milestone after the M3-T04/T05 joint candidate passed Advisor
+`FIT` and Kongming `PASS` (see the Go/NATS ADR in `docs/adr/`), followed by the
+milestone-level dual review whose HOLD findings were remediated and
+re-integrated. This session records the acceptance evidence that was missing
+in earlier rounds.
+
+### Exact-Head Verification
+
+| Item | Value |
+|---|---|
+| Repository root | `D:\Nexora` |
+| `main` merge head | `365783ba81759f3c61f8730078b718befcc52a03` |
+| `integration/v0.1-m3` head | `7bcdbae61aef29958cbdbf90b462a3eea95c7c31` |
+| Remote main SHA equality | `ec50d8d…` = local after CI fixes |
+| Worktree cleanliness | main clean except pre-existing local `.agentkit/.agents/.codex` state |
+
+### Dual-Review Receipts (M3-T04/T05)
+
+- Advisor: `FIT` on `ece5efb` (ADR + remediation round) and `FIT` on `561e108`
+  (bearer-expiry recheck cherry-pick).
+- Kongming: `PASS` on `ece5efb` and `PASS` on `561e108`, with one LOW finding
+  (untested in-flight expiry guard) that was fixed in commit `8a00cab`.
+- Milestone-level review of `7c58c3a`: Advisor `HOLD`, Kongming `HOLD` with
+  remediation list. All findings were addressed:
+  - opt-in durable consumer subscription (`46cd597`, `4242914`)
+  - platform-api CI gate (`2c9e535`)
+  - outbox backlog/age metrics (`93d29c4`)
+  - file-backed JetStream stream provisioning (`a065a62`)
+  - state documentation sync (`9465928`, `7a6f749`)
+  - CI action pin and wrapper invocation fixes (`0fac5e5`, `ec50d8d`)
+
+### Combined Check Evidence (run locally)
+
+| Check | Command | Result |
+|---|---|---|
+| Foundation validation | `pwsh ./tools/validate-repo.ps1` | PASS |
+| Compose render | `docker compose -f compose.yaml config --quiet` | PASS |
+| Go vet + tests | `go vet ./...` + `go test ./...` in `services/event-ingestion` | PASS (all packages) |
+| Java unit suite | `mvnw test -Dtest='JwtValidationTests,EventContractV1_1Test,OutboxPublisherSchedulerTest,OutboxPublisherTest,EventAdmissionServiceTest,EventConsumerWiringTest'` | PASS (19 tests) |
+| Java full suite incl. Testcontainers | `mvnw test` with Docker daemon running | PASS (59 tests, incl. 20 joint `CmsPageIntegrationTests`) |
+| CI on GitHub | `Validate repository foundation` workflow on `main` | PASS (foundation, go-ingestion, platform-api) |
+
+The Testcontainers run provides the previously missing containerized evidence:
+PostgreSQL 17.5 plus NATS 2.11 JetStream, outbox publish, Go admission joint
+flow, outage/stall/backpressure bounds, replay convergence and the bounded
+Go/Spring benchmark probe all pass on the reviewed head.
+
+### Honest Limitations
+
+- File-backed stream provisioning is wired in `compose.yaml` but has not been
+  exercised by a compose-level end-to-end run in this session; the
+  Testcontainers suite uses disposable in-memory streams for speed.
+- `readyz` remains local serve state only (documented).
+- The joint benchmark retention decision stays deferred per the ADR to a later
+  bounded load profile.
+- No live Supabase/provider claim is made.
+
+### Outcome
+
+- M3 milestone evidence is complete; `main` carries the accepted M3 merge.
+- M4 (secure knowledge and RAG) is the next dispatchable milestone per the
+  execution ledger.
