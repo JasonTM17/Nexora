@@ -109,3 +109,15 @@ For a shared database, use a new reviewed forward migration only after the
 required dependency and rollback assessment. Preserve the outbox receipt and
 terminal-state contract during any expand/contract sequence. Hosted Supabase
 rollback, provider configuration, and deployment remain outside M3-DB01.
+
+## M4-DB01 knowledge, chat and retrieval-run notes
+
+`V022` and `V023` are append-only once applied. Do not disable forced RLS on
+the knowledge/chat tables, relax the knowledge.read/knowledge.manage split, drop
+the documents dedup key, weaken the chat subject+tenant policies, or grant Data
+API roles as an ad-hoc rollback. A DELETED document or chat session becomes
+retrieval-ineligible through its state and policy; physical object/chunk/vector
+cleanup runs as a later owned job per the lifecycle contract and must never
+resurrect a marked row. Any corrective change is a new reviewed forward
+migration after dependency and backup/restore assessment; hosted rollback,
+provider configuration and deployment remain outside M4-DB01.
