@@ -11,6 +11,11 @@ engineer/
 .agentkit/state/
 .agentkit/state/**
 
+# README capture intermediates; final png/gif media in assets/readme is tracked
+assets/readme/frames/
+assets/readme/*.webm
+assets/readme/gif-check.png
+
 # Common generated artifacts
 node_modules/
 .next/

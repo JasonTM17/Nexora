@@ -109,16 +109,34 @@
       "get": {
         "operationId": "getAccessContext",
         "summary": "Read the authenticated actor's membership-derived access contexts",
-        "tags": ["Identity"],
+        "tags": [
+          "Identity"
+        ],
         "responses": {
           "200": {
             "description": "Active membership contexts for the authenticated actor",
-            "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } },
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AccessContextResponse" } } }
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessContextResponse"
+                }
+              }
+            }
           },
-          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
-          "403": { "$ref": "#/components/responses/PermissionDenied" },
-          "500": { "$ref": "#/components/responses/InternalError" }
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       }
     },
@@ -126,21 +144,47 @@
       "post": {
         "operationId": "resolveTenantContext",
         "summary": "Resolve one membership-derived tenant context from an organization selection candidate",
-        "tags": ["Tenant context"],
+        "tags": [
+          "Tenant context"
+        ],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ResolveTenantContextRequest" } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveTenantContextRequest"
+              }
+            }
+          }
         },
         "responses": {
           "200": {
             "description": "Current active membership context for the requested organization",
-            "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } },
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TenantContextResponse" } } }
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantContextResponse"
+                }
+              }
+            }
           },
-          "400": { "$ref": "#/components/responses/ValidationError" },
-          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
-          "403": { "$ref": "#/components/responses/PermissionDenied" },
-          "500": { "$ref": "#/components/responses/InternalError" }
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       }
     },
@@ -148,7 +192,9 @@
       "get": {
         "operationId": "getTenantContext",
         "summary": "Resolve the authenticated actor's tenant context from an explicit selection header",
-        "tags": ["Tenant context"],
+        "tags": [
+          "Tenant context"
+        ],
         "parameters": [
           {
             "name": "X-Nexora-Organization-Id",
@@ -156,18 +202,36 @@
             "required": false,
             "x-nexora-client-name": "organizationId",
             "description": "Organization selection candidate. It is never authority; the server derives authorization from the current active membership.",
-            "schema": { "$ref": "#/components/schemas/OrganizationId" }
+            "schema": {
+              "$ref": "#/components/schemas/OrganizationId"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Current active membership context for the selected organization",
-            "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } },
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TenantContextResponse" } } }
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantContextResponse"
+                }
+              }
+            }
           },
-          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
-          "403": { "$ref": "#/components/responses/PermissionDenied" },
-          "500": { "$ref": "#/components/responses/InternalError" }
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       }
     },
@@ -175,7 +239,9 @@
       "get": {
         "operationId": "getPermissionMatrix",
         "summary": "Read the server-derived permission matrix for one selected tenant context",
-        "tags": ["Authorization"],
+        "tags": [
+          "Authorization"
+        ],
         "parameters": [
           {
             "name": "X-Nexora-Organization-Id",
@@ -183,18 +249,36 @@
             "required": false,
             "x-nexora-client-name": "organizationId",
             "description": "Organization selection candidate. The server resolves a fresh active membership before deriving permissions.",
-            "schema": { "$ref": "#/components/schemas/OrganizationId" }
+            "schema": {
+              "$ref": "#/components/schemas/OrganizationId"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "The selected membership context and its server-derived permission strings",
-            "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } },
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PermissionMatrixResponse" } } }
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionMatrixResponse"
+                }
+              }
+            }
           },
-          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
-          "403": { "$ref": "#/components/responses/PermissionDenied" },
-          "500": { "$ref": "#/components/responses/InternalError" }
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       }
     },
@@ -203,19 +287,42 @@
         "operationId": "listMemberships",
         "summary": "List authoritative memberships within one selected tenant",
         "description": "The required organization header is only a selection candidate. The server resolves a fresh active acting membership and requires both user.manage and role.manage before returning the selected tenant's bounded membership rows.",
-        "tags": ["Authorization"],
+        "tags": [
+          "Authorization"
+        ],
         "parameters": [
-          { "$ref": "#/components/parameters/RequiredOrganizationHeader" }
+          {
+            "$ref": "#/components/parameters/RequiredOrganizationHeader"
+          }
         ],
         "responses": {
           "200": {
             "description": "Authoritative memberships for the selected tenant only, ordered by opaque membership identifier",
-            "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } },
-            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/MembershipDirectoryEntry" } } } }
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MembershipDirectoryEntry"
+                  }
+                }
+              }
+            }
           },
-          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
-          "403": { "$ref": "#/components/responses/PermissionDenied" },
-          "500": { "$ref": "#/components/responses/InternalError" }
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       }
     },
@@ -224,13 +331,17 @@
         "operationId": "updateMembership",
         "summary": "Mutate one selected tenant membership with optimistic versioning",
         "description": "The server derives the acting membership and permissions from current tenant authority. The target identifier and organization header are routing candidates only; no browser-provided role or status grants authority.",
-        "tags": ["Authorization"],
+        "tags": [
+          "Authorization"
+        ],
         "parameters": [
           {
             "name": "membershipId",
             "in": "path",
             "required": true,
-            "schema": { "$ref": "#/components/schemas/MembershipId" }
+            "schema": {
+              "$ref": "#/components/schemas/MembershipId"
+            }
           },
           {
             "name": "X-Nexora-Organization-Id",
@@ -238,24 +349,52 @@
             "required": true,
             "x-nexora-client-name": "organizationId",
             "description": "Organization selection candidate. The server resolves a fresh active acting membership and checks assignment authority.",
-            "schema": { "$ref": "#/components/schemas/OrganizationId" }
+            "schema": {
+              "$ref": "#/components/schemas/OrganizationId"
+            }
           }
         ],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MembershipMutationRequest" } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MembershipMutationRequest"
+              }
+            }
+          }
         },
         "responses": {
           "200": {
             "description": "The authoritative target membership after one permitted mutation",
-            "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } },
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MembershipMutationResponse" } } }
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipMutationResponse"
+                }
+              }
+            }
           },
-          "400": { "$ref": "#/components/responses/ValidationError" },
-          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
-          "403": { "$ref": "#/components/responses/PermissionDenied" },
-          "409": { "$ref": "#/components/responses/VersionConflict" },
-          "500": { "$ref": "#/components/responses/InternalError" }
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "409": {
+            "$ref": "#/components/responses/VersionConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       }
     },
@@ -263,38 +402,86 @@
       "get": {
         "operationId": "getProfile",
         "summary": "Read the authenticated actor's allowlisted profile",
-        "tags": ["Profile"],
+        "tags": [
+          "Profile"
+        ],
         "responses": {
           "200": {
             "description": "The authenticated actor's profile",
-            "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } },
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserProfile" } } }
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfile"
+                }
+              }
+            }
           },
-          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
-          "403": { "$ref": "#/components/responses/PermissionDenied" },
-          "404": { "$ref": "#/components/responses/ProfileNotFound" },
-          "500": { "$ref": "#/components/responses/InternalError" }
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/ProfileNotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       },
       "put": {
         "operationId": "updateProfile",
         "summary": "Update the authenticated actor's allowlisted profile with optimistic versioning",
-        "tags": ["Profile"],
+        "tags": [
+          "Profile"
+        ],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateProfileRequest" } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileRequest"
+              }
+            }
+          }
         },
         "responses": {
           "200": {
             "description": "The updated profile with its new version",
-            "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } },
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserProfile" } } }
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfile"
+                }
+              }
+            }
           },
-          "400": { "$ref": "#/components/responses/ValidationError" },
-          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
-          "403": { "$ref": "#/components/responses/PermissionDenied" },
-          "409": { "$ref": "#/components/responses/VersionConflict" },
-          "500": { "$ref": "#/components/responses/InternalError" }
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "409": {
+            "$ref": "#/components/responses/VersionConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       }
     },
@@ -302,34 +489,126 @@
       "get": {
         "operationId": "listCmsPages",
         "summary": "List tenant-scoped page aggregates with stable cursor ordering",
-        "tags": ["CMS"],
+        "tags": [
+          "CMS"
+        ],
         "parameters": [
-          { "name": "X-Nexora-Organization-Id", "in": "header", "required": true, "x-nexora-client-name": "organizationId", "schema": { "$ref": "#/components/schemas/OrganizationId" } },
-          { "name": "cursor", "in": "query", "required": false, "schema": { "type": "string", "minLength": 1, "maxLength": 256 } },
-          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 25 } }
+          {
+            "name": "X-Nexora-Organization-Id",
+            "in": "header",
+            "required": true,
+            "x-nexora-client-name": "organizationId",
+            "schema": {
+              "$ref": "#/components/schemas/OrganizationId"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Tenant-scoped pages in deterministic cursor order", "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageListResponse" } } } },
-          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
-          "403": { "$ref": "#/components/responses/PermissionDenied" },
-          "500": { "$ref": "#/components/responses/InternalError" }
+          "200": {
+            "description": "Tenant-scoped pages in deterministic cursor order",
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       },
       "post": {
         "operationId": "createCmsPage",
         "summary": "Create one tenant-scoped draft page",
-        "tags": ["CMS"],
-        "parameters": [
-          { "name": "X-Nexora-Organization-Id", "in": "header", "required": true, "x-nexora-client-name": "organizationId", "schema": { "$ref": "#/components/schemas/OrganizationId" } }
+        "tags": [
+          "CMS"
         ],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreatePageRequest" } } } },
+        "parameters": [
+          {
+            "name": "X-Nexora-Organization-Id",
+            "in": "header",
+            "required": true,
+            "x-nexora-client-name": "organizationId",
+            "schema": {
+              "$ref": "#/components/schemas/OrganizationId"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePageRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "201": { "description": "New authoritative draft page", "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageDetail" } } } },
-          "400": { "$ref": "#/components/responses/ValidationError" },
-          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
-          "403": { "$ref": "#/components/responses/PermissionDenied" },
-          "409": { "$ref": "#/components/responses/VersionConflict" },
-          "500": { "$ref": "#/components/responses/InternalError" }
+          "201": {
+            "description": "New authoritative draft page",
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "409": {
+            "$ref": "#/components/responses/VersionConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       }
     },
@@ -337,51 +616,153 @@
       "get": {
         "operationId": "getCmsPage",
         "summary": "Read one authorized tenant page aggregate",
-        "tags": ["CMS"],
+        "tags": [
+          "CMS"
+        ],
         "parameters": [
-          { "$ref": "#/components/parameters/PageId" },
-          { "$ref": "#/components/parameters/RequiredOrganizationHeader" }
+          {
+            "$ref": "#/components/parameters/PageId"
+          },
+          {
+            "$ref": "#/components/parameters/RequiredOrganizationHeader"
+          }
         ],
         "responses": {
-          "200": { "description": "Authoritative page aggregate", "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageDetail" } } } },
-          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
-          "403": { "$ref": "#/components/responses/PermissionDenied" },
-          "500": { "$ref": "#/components/responses/InternalError" }
+          "200": {
+            "description": "Authoritative page aggregate",
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       },
       "patch": {
         "operationId": "updateCmsPage",
         "summary": "Update one draft with an expected version",
-        "tags": ["CMS"],
-        "parameters": [
-          { "$ref": "#/components/parameters/PageId" },
-          { "$ref": "#/components/parameters/RequiredOrganizationHeader" }
+        "tags": [
+          "CMS"
         ],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdatePageRequest" } } } },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageId"
+          },
+          {
+            "$ref": "#/components/parameters/RequiredOrganizationHeader"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePageRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": { "description": "Updated authoritative draft", "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageDetail" } } } },
-          "400": { "$ref": "#/components/responses/ValidationError" },
-          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
-          "403": { "$ref": "#/components/responses/PermissionDenied" },
-          "409": { "$ref": "#/components/responses/VersionConflict" },
-          "500": { "$ref": "#/components/responses/InternalError" }
+          "200": {
+            "description": "Updated authoritative draft",
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "409": {
+            "$ref": "#/components/responses/VersionConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       },
       "delete": {
         "operationId": "archiveCmsPage",
         "summary": "Archive one page with optimistic concurrency",
-        "tags": ["CMS"],
+        "tags": [
+          "CMS"
+        ],
         "parameters": [
-          { "$ref": "#/components/parameters/PageId" },
-          { "$ref": "#/components/parameters/RequiredOrganizationHeader" },
-          { "name": "expectedDraftVersion", "in": "query", "required": true, "schema": { "type": "integer", "minimum": 1, "format": "int64" } }
+          {
+            "$ref": "#/components/parameters/PageId"
+          },
+          {
+            "$ref": "#/components/parameters/RequiredOrganizationHeader"
+          },
+          {
+            "name": "expectedDraftVersion",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "format": "int64"
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Page archived without deleting immutable history", "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ArchivePageResponse" } } } },
-          "401": { "$ref": "#/components/responses/AuthenticationRequired" },
-          "403": { "$ref": "#/components/responses/PermissionDenied" },
-          "409": { "$ref": "#/components/responses/VersionConflict" },
-          "500": { "$ref": "#/components/responses/InternalError" }
+          "200": {
+            "description": "Page archived without deleting immutable history",
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchivePageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "409": {
+            "$ref": "#/components/responses/VersionConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       }
     },
@@ -389,12 +770,58 @@
       "post": {
         "operationId": "transitionCmsPageWorkflow",
         "summary": "Apply one server-authorized workflow transition to an exact draft version",
-        "tags": ["CMS workflow"],
-        "parameters": [ { "$ref": "#/components/parameters/PageId" }, { "$ref": "#/components/parameters/RequiredOrganizationHeader" } ],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WorkflowTransitionRequest" } } } },
+        "tags": [
+          "CMS workflow"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageId"
+          },
+          {
+            "$ref": "#/components/parameters/RequiredOrganizationHeader"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowTransitionRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": { "description": "New authoritative workflow state", "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageDetail" } } } },
-          "400": { "$ref": "#/components/responses/ValidationError" }, "401": { "$ref": "#/components/responses/AuthenticationRequired" }, "403": { "$ref": "#/components/responses/PermissionDenied" }, "409": { "$ref": "#/components/responses/VersionConflict" }, "500": { "$ref": "#/components/responses/InternalError" }
+          "200": {
+            "description": "New authoritative workflow state",
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "409": {
+            "$ref": "#/components/responses/VersionConflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       }
     },
@@ -402,17 +829,88 @@
       "post": {
         "operationId": "publishCmsPage",
         "summary": "Publish or roll back an exact approved page version idempotently",
-        "tags": ["CMS publishing"],
-        "parameters": [
-          { "$ref": "#/components/parameters/PageId" },
-          { "$ref": "#/components/parameters/RequiredOrganizationHeader" },
-          { "name": "Idempotency-Key", "in": "header", "required": true, "x-nexora-client-name": "idempotencyKey", "schema": { "type": "string", "minLength": 16, "maxLength": 200, "pattern": "^[A-Za-z0-9._-]+$" } }
+        "tags": [
+          "CMS publishing"
         ],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PublicationRequest" } } } },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageId"
+          },
+          {
+            "$ref": "#/components/parameters/RequiredOrganizationHeader"
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "x-nexora-client-name": "idempotencyKey",
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9._-]+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicationRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": { "description": "Existing terminal receipt for an idempotent retry", "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PublicationReceipt" } } } },
-          "201": { "description": "New immutable published version and receipt", "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PublicationReceipt" } } } },
-          "400": { "$ref": "#/components/responses/ValidationError" }, "401": { "$ref": "#/components/responses/AuthenticationRequired" }, "403": { "$ref": "#/components/responses/PermissionDenied" }, "409": { "$ref": "#/components/responses/VersionConflict" }, "422": { "$ref": "#/components/responses/PublicationValidationFailed" }, "500": { "$ref": "#/components/responses/InternalError" }
+          "200": {
+            "description": "Existing terminal receipt for an idempotent retry",
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationReceipt"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "New immutable published version and receipt",
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "409": {
+            "$ref": "#/components/responses/VersionConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/PublicationValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
       }
     },
@@ -420,15 +918,848 @@
       "get": {
         "operationId": "getCmsThemeVersion",
         "summary": "Read one authorized constrained theme version",
-        "tags": ["CMS theme"],
+        "tags": [
+          "CMS theme"
+        ],
         "parameters": [
-          { "name": "themeVersionId", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/ThemeVersionId" } },
-          { "$ref": "#/components/parameters/RequiredOrganizationHeader" }
+          {
+            "name": "themeVersionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ThemeVersionId"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/RequiredOrganizationHeader"
+          }
         ],
         "responses": {
-          "200": { "description": "Validated immutable theme token reference", "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ThemeVersion" } } } },
-          "401": { "$ref": "#/components/responses/AuthenticationRequired" }, "403": { "$ref": "#/components/responses/PermissionDenied" }, "500": { "$ref": "#/components/responses/InternalError" }
+          "200": {
+            "description": "Validated immutable theme token reference",
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThemeVersion"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
         }
+      }
+    },
+    "/api/v1/realtime/descriptors": {
+      "post": {
+        "tags": [
+          "realtime-descriptor-controller"
+        ],
+        "operationId": "issue",
+        "parameters": [
+          {
+            "name": "X-Nexora-Organization-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DescriptorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Descriptor"
+                }
+              }
+            },
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/rag/conversations": {
+      "post": {
+        "tags": [
+          "conversation-controller"
+        ],
+        "operationId": "create",
+        "parameters": [
+          {
+            "name": "X-Nexora-Organization-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionView"
+                }
+              }
+            },
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/rag/conversations/{sessionId}/messages": {
+      "get": {
+        "tags": [
+          "conversation-controller"
+        ],
+        "operationId": "history",
+        "parameters": [
+          {
+            "name": "X-Nexora-Organization-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MessageView"
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "conversation-controller"
+        ],
+        "operationId": "send",
+        "parameters": [
+          {
+            "name": "X-Nexora-Organization-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageView"
+                }
+              }
+            },
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/rag/ask": {
+      "post": {
+        "tags": [
+          "secure-rag-controller"
+        ],
+        "operationId": "ask",
+        "parameters": [
+          {
+            "name": "X-Nexora-Organization-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RagAnswer"
+                }
+              }
+            },
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/knowledge/knowledge-bases": {
+      "get": {
+        "tags": [
+          "knowledge-controller"
+        ],
+        "operationId": "listKnowledgeBases",
+        "parameters": [
+          {
+            "name": "X-Nexora-Organization-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeBaseList"
+                }
+              }
+            },
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "knowledge-controller"
+        ],
+        "operationId": "createKnowledgeBase",
+        "parameters": [
+          {
+            "name": "X-Nexora-Organization-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateKnowledgeBaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeBaseView"
+                }
+              }
+            },
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/knowledge/knowledge-bases/{knowledgeBaseId}/documents": {
+      "get": {
+        "tags": [
+          "knowledge-controller"
+        ],
+        "operationId": "listDocuments",
+        "parameters": [
+          {
+            "name": "X-Nexora-Organization-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "knowledgeBaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentList"
+                }
+              }
+            },
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "knowledge-controller"
+        ],
+        "operationId": "registerDocument",
+        "parameters": [
+          {
+            "name": "X-Nexora-Organization-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "knowledgeBaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDocumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentView"
+                }
+              }
+            },
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/knowledge/documents/{documentId}/queue": {
+      "post": {
+        "tags": [
+          "knowledge-controller"
+        ],
+        "operationId": "queueDocument",
+        "parameters": [
+          {
+            "name": "X-Nexora-Organization-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentView"
+                }
+              }
+            },
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/rag/conversations/{sessionId}": {
+      "delete": {
+        "tags": [
+          "conversation-controller"
+        ],
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "X-Nexora-Organization-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionView"
+                }
+              }
+            },
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/knowledge/knowledge-bases/{knowledgeBaseId}": {
+      "delete": {
+        "tags": [
+          "knowledge-controller"
+        ],
+        "operationId": "deleteKnowledgeBase",
+        "parameters": [
+          {
+            "name": "X-Nexora-Organization-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "knowledgeBaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeBaseView"
+                }
+              }
+            },
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/knowledge/documents/{documentId}": {
+      "delete": {
+        "tags": [
+          "knowledge-controller"
+        ],
+        "operationId": "deleteDocument",
+        "parameters": [
+          {
+            "name": "X-Nexora-Organization-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentView"
+                }
+              }
+            },
+            "headers": {
+              "X-Trace-Id": {
+                "$ref": "#/components/headers/TraceId"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     }
   },
@@ -455,7 +1786,9 @@
         "name": "pageId",
         "in": "path",
         "required": true,
-        "schema": { "$ref": "#/components/schemas/PageId" }
+        "schema": {
+          "$ref": "#/components/schemas/PageId"
+        }
       },
       "RequiredOrganizationHeader": {
         "name": "X-Nexora-Organization-Id",
@@ -463,7 +1796,9 @@
         "required": true,
         "x-nexora-client-name": "organizationId",
         "description": "Organization selection candidate. The server resolves a current active membership and evaluates authorization before using it.",
-        "schema": { "$ref": "#/components/schemas/OrganizationId" }
+        "schema": {
+          "$ref": "#/components/schemas/OrganizationId"
+        }
       }
     },
     "responses": {
@@ -562,11 +1897,15 @@
       "ProfileNotFound": {
         "description": "The authenticated actor does not yet have a profile.",
         "headers": {
-          "X-Trace-Id": { "$ref": "#/components/headers/TraceId" }
+          "X-Trace-Id": {
+            "$ref": "#/components/headers/TraceId"
+          }
         },
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/ApiProblem" },
+            "schema": {
+              "$ref": "#/components/schemas/ApiProblem"
+            },
             "example": {
               "code": "PROFILE_NOT_FOUND",
               "message": "The profile does not exist.",
@@ -579,11 +1918,15 @@
       "VersionConflict": {
         "description": "The request's optimistic version or protected ownership state conflicts with current authoritative state.",
         "headers": {
-          "X-Trace-Id": { "$ref": "#/components/headers/TraceId" }
+          "X-Trace-Id": {
+            "$ref": "#/components/headers/TraceId"
+          }
         },
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/ApiProblem" },
+            "schema": {
+              "$ref": "#/components/schemas/ApiProblem"
+            },
             "example": {
               "code": "VERSION_CONFLICT",
               "message": "The profile version is stale.",
@@ -595,14 +1938,22 @@
       },
       "PublicationValidationFailed": {
         "description": "A publish or rollback candidate failed immutable workflow, schema, theme or SEO validation.",
-        "headers": { "X-Trace-Id": { "$ref": "#/components/headers/TraceId" } },
+        "headers": {
+          "X-Trace-Id": {
+            "$ref": "#/components/headers/TraceId"
+          }
+        },
         "content": {
           "application/json": {
-            "schema": { "$ref": "#/components/schemas/ApiProblem" },
+            "schema": {
+              "$ref": "#/components/schemas/ApiProblem"
+            },
             "example": {
               "code": "SEO_VALIDATION_FAILED",
               "message": "Publication validation failed.",
-              "details": { "field": "canonical" },
+              "details": {
+                "field": "canonical"
+              },
               "traceId": "01JTRACEPUBLISHVALIDATION"
             }
           }
@@ -778,66 +2129,140 @@
       },
       "TenantRole": {
         "type": "string",
-        "enum": ["OWNER", "ADMIN", "EDITOR", "REVIEWER", "USER"],
+        "enum": [
+          "OWNER",
+          "ADMIN",
+          "EDITOR",
+          "REVIEWER",
+          "USER"
+        ],
         "description": "Frozen v1 tenant role. Permission evaluation remains server-side."
       },
       "MembershipContext": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["organizationId", "membershipId", "membershipVersion", "role"],
+        "required": [
+          "organizationId",
+          "membershipId",
+          "membershipVersion",
+          "role"
+        ],
         "properties": {
-          "organizationId": { "$ref": "#/components/schemas/OrganizationId" },
-          "membershipId": { "$ref": "#/components/schemas/MembershipId" },
-          "membershipVersion": { "type": "integer", "minimum": 1, "format": "int64" },
-          "role": { "$ref": "#/components/schemas/TenantRole" }
+          "organizationId": {
+            "$ref": "#/components/schemas/OrganizationId"
+          },
+          "membershipId": {
+            "$ref": "#/components/schemas/MembershipId"
+          },
+          "membershipVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "format": "int64"
+          },
+          "role": {
+            "$ref": "#/components/schemas/TenantRole"
+          }
         }
       },
       "AccessContextResponse": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["subjectId", "sessionId", "assuranceLevel", "memberships", "tenantSelectionRequired"],
+        "required": [
+          "subjectId",
+          "sessionId",
+          "assuranceLevel",
+          "memberships",
+          "tenantSelectionRequired"
+        ],
         "properties": {
-          "subjectId": { "$ref": "#/components/schemas/SubjectId" },
-          "sessionId": { "$ref": "#/components/schemas/SessionId" },
-          "assuranceLevel": { "type": "string", "minLength": 1, "maxLength": 32 },
-          "memberships": { "type": "array", "items": { "$ref": "#/components/schemas/MembershipContext" } },
-          "tenantSelectionRequired": { "type": "boolean" }
+          "subjectId": {
+            "$ref": "#/components/schemas/SubjectId"
+          },
+          "sessionId": {
+            "$ref": "#/components/schemas/SessionId"
+          },
+          "assuranceLevel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "memberships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MembershipContext"
+            }
+          },
+          "tenantSelectionRequired": {
+            "type": "boolean"
+          }
         }
       },
       "ResolveTenantContextRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["organizationId"],
+        "required": [
+          "organizationId"
+        ],
         "properties": {
-          "organizationId": { "$ref": "#/components/schemas/OrganizationId" }
+          "organizationId": {
+            "$ref": "#/components/schemas/OrganizationId"
+          }
         }
       },
       "TenantContextResponse": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["organizationId", "membershipId", "membershipVersion", "role"],
+        "required": [
+          "organizationId",
+          "membershipId",
+          "membershipVersion",
+          "role"
+        ],
         "properties": {
-          "organizationId": { "$ref": "#/components/schemas/OrganizationId" },
-          "membershipId": { "$ref": "#/components/schemas/MembershipId" },
-          "membershipVersion": { "type": "integer", "minimum": 1, "format": "int64" },
-          "role": { "$ref": "#/components/schemas/TenantRole" }
+          "organizationId": {
+            "$ref": "#/components/schemas/OrganizationId"
+          },
+          "membershipId": {
+            "$ref": "#/components/schemas/MembershipId"
+          },
+          "membershipVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "format": "int64"
+          },
+          "role": {
+            "$ref": "#/components/schemas/TenantRole"
+          }
         }
       },
       "PermissionMatrixResponse": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["context", "permissions"],
+        "required": [
+          "context",
+          "permissions"
+        ],
         "properties": {
-          "context": { "$ref": "#/components/schemas/TenantContextResponse" },
+          "context": {
+            "$ref": "#/components/schemas/TenantContextResponse"
+          },
           "permissions": {
             "type": "array",
-            "items": { "type": "string", "pattern": "^[a-z]+(?:\\.[a-z]+)+$" }
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z]+(?:\\.[a-z]+)+$"
+            }
           }
         }
       },
       "MembershipStatus": {
         "type": "string",
-        "enum": ["INVITED", "ACTIVE", "SUSPENDED", "REMOVED"],
+        "enum": [
+          "INVITED",
+          "ACTIVE",
+          "SUSPENDED",
+          "REMOVED"
+        ],
         "description": "Authoritative lifecycle state returned by the server. Direct activation is not supported by the v1 mutation boundary."
       },
       "MembershipMutationRequest": {
@@ -846,19 +2271,37 @@
           {
             "type": "object",
             "additionalProperties": false,
-            "required": ["expectedVersion", "role"],
+            "required": [
+              "expectedVersion",
+              "role"
+            ],
             "properties": {
-              "expectedVersion": { "type": "integer", "minimum": 1, "format": "int64" },
-              "role": { "$ref": "#/components/schemas/TenantRole" }
+              "expectedVersion": {
+                "type": "integer",
+                "minimum": 1,
+                "format": "int64"
+              },
+              "role": {
+                "$ref": "#/components/schemas/TenantRole"
+              }
             }
           },
           {
             "type": "object",
             "additionalProperties": false,
-            "required": ["expectedVersion", "status"],
+            "required": [
+              "expectedVersion",
+              "status"
+            ],
             "properties": {
-              "expectedVersion": { "type": "integer", "minimum": 1, "format": "int64" },
-              "status": { "$ref": "#/components/schemas/MembershipStatus" }
+              "expectedVersion": {
+                "type": "integer",
+                "minimum": 1,
+                "format": "int64"
+              },
+              "status": {
+                "$ref": "#/components/schemas/MembershipStatus"
+              }
             }
           }
         ]
@@ -866,27 +2309,69 @@
       "MembershipMutationResponse": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["membershipId", "organizationId", "subjectId", "status", "role", "version"],
+        "required": [
+          "membershipId",
+          "organizationId",
+          "subjectId",
+          "status",
+          "role",
+          "version"
+        ],
         "properties": {
-          "membershipId": { "$ref": "#/components/schemas/MembershipId" },
-          "organizationId": { "$ref": "#/components/schemas/OrganizationId" },
-          "subjectId": { "$ref": "#/components/schemas/SubjectId" },
-          "status": { "$ref": "#/components/schemas/MembershipStatus" },
-          "role": { "$ref": "#/components/schemas/TenantRole" },
-          "version": { "type": "integer", "minimum": 1, "format": "int64" }
+          "membershipId": {
+            "$ref": "#/components/schemas/MembershipId"
+          },
+          "organizationId": {
+            "$ref": "#/components/schemas/OrganizationId"
+          },
+          "subjectId": {
+            "$ref": "#/components/schemas/SubjectId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MembershipStatus"
+          },
+          "role": {
+            "$ref": "#/components/schemas/TenantRole"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "format": "int64"
+          }
         }
       },
       "MembershipDirectoryEntry": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["membershipId", "organizationId", "subjectId", "status", "role", "version"],
+        "required": [
+          "membershipId",
+          "organizationId",
+          "subjectId",
+          "status",
+          "role",
+          "version"
+        ],
         "properties": {
-          "membershipId": { "$ref": "#/components/schemas/MembershipId" },
-          "organizationId": { "$ref": "#/components/schemas/OrganizationId" },
-          "subjectId": { "$ref": "#/components/schemas/SubjectId" },
-          "status": { "$ref": "#/components/schemas/MembershipStatus" },
-          "role": { "$ref": "#/components/schemas/TenantRole" },
-          "version": { "type": "integer", "minimum": 1, "format": "int64" }
+          "membershipId": {
+            "$ref": "#/components/schemas/MembershipId"
+          },
+          "organizationId": {
+            "$ref": "#/components/schemas/OrganizationId"
+          },
+          "subjectId": {
+            "$ref": "#/components/schemas/SubjectId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MembershipStatus"
+          },
+          "role": {
+            "$ref": "#/components/schemas/TenantRole"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "format": "int64"
+          }
         }
       },
       "PageId": {
@@ -899,133 +2384,1183 @@
         "format": "uuid",
         "description": "Opaque site identifier scoped to the resolved organization."
       },
-      "PageVersionId": { "type": "string", "format": "uuid" },
-      "ThemeVersionId": { "type": "string", "format": "uuid" },
-      "PublicationReceiptId": { "type": "string", "format": "uuid" },
+      "PageVersionId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "ThemeVersionId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "PublicationReceiptId": {
+        "type": "string",
+        "format": "uuid"
+      },
       "PageState": {
         "type": "string",
-        "enum": ["DRAFT", "IN_REVIEW", "APPROVED", "PUBLISHED", "ARCHIVED"]
+        "enum": [
+          "DRAFT",
+          "IN_REVIEW",
+          "APPROVED",
+          "PUBLISHED",
+          "ARCHIVED"
+        ]
       },
       "WorkflowAction": {
         "type": "string",
-        "enum": ["SUBMIT_FOR_REVIEW", "APPROVE", "REJECT"]
+        "enum": [
+          "SUBMIT_FOR_REVIEW",
+          "APPROVE",
+          "REJECT"
+        ]
       },
       "SeoSnapshot": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["title", "description", "locale", "canonicalPath", "openGraph", "twitter", "jsonLdType"],
+        "required": [
+          "title",
+          "description",
+          "locale",
+          "canonicalPath",
+          "openGraph",
+          "twitter",
+          "jsonLdType"
+        ],
         "properties": {
-          "title": { "type": "string", "minLength": 1, "maxLength": 70 },
-          "description": { "type": "string", "minLength": 1, "maxLength": 160 },
-          "locale": { "type": "string", "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$" },
-          "canonicalPath": { "type": "string", "pattern": "^/[a-z0-9]+(?:[/-][a-z0-9]+)*$", "maxLength": 240 },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 70
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "locale": {
+            "type": "string",
+            "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"
+          },
+          "canonicalPath": {
+            "type": "string",
+            "pattern": "^/[a-z0-9]+(?:[/-][a-z0-9]+)*$",
+            "maxLength": 240
+          },
           "openGraph": {
-            "type": "object", "additionalProperties": false, "required": ["title", "description", "type"],
-            "properties": { "title": { "type": "string", "minLength": 1, "maxLength": 70 }, "description": { "type": "string", "minLength": 1, "maxLength": 160 }, "type": { "type": "string", "enum": ["website", "article"] }, "imageAssetId": { "type": "string", "format": "uuid" } }
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title",
+              "description",
+              "type"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 70
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "website",
+                  "article"
+                ]
+              },
+              "imageAssetId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
           },
           "twitter": {
-            "type": "object", "additionalProperties": false, "required": ["card", "title", "description"],
-            "properties": { "card": { "type": "string", "enum": ["summary", "summary_large_image"] }, "title": { "type": "string", "minLength": 1, "maxLength": 70 }, "description": { "type": "string", "minLength": 1, "maxLength": 160 }, "imageAssetId": { "type": "string", "format": "uuid" } }
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "card",
+              "title",
+              "description"
+            ],
+            "properties": {
+              "card": {
+                "type": "string",
+                "enum": [
+                  "summary",
+                  "summary_large_image"
+                ]
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 70
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "imageAssetId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
           },
-          "jsonLdType": { "type": "string", "enum": ["WebPage", "Article"] }
+          "jsonLdType": {
+            "type": "string",
+            "enum": [
+              "WebPage",
+              "Article"
+            ]
+          }
         }
       },
       "PageSummary": {
-        "type": "object", "additionalProperties": false,
-        "required": ["pageId", "siteId", "slug", "title", "state", "draftVersion", "updatedAt"],
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pageId",
+          "siteId",
+          "slug",
+          "title",
+          "state",
+          "draftVersion",
+          "updatedAt"
+        ],
         "properties": {
-          "pageId": { "$ref": "#/components/schemas/PageId" }, "siteId": { "$ref": "#/components/schemas/SiteId" },
-          "slug": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 120 },
-          "title": { "type": "string", "minLength": 1, "maxLength": 160 },
-          "state": { "$ref": "#/components/schemas/PageState" }, "draftVersion": { "type": "integer", "minimum": 1, "format": "int64" },
-          "updatedAt": { "type": "string", "format": "date-time" }
+          "pageId": {
+            "$ref": "#/components/schemas/PageId"
+          },
+          "siteId": {
+            "$ref": "#/components/schemas/SiteId"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "maxLength": 120
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "state": {
+            "$ref": "#/components/schemas/PageState"
+          },
+          "draftVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "PageDetail": {
-        "type": "object", "additionalProperties": false,
-        "required": ["pageId", "siteId", "slug", "title", "state", "draftVersion", "updatedAt", "schemaVersion", "contentDigest", "themeVersionId", "seo"],
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pageId",
+          "siteId",
+          "slug",
+          "title",
+          "state",
+          "draftVersion",
+          "updatedAt",
+          "schemaVersion",
+          "contentDigest",
+          "themeVersionId",
+          "seo"
+        ],
         "properties": {
-          "pageId": { "$ref": "#/components/schemas/PageId" }, "siteId": { "$ref": "#/components/schemas/SiteId" },
-          "slug": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 120 },
-          "title": { "type": "string", "minLength": 1, "maxLength": 160 },
-          "state": { "$ref": "#/components/schemas/PageState" }, "draftVersion": { "type": "integer", "minimum": 1, "format": "int64" },
-          "updatedAt": { "type": "string", "format": "date-time" },
-          "schemaVersion": { "type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$" },
-          "contentDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-          "themeVersionId": { "$ref": "#/components/schemas/ThemeVersionId" }, "seo": { "$ref": "#/components/schemas/SeoSnapshot" },
-          "publishedVersionId": { "$ref": "#/components/schemas/PageVersionId" }
+          "pageId": {
+            "$ref": "#/components/schemas/PageId"
+          },
+          "siteId": {
+            "$ref": "#/components/schemas/SiteId"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "maxLength": 120
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "state": {
+            "$ref": "#/components/schemas/PageState"
+          },
+          "draftVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "schemaVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"
+          },
+          "contentDigest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "themeVersionId": {
+            "$ref": "#/components/schemas/ThemeVersionId"
+          },
+          "seo": {
+            "$ref": "#/components/schemas/SeoSnapshot"
+          },
+          "publishedVersionId": {
+            "$ref": "#/components/schemas/PageVersionId"
+          }
         }
       },
       "PageListResponse": {
-        "type": "object", "additionalProperties": false, "required": ["items", "nextCursor"],
-        "properties": { "items": { "type": "array", "maxItems": 100, "items": { "$ref": "#/components/schemas/PageSummary" } }, "nextCursor": { "type": ["string", "null"], "maxLength": 256 } }
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/PageSummary"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 256
+          }
+        }
       },
       "ArchivePageResponse": {
-        "type": "object", "additionalProperties": false, "required": ["pageId", "state", "archivedAt"],
-        "properties": { "pageId": { "$ref": "#/components/schemas/PageId" }, "state": { "type": "string", "const": "ARCHIVED" }, "archivedAt": { "type": "string", "format": "date-time" } }
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pageId",
+          "state",
+          "archivedAt"
+        ],
+        "properties": {
+          "pageId": {
+            "$ref": "#/components/schemas/PageId"
+          },
+          "state": {
+            "type": "string",
+            "const": "ARCHIVED"
+          },
+          "archivedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       },
       "CreatePageRequest": {
-        "type": "object", "additionalProperties": false, "required": ["siteId", "slug", "title", "schemaVersion", "contentDigest", "themeVersionId", "seo"],
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "siteId",
+          "slug",
+          "title",
+          "schemaVersion",
+          "contentDigest",
+          "themeVersionId",
+          "seo"
+        ],
         "properties": {
-          "siteId": { "$ref": "#/components/schemas/SiteId" }, "slug": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 120 },
-          "title": { "type": "string", "minLength": 1, "maxLength": 160 }, "schemaVersion": { "type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$" },
-          "contentDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }, "themeVersionId": { "$ref": "#/components/schemas/ThemeVersionId" }, "seo": { "$ref": "#/components/schemas/SeoSnapshot" }
+          "siteId": {
+            "$ref": "#/components/schemas/SiteId"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "maxLength": 120
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "schemaVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"
+          },
+          "contentDigest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "themeVersionId": {
+            "$ref": "#/components/schemas/ThemeVersionId"
+          },
+          "seo": {
+            "$ref": "#/components/schemas/SeoSnapshot"
+          }
         }
       },
       "UpdatePageRequest": {
-        "type": "object", "additionalProperties": false, "required": ["expectedDraftVersion", "title", "schemaVersion", "contentDigest", "themeVersionId", "seo"],
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedDraftVersion",
+          "title",
+          "schemaVersion",
+          "contentDigest",
+          "themeVersionId",
+          "seo"
+        ],
         "properties": {
-          "expectedDraftVersion": { "type": "integer", "minimum": 1, "format": "int64" }, "title": { "type": "string", "minLength": 1, "maxLength": 160 },
-          "schemaVersion": { "type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$" }, "contentDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-          "themeVersionId": { "$ref": "#/components/schemas/ThemeVersionId" }, "seo": { "$ref": "#/components/schemas/SeoSnapshot" }
+          "expectedDraftVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "format": "int64"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "schemaVersion": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"
+          },
+          "contentDigest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "themeVersionId": {
+            "$ref": "#/components/schemas/ThemeVersionId"
+          },
+          "seo": {
+            "$ref": "#/components/schemas/SeoSnapshot"
+          }
         }
       },
       "WorkflowTransitionRequest": {
-        "type": "object", "additionalProperties": false, "required": ["expectedDraftVersion", "action"],
-        "properties": { "expectedDraftVersion": { "type": "integer", "minimum": 1, "format": "int64" }, "action": { "$ref": "#/components/schemas/WorkflowAction" }, "reason": { "type": "string", "minLength": 1, "maxLength": 512 } },
-        "allOf": [{ "if": { "properties": { "action": { "const": "REJECT" } } }, "then": { "required": ["reason"] } }]
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedDraftVersion",
+          "action"
+        ],
+        "properties": {
+          "expectedDraftVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "format": "int64"
+          },
+          "action": {
+            "$ref": "#/components/schemas/WorkflowAction"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "REJECT"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "reason"
+              ]
+            }
+          }
+        ]
       },
       "PublicationRequest": {
-        "type": "object", "additionalProperties": false, "required": ["operation", "expectedDraftVersion"],
-        "properties": { "operation": { "type": "string", "enum": ["PUBLISH", "ROLLBACK"] }, "expectedDraftVersion": { "type": "integer", "minimum": 1, "format": "int64" }, "rollbackSourceVersionId": { "$ref": "#/components/schemas/PageVersionId" } },
-        "allOf": [{ "if": { "properties": { "operation": { "const": "ROLLBACK" } } }, "then": { "required": ["rollbackSourceVersionId"] }, "else": { "not": { "required": ["rollbackSourceVersionId"] } } }]
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "operation",
+          "expectedDraftVersion"
+        ],
+        "properties": {
+          "operation": {
+            "type": "string",
+            "enum": [
+              "PUBLISH",
+              "ROLLBACK"
+            ]
+          },
+          "expectedDraftVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "format": "int64"
+          },
+          "rollbackSourceVersionId": {
+            "$ref": "#/components/schemas/PageVersionId"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "operation": {
+                  "const": "ROLLBACK"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "rollbackSourceVersionId"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "rollbackSourceVersionId"
+                ]
+              }
+            }
+          }
+        ]
       },
       "PublicationReceipt": {
-        "type": "object", "additionalProperties": false,
-        "required": ["receiptId", "operation", "pageId", "publishedVersionId", "sourceDraftVersion", "schemaVersion", "themeVersionId", "seoSnapshotDigest", "createdAt"],
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "receiptId",
+          "operation",
+          "pageId",
+          "publishedVersionId",
+          "sourceDraftVersion",
+          "schemaVersion",
+          "themeVersionId",
+          "seoSnapshotDigest",
+          "createdAt"
+        ],
         "properties": {
-          "receiptId": { "$ref": "#/components/schemas/PublicationReceiptId" }, "operation": { "type": "string", "enum": ["PUBLISH", "ROLLBACK"] },
-          "pageId": { "$ref": "#/components/schemas/PageId" }, "publishedVersionId": { "$ref": "#/components/schemas/PageVersionId" }, "sourceDraftVersion": { "type": "integer", "minimum": 1, "format": "int64" },
-          "schemaVersion": { "type": "string" }, "themeVersionId": { "$ref": "#/components/schemas/ThemeVersionId" }, "seoSnapshotDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }, "createdAt": { "type": "string", "format": "date-time" }
+          "receiptId": {
+            "$ref": "#/components/schemas/PublicationReceiptId"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "PUBLISH",
+              "ROLLBACK"
+            ]
+          },
+          "pageId": {
+            "$ref": "#/components/schemas/PageId"
+          },
+          "publishedVersionId": {
+            "$ref": "#/components/schemas/PageVersionId"
+          },
+          "sourceDraftVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "format": "int64"
+          },
+          "schemaVersion": {
+            "type": "string"
+          },
+          "themeVersionId": {
+            "$ref": "#/components/schemas/ThemeVersionId"
+          },
+          "seoSnapshotDigest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "ThemeVersion": {
-        "type": "object", "additionalProperties": false, "required": ["themeVersionId", "tokenDigest", "status"],
-        "properties": { "themeVersionId": { "$ref": "#/components/schemas/ThemeVersionId" }, "tokenDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }, "status": { "type": "string", "enum": ["DRAFT", "PUBLISHED", "ARCHIVED"] } }
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "themeVersionId",
+          "tokenDigest",
+          "status"
+        ],
+        "properties": {
+          "themeVersionId": {
+            "$ref": "#/components/schemas/ThemeVersionId"
+          },
+          "tokenDigest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PUBLISHED",
+              "ARCHIVED"
+            ]
+          }
+        }
       },
       "UpdateProfileRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["displayName", "locale", "reducedMotion", "highContrast", "expectedVersion"],
+        "required": [
+          "displayName",
+          "locale",
+          "reducedMotion",
+          "highContrast",
+          "expectedVersion"
+        ],
         "properties": {
-          "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
-          "locale": { "type": "string", "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$" },
-          "reducedMotion": { "type": "boolean" },
-          "highContrast": { "type": "boolean" },
-          "expectedVersion": { "type": "integer", "minimum": 0, "format": "int64" }
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "locale": {
+            "type": "string",
+            "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"
+          },
+          "reducedMotion": {
+            "type": "boolean"
+          },
+          "highContrast": {
+            "type": "boolean"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0,
+            "format": "int64"
+          }
         }
       },
       "UserProfile": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["subjectId", "displayName", "locale", "reducedMotion", "highContrast", "version"],
+        "required": [
+          "subjectId",
+          "displayName",
+          "locale",
+          "reducedMotion",
+          "highContrast",
+          "version"
+        ],
         "properties": {
-          "subjectId": { "$ref": "#/components/schemas/SubjectId" },
-          "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
-          "locale": { "type": "string", "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$" },
-          "reducedMotion": { "type": "boolean" },
-          "highContrast": { "type": "boolean" },
-          "version": { "type": "integer", "minimum": 1, "format": "int64" }
+          "subjectId": {
+            "$ref": "#/components/schemas/SubjectId"
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "locale": {
+            "type": "string",
+            "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"
+          },
+          "reducedMotion": {
+            "type": "boolean"
+          },
+          "highContrast": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "format": "int64"
+          }
+        }
+      },
+      "ResolveTenantRequest": {
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "organizationId"
+        ]
+      },
+      "DescriptorRequest": {
+        "type": "object",
+        "properties": {
+          "eventType": {
+            "type": "string",
+            "enum": [
+              "PUBLICATION_INVALIDATED",
+              "WORKFLOW_TRANSITIONED",
+              "JOB_PROGRESS_CHANGED",
+              "PRESENCE_CHANGED"
+            ]
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "eventType"
+        ]
+      },
+      "Descriptor": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "eventVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "authorizationEpoch": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "transportToken": {
+            "type": "string"
+          },
+          "privateChannel": {
+            "type": "boolean"
+          },
+          "delivery": {
+            "type": "string"
+          },
+          "reconnectBackoffMs": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "onEvent": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateSessionRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "title"
+        ]
+      },
+      "SessionView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SendMessageRequest": {
+        "type": "object",
+        "properties": {
+          "clientMessageId": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 0
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 100000,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "clientMessageId",
+          "content"
+        ]
+      },
+      "MessageView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "content": {
+            "type": "string"
+          }
+        }
+      },
+      "AskRequest": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "RagAnswer": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "query": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "citations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "tokenCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "modelId": {
+            "type": "string"
+          },
+          "modelRevision": {
+            "type": "string"
+          },
+          "answeredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateKnowledgeBaseRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 0
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "KnowledgeBaseView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RegisterDocumentRequest": {
+        "type": "object",
+        "properties": {
+          "originalName": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 0
+          },
+          "contentType": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(application/pdf|text/markdown|text/plain)$"
+          },
+          "byteSize": {
+            "type": "integer",
+            "format": "int64",
+            "maximum": 52428800,
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "contentType",
+          "originalName",
+          "sha256"
+        ]
+      },
+      "DocumentView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "knowledgeBaseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "originalName": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "byteSize": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "OpenGraphRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 70,
+            "minLength": 0
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 0
+          },
+          "imageAssetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(website|article)$"
+          }
+        },
+        "required": [
+          "description",
+          "title",
+          "type"
+        ]
+      },
+      "SeoRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 70,
+            "minLength": 0
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 0
+          },
+          "locale": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
+          },
+          "canonicalPath": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 0,
+            "pattern": "^/[a-z0-9]+(?:[/-][a-z0-9]+)*$"
+          },
+          "openGraph": {
+            "$ref": "#/components/schemas/OpenGraphRequest"
+          },
+          "twitter": {
+            "$ref": "#/components/schemas/TwitterRequest"
+          },
+          "jsonLdType": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(WebPage|Article)$"
+          }
+        },
+        "required": [
+          "canonicalPath",
+          "description",
+          "jsonLdType",
+          "locale",
+          "openGraph",
+          "title",
+          "twitter"
+        ]
+      },
+      "TwitterRequest": {
+        "type": "object",
+        "properties": {
+          "card": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(summary|summary_large_image)$"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 70,
+            "minLength": 0
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 0
+          },
+          "imageAssetId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "card",
+          "description",
+          "title"
+        ]
+      },
+      "PageView": {
+        "type": "object",
+        "properties": {
+          "pageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "siteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "draftVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "schemaVersion": {
+            "type": "string"
+          },
+          "contentDigest": {
+            "type": "string"
+          },
+          "themeVersionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "seo": {
+            "$ref": "#/components/schemas/SeoSnapshot"
+          },
+          "publishedVersionId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "MembershipView": {
+        "type": "object",
+        "properties": {
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "KnowledgeBaseList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeBaseView"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "DocumentList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentView"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "MembershipResponse": {
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "membershipVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "role": {
+            "type": "string"
+          }
+        }
+      },
+      "PageList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PageSummary"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "ArchiveResult": {
+        "type": "object",
+        "properties": {
+          "pageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string"
+          },
+          "archivedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       }
     }
