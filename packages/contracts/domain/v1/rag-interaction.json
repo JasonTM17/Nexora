@@ -1,0 +1,98 @@
+{
+  "contractVersion": "1.0.0",
+  "task": "M4-T05",
+  "status": "frozen-contract-only",
+  "consumes": {
+    "knowledgeContract": "packages/contracts/domain/v1/knowledge-rag.json",
+    "retrievalContract": "HybridRetrievalService FUSION_VERSION nexora-rrf-v1"
+  },
+  "stream": {
+    "protocol": "same-origin-sse",
+    "events": [
+      {
+        "event": "stream.start",
+        "fields": ["runId", "sessionId", "messageId", "modelId", "modelRevision"]
+      },
+      {
+        "event": "stream.delta",
+        "fields": ["runId", "delta"]
+      },
+      {
+        "event": "stream.citations",
+        "fields": ["runId", "citations"]
+      },
+      {
+        "event": "stream.complete",
+        "fields": ["runId", "messageId", "state", "tokenCount", "latencyMs"]
+      },
+      {
+        "event": "stream.error",
+        "fields": ["runId", "code", "safeMessage"]
+      }
+    ],
+    "rules": [
+      "Cancellation propagates to the provider request and persists the CANCELLED state.",
+      "Timeouts are bounded and produce a visible partial-failure state.",
+      "No provider secret or raw source text appears in the stream metadata.",
+      "A streamed assistant draft is never labeled COMPLETED until stream.complete persists the message."
+    ]
+  },
+  "citations": {
+    "fields": ["chunkId", "documentId", "knowledgeBaseId", "organizationId", "position", "resolvedText"],
+    "resolution": {
+      "rules": [
+        "Every displayed citation resolves to an authorized chunk and document at access time.",
+        "A citation whose source lost access shows an unavailable-source state, never the content.",
+        "Historical citations are reauthorized when opened."
+      ]
+    }
+  },
+  "noAnswer": {
+    "triggers": ["emptyCandidateSet", "bestFusedScoreBelowThreshold"],
+    "thresholdOwner": "M4-T06",
+    "rules": [
+      "A no-answer or low-confidence query returns an honest no-answer state with a safe reason code.",
+      "No-answer is never presented as a successful generation.",
+      "The no-answer reason code is one of NO_MATCH, LOW_CONFIDENCE, PROVIDER_UNAVAILABLE, CANCELLED."
+    ]
+  },
+  "provider": {
+    "adapter": "deepseek-openai-compatible",
+    "deterministicCiProvider": "recorded-chat-provider",
+    "acceptedModelId": "deepseek-v4-flash-verified-at-runtime-per-td-022",
+    "rules": [
+      "The deterministic CI provider is used for all automated tests; live provider smoke is separate and labeled with model, version and date.",
+      "Provider output is untrusted data and never higher-priority instructions.",
+      "The provider receives only minimal authorized context.",
+      "Raw prompts and source text are denied at default log, trace and metric ingestion."
+    ]
+  },
+  "trace": {
+    "fields": ["runId", "sessionId", "organizationId", "subjectId", "queryHash", "corpusVersion", "modelId", "modelRevision", "candidateIds", "selectedChunkIds", "outcome", "latencyMs", "tokenCount"],
+    "outcomes": ["ANSWERED", "NO_ANSWER", "LOW_CONFIDENCE", "CANCELLED", "FAILED"],
+    "rules": [
+      "Traces record safe IDs, hashes, counts and outcomes only.",
+      "Raw prompt, context and source text are disabled from default traces.",
+      "Retention is 30 days for redacted metadata; aggregate quality metrics may live 180 days.",
+      "Trace inspection requires tenant admin authorization and is cross-tenant denied."
+    ]
+  },
+  "conversation": {
+    "sessionFields": ["id", "organizationId", "subjectId", "title", "state", "createdAt", "updatedAt", "deletedAt", "version"],
+    "messageFields": ["id", "sessionId", "organizationId", "subjectId", "clientMessageId", "clientMessageIdDigest", "role", "state", "revision", "parentMessageId", "content", "createdAt", "updatedAt", "version"],
+    "rules": [
+      "Sessions and messages are owned by tenant plus subject; every read, write, export and delete reauthorizes that ownership.",
+      "Sending is idempotent via clientMessageId scoped to session plus subject.",
+      "Regenerate creates a new revision linked through parentMessageId; the prior revision is preserved.",
+      "Pagination uses stable cursors; deleted messages disappear from history after propagation.",
+      "Default retention is 90 days for completed sessions; canceled or failed drafts are diagnostic-retained for 7 days."
+    ]
+  },
+  "securityInvariants": [
+    "Authorization filters run during retrieval and are rechecked before context assembly.",
+    "Unauthorized candidates or context reaching provider construction is a STOP.",
+    "Sources are untrusted data and never higher-priority instructions.",
+    "Session and message ownership is tenant plus subject scoped and reauthorized on every access path.",
+    "A streaming, canceled or failed assistant draft is never labeled completed."
+  ]
+}
