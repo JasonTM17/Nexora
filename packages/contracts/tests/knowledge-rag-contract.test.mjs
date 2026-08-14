@@ -63,6 +63,8 @@ test("retrieval fusion is deterministic and bounded", () => {
 test("chat messages never mislabel drafts and regenerate preserves lineage", () => {
   assert.equal(domain.chat.message.roles.includes("assistant"), true);
   assert.equal(domain.chat.message.states.includes("STREAMING"), true);
+  assert.equal(domain.chat.message.fields.includes("clientMessageId"), true);
+  assert.equal(domain.chat.message.fields.includes("clientMessageIdDigest"), true);
   assert.equal(
     domain.chat.message.rules.some((rule) => rule.includes("never labeled COMPLETED")),
     true,
@@ -88,6 +90,15 @@ test("deletion order makes sources retrieval-ineligible first", () => {
   assert.equal(domain.lifecycle.deletionOrder[0], "mark document DELETED (retrieval-ineligible)");
   assert.equal(domain.lifecycle.deletionOrder[domain.lifecycle.deletionOrder.length - 1], "record durable receipt");
   assert.equal(
+    domain.lifecycle.deletionOrder.some((step) => step.includes("cancel or terminalize")),
+    true,
+  );
+  assert.equal(
+    domain.lifecycle.deletionOrder.some((step) => step.includes("index entries")),
+    true,
+  );
+  assert.equal(domain.lifecycle.chatDeletionOrder.length >= 4, true);
+  assert.equal(
     domain.lifecycle.rules.some((rule) => rule.includes("never remain retrievable")),
     true,
   );
@@ -100,12 +111,13 @@ test("security invariants cover the stop conditions", () => {
   assert.equal(invariants.some((rule) => rule.includes("tenant plus subject")), true);
 });
 
-test("fixture keeps the two tenants disjoint", () => {
+test("fixture keeps the two tenants disjoint with a positive control", () => {
   const a = fixture.organizationA;
   const b = fixture.organizationB;
   assert.notEqual(a.organizationId, b.organizationId);
   assert.notEqual(a.knowledgeBaseId, b.knowledgeBaseId);
   assert.deepEqual(fixture.expectedRetrieval.crossTenantProbeForOrgA, []);
+  assert.deepEqual(fixture.expectedRetrieval.crossTenantProbeForOrgB, ["41000000-0000-4000-8000-000000000001"]);
   assert.equal(
     fixture.chunks.orgBSecretChunk.documentId,
     fixture.documents.orgBSecret.documentId,
@@ -114,6 +126,8 @@ test("fixture keeps the two tenants disjoint", () => {
     fixture.documents.orgAText.state,
     "READY",
   );
+  assert.equal(fixture.chat.orgBMemberProbeSession.subjectId, b.memberSubjectId);
+  assert.equal(fixture.chat.orgAMember.subjectId, a.memberSubjectId);
 });
 
 test("every fixture chunk references a declared document", () => {
