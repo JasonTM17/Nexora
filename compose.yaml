@@ -37,26 +37,30 @@ services:
     # bounded retention means JetStream remains replayable after a restart;
     # the earlier tests used Memory storage only for disposable speed. This
     # init container owns no credentials and quits after provisioning.
-    image: nats:2.11.0-alpine
+    image: natsio/nats-box:latest
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         set -e
         while ! wget -qO- http://nats:8222/healthz >/dev/null; do sleep 1; done
-        nats --server nats://nats:4222 stream add NEXORA_EVENTS \
-          --subjects "nexora.events.*" \
-          --storage file \
-          --retention limits \
-          --max-msgs-per-subject 10000 \
-          --discard old \
-          --defaults
-        nats --server nats://nats:4222 stream add NEXORA_GO_INGESTION \
-          --subjects "nexora.events.publication" \
-          --storage file \
-          --retention limits \
-          --max-msgs-per-subject 10000 \
-          --discard old \
-          --defaults
+        if ! nats --server nats://nats:4222 stream info NEXORA_EVENTS >/dev/null 2>&1; then
+          nats --server nats://nats:4222 stream add NEXORA_EVENTS \
+            --subjects "nexora.events.workflow,nexora.events.job-progress,nexora.events.notification,nexora.events.presence,nexora.events.outbox" \
+            --storage file \
+            --retention limits \
+            --max-msgs-per-subject 10000 \
+            --discard old \
+            --defaults
+        fi
+        if ! nats --server nats://nats:4222 stream info NEXORA_GO_INGESTION >/dev/null 2>&1; then
+          nats --server nats://nats:4222 stream add NEXORA_GO_INGESTION \
+            --subjects "nexora.events.publication" \
+            --storage file \
+            --retention limits \
+            --max-msgs-per-subject 10000 \
+            --discard old \
+            --defaults
+        fi
     depends_on:
       nats:
         condition: service_healthy
