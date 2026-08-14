@@ -45,11 +45,14 @@ public class HybridRetrievalService {
         return tenantContexts.withFreshTenant(actor, (authoritative, jdbc) -> {
             List<BranchMatch> lexical = lexical(jdbc, authoritative.organizationId(), query, LEXICAL_TOP_K);
             List<BranchMatch> vector = new ArrayList<>();
+            double bestVectorSimilarity = Double.NEGATIVE_INFINITY;
             for (VectorService.VectorMatch match : vectors.search(authoritative, query, VECTOR_TOP_K)) {
                 vector.add(new BranchMatch(match.chunkId(), match.documentId(), match.similarity()));
+                bestVectorSimilarity = Math.max(bestVectorSimilarity, match.similarity());
             }
             List<FusedMatch> fused = fuse(lexical, vector);
-            return new RetrievalResult(FUSION_VERSION, List.copyOf(fused), lexical.isEmpty(), vector.isEmpty());
+            return new RetrievalResult(FUSION_VERSION, List.copyOf(fused), lexical.isEmpty(), vector.isEmpty(),
+                    bestVectorSimilarity);
         });
     }
 
@@ -110,6 +113,6 @@ public class HybridRetrievalService {
     }
 
     public record RetrievalResult(String fusionVersion, List<FusedMatch> matches,
-                                  boolean lexicalEmpty, boolean vectorEmpty) {
+                                  boolean lexicalEmpty, boolean vectorEmpty, double bestVectorSimilarity) {
     }
 }
