@@ -122,7 +122,7 @@ CREATE TABLE nexora.document_jobs (
     state <> 'FAILED' OR last_error_code IS NOT NULL
   ),
   CONSTRAINT document_jobs_clean_terminal_shape_check CHECK (
-    state IN ('SUCCEEDED', 'CANCELLED') OR last_error_code IS NULL
+    state NOT IN ('SUCCEEDED', 'CANCELLED') OR last_error_code IS NULL
   )
 );
 
