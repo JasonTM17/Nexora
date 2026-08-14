@@ -141,6 +141,7 @@ CREATE TABLE nexora.chunks (
   chunk_strategy_version text NOT NULL CHECK (chunk_strategy_version ~ '^nexora-chunk-v[0-9]+$'),
   state nexora.chunk_state NOT NULL DEFAULT 'ACTIVE',
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+  updated_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
   CONSTRAINT chunks_document_fk FOREIGN KEY (document_id, organization_id)
     REFERENCES nexora.documents (id, organization_id),
@@ -182,9 +183,10 @@ CREATE TABLE nexora.chat_messages (
   version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
   CONSTRAINT chat_messages_session_fk FOREIGN KEY (session_id, organization_id, subject_id)
     REFERENCES nexora.chat_sessions (id, organization_id, subject_id),
-  CONSTRAINT chat_messages_parent_fk FOREIGN KEY (parent_message_id, organization_id)
-    REFERENCES nexora.chat_messages (id, organization_id),
+  CONSTRAINT chat_messages_parent_fk FOREIGN KEY (parent_message_id, organization_id, subject_id)
+    REFERENCES nexora.chat_messages (id, organization_id, subject_id),
   CONSTRAINT chat_messages_tenant_key UNIQUE (organization_id, id),
+  CONSTRAINT chat_messages_subject_key UNIQUE (organization_id, id, subject_id),
   CONSTRAINT chat_messages_idempotency_key UNIQUE (organization_id, session_id, subject_id, client_message_id_digest),
   CONSTRAINT chat_messages_shape_check CHECK (
     state <> 'DELETED' OR content = ''
@@ -206,6 +208,7 @@ CREATE TABLE nexora.retrieval_runs (
   latency_ms bigint NOT NULL CHECK (latency_ms >= 0),
   token_count integer NOT NULL DEFAULT 0 CHECK (token_count >= 0),
   created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+  updated_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
   CONSTRAINT retrieval_runs_session_fk FOREIGN KEY (session_id, organization_id, subject_id)
     REFERENCES nexora.chat_sessions (id, organization_id, subject_id),
