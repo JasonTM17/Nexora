@@ -9,8 +9,10 @@ export interface RagTraceItem {
   readonly corpusVersion: string;
   readonly modelId: string;
   readonly modelRevision: string;
-  readonly candidateIds: ReadonlyArray<string>;
-  readonly selectedChunkIds: ReadonlyArray<string>;
+  readonly candidateIds?: ReadonlyArray<string>;
+  readonly selectedChunkIds?: ReadonlyArray<string>;
+  readonly candidateCount?: number;
+  readonly selectedCitationCount?: number;
   readonly outcome: "ANSWERED" | "NO_ANSWER" | "LOW_CONFIDENCE" | "CANCELLED" | "FAILED" | string;
   readonly latencyMs: number;
   readonly tokenCount: number;

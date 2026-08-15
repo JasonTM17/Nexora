@@ -11,9 +11,11 @@ describe("RAG Quality Dashboard UI Tests", () => {
       queryHash: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       modelId: "deepseek-v4-flash",
       modelRevision: "v1-prod",
+      corpusVersion: "corpus-v1",
       candidateCount: 10,
       selectedCitationCount: 3,
       latencyMs: 142,
+      tokenCount: 256,
       outcome: "ANSWERED",
       createdAt: new Date().toISOString(),
     };
