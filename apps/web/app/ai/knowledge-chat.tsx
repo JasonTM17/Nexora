@@ -70,7 +70,7 @@ export function KnowledgeChat() {
     <p className="nx-eyebrow">{t("ai.eyebrow")}</p><h1 ref={heading} tabIndex={-1}>{state === "denied" ? t("status.denied") : t("ai.title")}</h1><p className="nx-lede" aria-live="polite">{state === "denied" ? t("ai.accessDenied") : t("ai.lede")}</p>
     <form className="nx-kb-form" onSubmit={ask} aria-label={t("ai.title")}>
       <label className="nx-admin-organization" htmlFor="rag-query">{t("ai.askPlaceholder")}<textarea id="rag-query" value={query} maxLength={2000} required rows={3} disabled={state === "loading" || !organizationId} onChange={(event) => setQuery(event.target.value)} placeholder={t("ai.askPlaceholder")} /></label>
-      <ActionButton disabled={state === "loading" || !query.trim() || !organizationId}>{state === "loading" ? t("common.loading") : t("ai.ask")}</ActionButton>
+      <ActionButton type="submit" disabled={state === "loading" || !query.trim() || !organizationId}>{state === "loading" ? t("common.loading") : t("ai.ask")}</ActionButton>
     </form>
     {state === "answered" && answer && <article className="nx-ai-response" aria-live="polite"><p>{answer.content}</p><Citation state={citationState} title={answer.citations?.[0] ?? "Authorized source"} /><p className="nx-field-help">Model {answer.modelId} · {answer.tokenCount} tokens</p></article>}
     {state === "no-answer" && <article className="nx-ai-response" aria-live="polite"><StatusLabel kind="empty" /><p>{t("ai.noAnswer")}</p></article>}
