@@ -4,9 +4,12 @@ Nexora is a tenant-aware CMS and knowledge workspace delivered as a polyglot
 monorepo: a Next.js web surface with a same-origin BFF, a Spring Boot modular
 monolith platform API, a narrowly-scoped Go event-ingestion edge, PostgreSQL
 with row-level security as the durable truth, and NATS JetStream as the event
-backbone. The active line integrates milestones M0–M4 (repository foundation, platform
+backbone. The active line integrates milestones M0–M5 (repository foundation, platform
 API, web foundation, tenant CMS core, durable event outbox, bounded Go
-ingress, private Realtime descriptors, knowledge management and secure RAG).
+ingress, private Realtime descriptors, knowledge management and secure RAG,
+adaptive intelligence: feature flags, analytics, notifications, experiments,
+global search). Milestone M6 (observability + security hardening) is in progress.
+M7–M8 (deployment, polish) are planned.
 
 Every claim in this repository is bounded by evidence: local builds, tests and
 deterministic fixtures. Nothing here claims a deployed environment, a live
@@ -34,7 +37,7 @@ tenant, repository, provider or live metric is connected.
 The capture workflow is documented under
 [Local development → Web evidence capture](#web-evidence-capture).
 
-## Implemented today (M0–M4)
+## Implemented today (M0–M5)
 
 - Apache-2.0 repository license, `NOTICE` and third-party provenance boundary
   (`THIRD-PARTY-NOTICES.md`).
@@ -62,7 +65,14 @@ The capture workflow is documented under
   deterministic evaluation. See
   [apps/platform-api/README.md](apps/platform-api/README.md) and the
   [Knowledge/RAG ADR](docs/adr/adr-m4-knowledge-rag.md).
-- Flyway migrations `V001`–`V024` under `database/migrations` with
+- Adaptive intelligence under `apps/platform-api`: tenant-scoped feature flags
+  with deterministic rollout, product analytics pipeline, multi-channel
+  notifications, A/B experimentation framework, and authorized hybrid global
+  search. See [Feature flags](../plans/260815-0935-nexora-full-program-m4-m8/plan.md).
+- Observability stack under `observability/`: Prometheus (metrics), Loki (logs),
+  Tempo (traces), Grafana (dashboards). Spring structured JSON logging +
+  Prometheus `/metrics`. Go `/metrics` already exposed.
+- Flyway migrations `V001`–`V028` under `database/migrations` with
   RLS-forced application schemas, outbox, event-ledger functions and the
   knowledge/vector plane; see
   [database/migrations/README.md](database/migrations/README.md) and
@@ -75,13 +85,12 @@ The capture workflow is documented under
 
 ## Planned, not implemented
 
-Analytics, personalization, notifications, experimentation and product
-adaptive intelligence (M5); full observability stack and security hardening
-(M6); production deployment, GitOps, disaster recovery and measured SLOs (M7);
+Security hardening (M6): JWT Ed25519 cutover, account lockout, API validation
+audit; production deployment, GitOps, disaster recovery and measured SLOs (M7);
 final product polish and Staff-level review (M8); hosted Supabase/Vercel/NATS
-provisioning and release remain later owned tasks. Empty directories such as
-`infrastructure/` and `observability/` are layout markers, not working
-features. The sequencing is governed by the execution ledger in
+provisioning and release remain later owned tasks. The `infrastructure/`
+directory is a layout marker (Kubernetes/Terraform deferred pending hosting
+decisions). The sequencing is governed by the execution ledger in
 [plans/260809-1030-nexora-master-production-build](plans/260809-1030-nexora-master-production-build/plan.md) and the full-program plan in
 [plans/260815-0935-nexora-full-program-m4-m8](plans/260815-0935-nexora-full-program-m4-m8/plan.md).
 
@@ -90,15 +99,16 @@ features. The sequencing is governed by the execution ledger in
 | Path | Purpose |
 |---|---|
 | `apps/web` | Next.js 16 / React 19 product shell, same-origin BFF, foundation surfaces |
-| `apps/platform-api` | Spring Boot 4.1 modular monolith: identity, RBAC, CMS, publishing, outbox, events |
+| `apps/platform-api` | Spring Boot 4.1 modular monolith: identity, RBAC, CMS, publishing, outbox, events, knowledge, RAG, feature flags, analytics, notifications, experiments, search |
 | `services/event-ingestion` | Go 1.26 bounded HTTP ingress publishing to NATS JetStream |
 | `packages/contracts` | Event/API contract source and generated client |
 | `packages/design-tokens`, `packages/ui-*` | Branded tokens and owned Ant Design / block wrappers |
-| `database/migrations` | Single ordered Flyway migration train (V001–V024) |
-| `infrastructure/`, `observability/` | Layout markers for later owned tasks |
+| `database/migrations` | Single ordered Flyway migration train (V001–V028) |
+| `observability/` | Prometheus, Loki, Tempo, Grafana stack + service metrics |
+| `infrastructure/` | Layout marker for later owned tasks (K8s/Terraform deferred) |
 | `docs/` | Architecture, security, UX and development documentation |
 | `tools/` | Deterministic repository validation and media helpers |
-| `.github/workflows/validate.yml` | CI: foundation, Go ingestion and platform-api gates |
+| `.github/workflows/` | CI: foundation, Go, platform-api, security scan, Docker Hub publish |
 
 ## Architecture and trust boundary
 
@@ -207,13 +217,18 @@ runtime dependencies.
 
 ## Verification and CI
 
-The `Validate repository foundation` workflow (`.github/workflows/validate.yml`)
-runs three jobs on every push and pull request: `foundation`
-(`tools/validate-repo.ps1` plus Compose render), `go-ingestion` (`go vet`,
-`go test`) and `platform-api` (Maven unit suite). The broader local evidence
-set includes the Java Testcontainers suite (PostgreSQL 17.5 + NATS JetStream:
-outbox publish, Go admission joint flow, outage/stall/backpressure bounds,
-replay convergence) and the M3 joint benchmark probe; see
+CI workflows (`.github/workflows/`):
+- `validate.yml`: foundation, Go ingestion (vet + test + coverage), platform-api
+  (Maven unit suite + JaCoCo coverage)
+- `security-scan.yml`: CodeQL SAST (Java/Go/TS), Gitleaks secret scan, Trivy FS
+- `docker-publish.yml`: build + push 3 images to Docker Hub (`nguyenson1710/`),
+  Trivy image scan, SBOM + provenance
+- `dependabot.yml`: automated updates for npm, Go, GitHub Actions, Docker
+
+The broader local evidence set includes the Java Testcontainers suite
+(PostgreSQL 17.5 + NATS JetStream: outbox publish, Go admission joint flow,
+outage/stall/backpressure bounds, replay convergence) and the M3 joint benchmark
+probe; see
 [plans/260809-1030-nexora-master-production-build/validation-log.md](plans/260809-1030-nexora-master-production-build/validation-log.md)
 for the recorded receipts and their exact heads.
 
@@ -233,13 +248,17 @@ for the recorded receipts and their exact heads.
 
 - The web surfaces are foundation previews with deterministic fixtures; M2/M3
   backend capabilities are proven by tests, not by a connected browser session.
-- The event-ingestion rate limiter is in-memory, fixed-window and
-  single-instance; Compose therefore wires exactly one replica. Multi-replica
-  topologies need a shared limiter and their own review.
+- The event-ingestion rate limiter defaults to in-memory, fixed-window,
+  single-instance. A Redis-backed sliding-window limiter is available when
+  `NEXORA_REDIS_ADDR` is configured (recommended for multi-replica).
 - `GET /readyz` on the Go service reports local serve state only; publish
   failures surface as bounded 503s instead of silent loss.
 - File-backed JetStream provisioning is wired in `compose.yaml`, while the
   Testcontainers suite uses disposable in-memory streams for speed.
+- Observability stack (Prometheus/Loki/Tempo/Grafana) is configured but not
+  yet validated end-to-end with live traffic.
+- M6 security hardening (JWT Ed25519, account lockout, API validation audit)
+  and M7 production deployment remain incomplete.
 - No live provider, deployment, scale or continuity claim is made anywhere in
   this repository; those require separately authorized evidence gates.
 
