@@ -6,6 +6,7 @@ import type { KnowledgeBaseView } from "../../../../packages/contracts/src/gener
 import { AppShell, PageGrid } from "../../../../packages/ui-core/src/app-shell";
 import { ActionButton } from "../../../../packages/ui-core/src/action-button";
 import { StatusLabel } from "../../../../packages/ui-core/src/status-label";
+import { useI18n } from "../../lib/i18n";
 
 type Problem = { code: string; message: string; traceId?: string | null };
 type State = "loading" | "ready" | "empty" | "denied" | "error";
@@ -22,6 +23,7 @@ function asProblem(error: unknown): Problem {
 }
 
 export function KnowledgeWorkspace() {
+  const { t } = useI18n();
   const [organizationId, setOrganizationId] = useState("");
   const [items, setItems] = useState<ReadonlyArray<KnowledgeBaseView>>([]);
   const [state, setState] = useState<State>("loading");
@@ -66,15 +68,15 @@ export function KnowledgeWorkspace() {
     finally { setSaving(false); }
   }
 
-  return <AppShell><PageGrid><header className="nx-site-header"><Link className="nx-wordmark" href="/">Nexora</Link><nav className="nx-nav" aria-label="Knowledge workspace"><Link aria-current="page" href="/knowledge">Knowledge</Link><Link href="/ai">AI</Link><Link href="/account">Account</Link></nav></header><main id="main-content" className="nx-admin-page">
-    <p className="nx-eyebrow">Knowledge workspace</p><h1 ref={heading} tabIndex={-1}>{state === "denied" ? "Access denied" : "Knowledge bases"}</h1><p className="nx-lede" aria-live="polite">{state === "denied" ? "You do not have current permission to manage knowledge in this organization." : "Documents are ingested into tenant-scoped knowledge bases with durable job progress."}</p>
-    {state === "loading" && <section className="nx-access-card" role="status"><StatusLabel kind="loading" /> Loading the server-authorized knowledge workspace…</section>}
-    {state === "empty" && <section className="nx-access-card"><StatusLabel kind="planned" /><h2>Choose an organization</h2><p>Choose an active organization in your account before accessing its knowledge bases.</p><Link className="nx-action-button nx-action-button--secondary" href="/account">Go to account</Link></section>}
-    {(state === "denied" || state === "error") && <section className="nx-access-card nx-error-card" aria-live="assertive"><StatusLabel kind={state === "denied" ? "denied" : "error"} /><p>{problem?.message}</p>{problem?.traceId && <p className="nx-field-help">Reference: {problem.traceId}</p>}<ActionButton tone="secondary" onClick={() => void load()}>Retry</ActionButton></section>}
-    {state === "ready" && <section className="nx-access-card" aria-labelledby="kb-title"><div className="nx-card-heading"><div><h2 id="kb-title">Tenant knowledge bases</h2><p className="nx-field-help">Server-derived organization context · knowledge.read</p></div><StatusLabel kind="fixture" /></div>{items.length === 0 ? <p className="nx-empty-copy">No knowledge bases yet. Create one to begin ingesting documents.</p> : <ul className="nx-kb-list">{items.map((item) => <li key={item.id}><code>{item.name}</code><small>{item.state} · version {item.version}</small></li>)}</ul>}
-      <form className="nx-kb-form" onSubmit={create} aria-label="Create knowledge base">
-        <label className="nx-admin-organization" htmlFor="kb-name">Knowledge base name<input id="kb-name" value={name} maxLength={200} required disabled={saving} onChange={(event) => setName(event.target.value)} placeholder="e.g. Product docs" /></label>
-        <ActionButton disabled={saving || !name.trim()}>{saving ? "Creating…" : "Create knowledge base"}</ActionButton>
+  return <AppShell><PageGrid><header className="nx-site-header"><Link className="nx-wordmark" href="/">Nexora</Link><nav className="nx-nav" aria-label={t("knowledge.title")}><Link aria-current="page" href="/knowledge">{t("nav.knowledge")}</Link><Link href="/ai">{t("nav.ai")}</Link><Link href="/account">{t("nav.account")}</Link></nav></header><main id="main-content" className="nx-admin-page">
+    <p className="nx-eyebrow">{t("knowledge.eyebrow")}</p><h1 ref={heading} tabIndex={-1}>{state === "denied" ? t("status.denied") : t("knowledge.title")}</h1><p className="nx-lede" aria-live="polite">{state === "denied" ? t("knowledge.accessDenied") : t("knowledge.lede")}</p>
+    {state === "loading" && <section className="nx-access-card" role="status"><StatusLabel kind="loading" /> {t("common.loading")}</section>}
+    {state === "empty" && <section className="nx-access-card"><StatusLabel kind="planned" /><h2>{t("account.selectOrganization")}</h2><p>{t("knowledge.organizationRequired")}</p><Link className="nx-action-button nx-action-button--secondary" href="/account">{t("account.title")}</Link></section>}
+    {(state === "denied" || state === "error") && <section className="nx-access-card nx-error-card" aria-live="assertive"><StatusLabel kind={state === "denied" ? "denied" : "error"} /><p>{problem?.message}</p>{problem?.traceId && <p className="nx-field-help">Reference: {problem.traceId}</p>}<ActionButton tone="secondary" onClick={() => void load()}>{t("common.retry")}</ActionButton></section>}
+    {state === "ready" && <section className="nx-access-card" aria-labelledby="kb-title"><div className="nx-card-heading"><div><h2 id="kb-title">{t("knowledge.title")}</h2><p className="nx-field-help">Server-derived organization context · knowledge.read</p></div><StatusLabel kind="fixture" /></div>{items.length === 0 ? <p className="nx-empty-copy">{t("knowledge.noBases")}</p> : <ul className="nx-kb-list">{items.map((item) => <li key={item.id}><code>{item.name}</code><small>{item.state} · {t("knowledge.version")} {item.version}</small></li>)}</ul>}
+      <form className="nx-kb-form" onSubmit={create} aria-label={t("knowledge.create")}>
+        <label className="nx-admin-organization" htmlFor="kb-name">{t("knowledge.create")}<input id="kb-name" value={name} maxLength={200} required disabled={saving} onChange={(event) => setName(event.target.value)} placeholder={t("knowledge.namePlaceholder")} /></label>
+        <ActionButton disabled={saving || !name.trim()}>{saving ? t("common.loading") : t("knowledge.create")}</ActionButton>
       </form></section>}
   </main></PageGrid></AppShell>;
 }
