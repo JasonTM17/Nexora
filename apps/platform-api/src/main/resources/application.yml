@@ -12,7 +12,7 @@ spring:
 logging:
   structured:
     format:
-      console: json
+      console: ecs
   level:
     root: INFO
     com.nexora.platform: DEBUG
