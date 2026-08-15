@@ -14,6 +14,7 @@ const publicCsp = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   async headers() {
     return [
       {
