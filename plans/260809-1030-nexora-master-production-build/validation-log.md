@@ -264,3 +264,54 @@ Go/Spring benchmark probe all pass on the reviewed head.
 - M3 milestone evidence is complete; `main` carries the accepted M3 merge.
 - M4 (secure knowledge and RAG) is the next dispatchable milestone per the
   execution ledger.
+
+## Session 5 — 2026-08-15 M4 Acceptance Receipt
+
+### Scope
+
+Closing the M4 milestone after the knowledge/RAG contracts, schema train and
+backend/UI tasks passed the Advisor/Kongming dual-review gates. All work went
+through bounded branches and the M4 integration line; combined evidence below.
+
+### Exact-Head Verification
+
+| Item | Value |
+|---|---|
+| \main\ M4 merge head | \111b0ba187a5fe23bae8ff6eb71cd19adc446161\ |
+| \integration/v0.1-m4\ head | \58ca77f37f8a05b6f37421f32dfc7eb20981bb8d\ |
+| Remote main SHA equality | verified |
+| Worktree cleanliness | main clean except pre-existing local tooling state |
+
+### Dual-Review Receipts
+
+- M4-C01 knowledge/RAG contract: Advisor HOLD then FIT after remediation;
+  Kongming HOLD then PASS; residuals (digest preimage, revision placeholder,
+  deletion order planes) closed on the same candidate.
+- M4-DB01 schema train: Advisor HOLD then FIT; Kongming HOLD then PASS after
+  terminal guards, subject-bound chat keys, partial dedup index, vector plane
+  and MERGE-resistant transition guards landed.
+
+### Combined Check Evidence
+
+| Check | Result |
+|---|---|
+| Contract tests | PASS 60/60 |
+| M4 schema isolated verification (PostgreSQL 17.5 + pgvector) | PASS |
+| Backend suite incl. M3 regression | PASS 55/55 |
+| Go vet + tests | PASS |
+| Foundation validation + Compose render | PASS |
+| Web TypeScript | PASS |
+
+### Honest Limitations
+
+- The web vitest suite still fails for pre-existing baseline reasons on this
+  machine (jsdom plus node builtins); unchanged from the M3 baseline.
+- The embedding and chat providers in CI are deterministic fixtures; live TEI
+  and DeepSeek adapters are env-only and disabled by default.
+- File-backed JetStream remains compose-wired, not yet exercised end-to-end.
+
+### Outcome
+
+M4 milestone evidence is complete on \main\; the remaining v0.1 work is the
+release-evidence wave (R00A/R00B/R00C/R00I/R01) and any M5-M8 future-Goal
+work per the execution ledger.
