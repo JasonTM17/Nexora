@@ -40,7 +40,15 @@ func NewIngestionRuntime(settings config.Config) (*IngestionRuntime, error) {
 		connection.Close()
 		return nil, err
 	}
-	limiter := infrastructure.NewFixedWindowLimiter(settings.RateLimitPerMinute, time.Minute, settings.RateLimitKeys)
+	// M6-R01: Prefer Redis-backed limiter for multi-replica deployments.
+	// Falls back to in-memory fixed-window when Redis is not configured.
+	var limiter Limiter
+	if redisClient := infrastructure.RedisClientFromEnv(); redisClient != nil {
+		limiter = infrastructure.NewRedisSlidingWindowLimiter(redisClient, settings.RateLimitPerMinute, time.Minute, "rl:ingest")
+	}
+	if limiter == nil {
+		limiter = infrastructure.NewFixedWindowLimiter(settings.RateLimitPerMinute, time.Minute, settings.RateLimitKeys)
+	}
 	collector, err := NewCollector(authorizer, limiter, publisher, time.Now)
 	if err != nil {
 		connection.Close()

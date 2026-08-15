@@ -31,6 +31,19 @@ services:
     volumes:
       - nexora-nats-data:/data
 
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    ports:
+      - "127.0.0.1:${NEXORA_REDIS_PORT:-16379}:6379"
+    volumes:
+      - nexora-redis-data:/data
+
   nats-streams:
     # M3-R01 file-backed JetStream provisioning: creates the durable streams
     # the outbox publisher and Go ingestion depend on. File storage plus
@@ -97,3 +110,4 @@ services:
 volumes:
   nexora-postgres-data:
   nexora-nats-data:
+  nexora-redis-data:
