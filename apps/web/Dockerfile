@@ -3,7 +3,7 @@
 # Runtime: non-root, standalone output, HEALTHCHECK, OCI labels.
 
 # ---- Build stage ----
-FROM node:24.12-alpine AS build
+FROM node:26.7-alpine AS build
 WORKDIR /src
 
 # Copy ALL source first (workspace packages need their source for build)
@@ -17,7 +17,7 @@ RUN corepack enable && corepack prepare pnpm@11.0.9 --activate \
 RUN pnpm --filter @nexora/web build
 
 # ---- Runtime stage ----
-FROM node:24.12-alpine AS runtime
+FROM node:26.7-alpine AS runtime
 WORKDIR /app
 
 # Copy built application (standalone output) BEFORE switching user
