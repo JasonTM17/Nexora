@@ -1,0 +1,103 @@
+{
+  "task": "R00B",
+  "productSha": "fde842a0c6a6f6d1d5d9267e7d7f0839848c363f",
+  "seedManifest": {
+    "path": "test-fixtures/demo/m4-seed-manifest.json",
+    "digest": "f8b15bf7c5f8e1b9bf3d8428db9a8f5e3f1f7d5637371f3163b0e9d41848c93c",
+    "label": "Deterministic M4-S01 synthetic fixture (Nexora University), not live data."
+  },
+  "runtimeTuple": {
+    "surface": "apps/web foundation preview (Next.js production build)",
+    "base": "http://127.0.0.1:3100",
+    "note": "No tenant, provider, repository or live metric is connected; every surface is deterministic fixture content."
+  },
+  "providerLabel": "fixture-only; no hosted provider or live product call",
+  "generatedAt": "2026-08-15T02:49:01.167Z",
+  "captured": [
+    {
+      "file": "home-desktop.png",
+      "surface": "/",
+      "viewport": "1440x900@2x",
+      "kind": "desktop-screenshot",
+      "sha256": "b52742786c78623f767dde6dd4505563c05cfd563c8f0f1466dabba3a1c84f6d"
+    },
+    {
+      "file": "studio-desktop.png",
+      "surface": "/studio",
+      "viewport": "1440x900@2x",
+      "kind": "desktop-screenshot",
+      "sha256": "4c405351de95b0e2792ca2e0aa7993daaf3f1da160993a9adff04c8d779109ab"
+    },
+    {
+      "file": "ai-desktop.png",
+      "surface": "/ai",
+      "viewport": "1440x900@2x",
+      "kind": "desktop-screenshot",
+      "sha256": "7e0388782149c7dfb4f0983dead235c1c3ec39a38b14a60d6bcc6bce260f7830"
+    },
+    {
+      "file": "knowledge-desktop.png",
+      "surface": "/knowledge",
+      "viewport": "1440x900@2x",
+      "kind": "desktop-screenshot",
+      "sha256": "6679f9170c7fb4268a5f2feaaee5338fa5b65df2c7411ed32588c7aaa3626f4f"
+    },
+    {
+      "file": "builder-desktop.png",
+      "surface": "/builder",
+      "viewport": "1440x900@2x",
+      "kind": "desktop-screenshot",
+      "sha256": "28b222bd6d40438587d7606fdecf4e009d94ffd6b39295d5629953b5260b765e"
+    },
+    {
+      "file": "home-mobile.png",
+      "surface": "/",
+      "viewport": "375x812@2x",
+      "kind": "mobile-screenshot",
+      "sha256": "b36164261f0c58e05fe705da8fd83b4c2fdcd1d9392682e9dd6b3e14ddfb63b0"
+    },
+    {
+      "file": "studio-mobile.png",
+      "surface": "/studio",
+      "viewport": "375x812@2x",
+      "kind": "mobile-screenshot",
+      "sha256": "e2e11b6acd34591787a002250790daadc95bc2c35d6d6747105898adde1872e6"
+    },
+    {
+      "file": "ai-mobile.png",
+      "surface": "/ai",
+      "viewport": "375x812@2x",
+      "kind": "mobile-screenshot",
+      "sha256": "cafdc4a971476873f138e91f67d5989814515dfbd793c23380037a4d08d41a39"
+    },
+    {
+      "file": "knowledge-mobile.png",
+      "surface": "/knowledge",
+      "viewport": "375x812@2x",
+      "kind": "mobile-screenshot",
+      "sha256": "392a72365dd96b250e5d4674ec8078bfc19d011378aaf62705fe895affd43b5d"
+    },
+    {
+      "file": "builder-mobile.png",
+      "surface": "/builder",
+      "viewport": "375x812@2x",
+      "kind": "mobile-screenshot",
+      "sha256": "26dcdb893d7f5dc75e3ae8e5d7dff8d730a8e2e91f4c23fc8b04b3e877967a02"
+    },
+    {
+      "file": "nexora-tour.webm",
+      "surface": "/",
+      "viewport": "1280x800",
+      "kind": "walkthrough-video",
+      "sha256": "2c696d76e1c706df14845abad63bd1abeaec5a10eb30bf6de9886d99881fffdc"
+    },
+    {
+      "file": "nexora-tour.gif",
+      "surface": "/",
+      "viewport": "1280x800 (960px scaled)",
+      "kind": "walkthrough-gif",
+      "derivedFrom": "nexora-tour.webm",
+      "sha256": "1cac8d6747ac7175fe8fafd3080f41a56443e65675ff72f4d8c983ef0136ad6a"
+    }
+  ]
+}
