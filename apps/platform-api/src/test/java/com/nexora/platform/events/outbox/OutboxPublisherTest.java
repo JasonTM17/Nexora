@@ -43,8 +43,8 @@ class OutboxPublisherTest {
         OutboxPublisher.PublishResult result = publisher.publishAvailable();
 
         assertThat(result.deadLettered()).isEqualTo(1);
-        assertThat(events.failedEventId).isNull();
-        assertThat(events.rejectedContractEventId).isEqualTo(fifthAttempt.id());
+        assertThat(events.lastErrorCode).isEqualTo("EVENT_CONTRACT_REJECTED");
+        assertThat(events.deadLetterErrorCode).isEqualTo("EVENT_CONTRACT_REJECTED");
     }
 
     private static OutboxEvent event(int attemptCount) {
@@ -58,7 +58,6 @@ class OutboxPublisherTest {
         private final OutboxEvent event;
         private UUID failedEventId;
         private UUID deadLetteredEventId;
-        private UUID rejectedContractEventId;
         private String lastErrorCode;
         private String deadLetterErrorCode;
 
@@ -77,11 +76,6 @@ class OutboxPublisherTest {
             failedEventId = eventId;
             lastErrorCode = errorCode;
             return event;
-        }
-
-        @Override
-        public void rejectContractViolation(UUID eventId, String owner) {
-            rejectedContractEventId = eventId;
         }
 
         @Override
