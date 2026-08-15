@@ -1,12 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AccessContextResponse } from "../../../../../packages/contracts/src/generated/platform-api";
 import { AppShell, PageGrid } from "../../../../../packages/ui-core/src/app-shell";
 import { ActionButton } from "../../../../../packages/ui-core/src/action-button";
 import { StatusLabel } from "../../../../../packages/ui-core/src/status-label";
 import { useI18n } from "../../../lib/i18n";
 import { PERMISSION_LABELS, type Permission } from "../../../lib/permissions";
+
+interface AccessContextWithPermissions {
+  memberships: ReadonlyArray<{ organizationId: string; role: string }>;
+  permissions?: string[];
+  tenantSelectionRequired?: boolean;
+}
 
 type Problem = { code: string; message: string; traceId?: string | null };
 type State = "loading" | "ready" | "empty" | "denied" | "error";
@@ -28,7 +33,7 @@ export default function PermissionsPage() {
   const load = useCallback(async () => {
     setState("loading"); setProblem(null);
     try {
-      const access = await fetch("/api/bff/access-context", { credentials: "same-origin" }).then(r => r.json()) as AccessContextResponse;
+      const access = await fetch("/api/bff/access-context", { credentials: "same-origin" }).then(r => r.json()) as AccessContextWithPermissions;
       const selected = organizationId || (access.tenantSelectionRequired ? "" : access.memberships[0]?.organizationId ?? "");
       setOrganizationId(selected);
       if (!selected) { setPermissions([]); setState("empty"); return; }
