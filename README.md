@@ -4,10 +4,9 @@ Nexora is a tenant-aware CMS and knowledge workspace delivered as a polyglot
 monorepo: a Next.js web surface with a same-origin BFF, a Spring Boot modular
 monolith platform API, a narrowly-scoped Go event-ingestion edge, PostgreSQL
 with row-level security as the durable truth, and NATS JetStream as the event
-backbone. The active line integrates milestones M0–M3 (repository foundation,
-platform API, web foundation, tenant CMS core, durable event outbox, bounded
-Go ingress, private Realtime descriptors). Milestone M4 (knowledge management
-and secure RAG) is planned, not implemented.
+backbone. The active line integrates milestones M0–M4 (repository foundation, platform
+API, web foundation, tenant CMS core, durable event outbox, bounded Go
+ingress, private Realtime descriptors, knowledge management and secure RAG).
 
 Every claim in this repository is bounded by evidence: local builds, tests and
 deterministic fixtures. Nothing here claims a deployed environment, a live
@@ -35,7 +34,7 @@ tenant, repository, provider or live metric is connected.
 The capture workflow is documented under
 [Local development → Web evidence capture](#web-evidence-capture).
 
-## Implemented today (M0–M3)
+## Implemented today (M0–M4)
 
 - Apache-2.0 repository license, `NOTICE` and third-party provenance boundary
   (`THIRD-PARTY-NOTICES.md`).
@@ -56,8 +55,16 @@ The capture workflow is documented under
   aggregate concurrency cap. See
   [services/event-ingestion/README.md](services/event-ingestion/README.md) and
   the [Go/NATS ADR](docs/adr/adr-m3-go-nats-event-ingestion.md).
-- Flyway migrations `V001`–`V021` under `database/migrations` with
-  RLS-forced application schemas, outbox and event-ledger functions; see
+- Knowledge management and secure RAG under `apps/platform-api`: document
+  ingestion with durable job progress, pgvector-backed embedding storage,
+  hybrid lexical + vector retrieval, permission-before-context RAG query,
+  persistent tenant-scoped chat history with citations, and bounded
+  deterministic evaluation. See
+  [apps/platform-api/README.md](apps/platform-api/README.md) and the
+  [Knowledge/RAG ADR](docs/adr/adr-m4-knowledge-rag.md).
+- Flyway migrations `V001`–`V024` under `database/migrations` with
+  RLS-forced application schemas, outbox, event-ledger functions and the
+  knowledge/vector plane; see
   [database/migrations/README.md](database/migrations/README.md) and
   [ROLLBACK.md](database/migrations/ROLLBACK.md).
 - Loopback-only local PostgreSQL 17.5 and NATS 2.11 JetStream Compose with
@@ -68,13 +75,15 @@ The capture workflow is documented under
 
 ## Planned, not implemented
 
-Knowledge management, document ingestion, pgvector retrieval and secure RAG
-(M4); analytics/personalization/notifications (M5–M8); production deployment,
-provider configuration, hosted Supabase/Vercel provisioning and release remain
-later owned tasks. Empty directories such as `infrastructure/` and
-`observability/` are layout markers, not working features. The sequencing is
-governed by the execution ledger in
-[plans/260809-1030-nexora-master-production-build](plans/260809-1030-nexora-master-production-build/plan.md).
+Analytics, personalization, notifications, experimentation and product
+adaptive intelligence (M5); full observability stack and security hardening
+(M6); production deployment, GitOps, disaster recovery and measured SLOs (M7);
+final product polish and Staff-level review (M8); hosted Supabase/Vercel/NATS
+provisioning and release remain later owned tasks. Empty directories such as
+`infrastructure/` and `observability/` are layout markers, not working
+features. The sequencing is governed by the execution ledger in
+[plans/260809-1030-nexora-master-production-build](plans/260809-1030-nexora-master-production-build/plan.md) and the full-program plan in
+[plans/260815-0935-nexora-full-program-m4-m8](plans/260815-0935-nexora-full-program-m4-m8/plan.md).
 
 ## Repository layout
 
@@ -85,7 +94,7 @@ governed by the execution ledger in
 | `services/event-ingestion` | Go 1.26 bounded HTTP ingress publishing to NATS JetStream |
 | `packages/contracts` | Event/API contract source and generated client |
 | `packages/design-tokens`, `packages/ui-*` | Branded tokens and owned Ant Design / block wrappers |
-| `database/migrations` | Single ordered Flyway migration train (V001–V021) |
+| `database/migrations` | Single ordered Flyway migration train (V001–V024) |
 | `infrastructure/`, `observability/` | Layout markers for later owned tasks |
 | `docs/` | Architecture, security, UX and development documentation |
 | `tools/` | Deterministic repository validation and media helpers |
