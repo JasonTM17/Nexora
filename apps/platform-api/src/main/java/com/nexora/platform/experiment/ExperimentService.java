@@ -7,6 +7,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
  * analytics pipeline for later analysis.</p>
  */
 @Service
+@Profile("database")
 @Transactional(readOnly = true)
 public class ExperimentService {
 
