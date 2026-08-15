@@ -75,7 +75,7 @@ The capture workflow is documented under
 - Adaptive intelligence under `apps/platform-api`: tenant-scoped feature flags
   with deterministic rollout, product analytics pipeline, multi-channel
   notifications, A/B experimentation framework, and authorized hybrid global
-  search. See [Feature flags](../plans/260815-0935-nexora-full-program-m4-m8/plan.md).
+  search. See [Feature flags](plans/260815-0935-nexora-full-program-m4-m8/plan.md).
 - Observability stack under `observability/`: Prometheus (metrics), Loki (logs),
   Tempo (traces), Grafana (dashboards). Spring structured JSON logging +
   Prometheus `/metrics`. Go `/metrics` already exposed.
@@ -219,8 +219,9 @@ docker pull ghcr.io/jasontm17/nexora-event-ingestion:latest
 If a package is private, authenticate with a GitHub token that has the package
 read permission before pulling; never place that token in a Dockerfile, image,
 or committed environment file. The publish workflow uses the ephemeral
-GitHub Actions token, produces SBOM/provenance attestations, and runs its
-image scan within CI.
+GitHub Actions token and produces SBOM/provenance attestations. Repository
+source and filesystem scanning run separately in `security-scan.yml`; a scan
+of the exact published image remains a later release gate.
 
 For a quick, loopback-only liveness check of the web image:
 
@@ -271,8 +272,7 @@ CI workflows (`.github/workflows/`):
   (Maven unit suite + JaCoCo coverage)
 - `security-scan.yml`: CodeQL SAST (Java/Go/TS), Gitleaks secret scan, Trivy FS
 - `docker-publish.yml`: build + push the web, platform API and event-ingestion
-  images to GHCR (`ghcr.io/jasontm17/`), with Trivy image scan, SBOM and
-  provenance
+  images to GHCR (`ghcr.io/jasontm17/`), with SBOM and provenance attestations
 - `dependabot.yml`: automated updates for npm, Go, GitHub Actions, Docker
 
 The broader local evidence set includes the Java Testcontainers suite
