@@ -1,8 +1,8 @@
 # Nexora
 
-[![Docker Hub](https://img.shields.io/docker/v/nguyenson1710/nexora-web?label=web&logo=docker)](https://hub.docker.com/r/nguyenson1710/nexora-web)
-[![Docker Hub](https://img.shields.io/docker/v/nguyenson1710/nexora-platform-api?label=api&logo=docker)](https://hub.docker.com/r/nguyenson1710/nexora-platform-api)
-[![Docker Hub](https://img.shields.io/docker/v/nguyenson1710/nexora-event-ingestion?label=ingestion&logo=docker)](https://hub.docker.com/r/nguyenson1710/nexora-event-ingestion)
+[![GitHub Container Registry: web](https://img.shields.io/badge/GHCR-nexora--web-181717?logo=github)](https://github.com/users/JasonTM17/packages/container/package/nexora-web)
+[![GitHub Container Registry: API](https://img.shields.io/badge/GHCR-nexora--platform--api-181717?logo=github)](https://github.com/users/JasonTM17/packages/container/package/nexora-platform-api)
+[![GitHub Container Registry: ingestion](https://img.shields.io/badge/GHCR-nexora--event--ingestion-181717?logo=github)](https://github.com/users/JasonTM17/packages/container/package/nexora-event-ingestion)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 Nexora is a tenant-aware CMS and knowledge workspace delivered as a polyglot
@@ -14,8 +14,9 @@ API, web foundation, tenant CMS core, durable event outbox, bounded Go
 ingress, private Realtime descriptors, knowledge management and secure RAG,
 adaptive intelligence: feature flags, analytics, notifications, experiments,
 global search, observability stack, and security hardening). Bilingual (VI/EN)
-interface with comprehensive RBAC (16 permissions, 5 roles). Docker images
-published to `nguyenson1710/nexora-*`.
+interface with comprehensive RBAC (16 permissions, 5 roles). The three
+container deliverables are configured for publication to GitHub Container
+Registry under `ghcr.io/jasontm17/nexora-*`.
 
 Every claim in this repository is bounded by evidence: local builds, tests and
 deterministic fixtures. Nothing here claims a deployed environment, a live
@@ -114,7 +115,7 @@ decisions). The sequencing is governed by the execution ledger in
 | `infrastructure/` | Layout marker for later owned tasks (K8s/Terraform deferred) |
 | `docs/` | Architecture, security, UX and development documentation |
 | `tools/` | Deterministic repository validation and media helpers |
-| `.github/workflows/` | CI: foundation, Go, platform-api, security scan, Docker Hub publish |
+| `.github/workflows/` | CI: foundation, Go, platform-api, security scan, GHCR publish |
 
 ## Architecture and trust boundary
 
@@ -191,6 +192,48 @@ go test ./...
 docker compose up --build --wait -d     # service-only loopback proof
 ```
 
+### Container packages
+
+The repository publishes three OCI images to GitHub Container Registry (GHCR).
+Each push to `main` produces `latest`, `main`, and an immutable source tag
+(`sha-<commit>`); a GitHub Release additionally produces the configured
+semantic-version tags. The images are build artifacts for local evaluation and
+integration. They are not deployment or production-readiness evidence.
+
+| Image | Package page | Default port | Local liveness path |
+|---|---|---:|---|
+| `ghcr.io/jasontm17/nexora-web` | [web package](https://github.com/users/JasonTM17/packages/container/package/nexora-web) | 3000 | `/healthz` |
+| `ghcr.io/jasontm17/nexora-platform-api` | [platform API package](https://github.com/users/JasonTM17/packages/container/package/nexora-platform-api) | 8080 | `/actuator/health/liveness` |
+| `ghcr.io/jasontm17/nexora-event-ingestion` | [event-ingestion package](https://github.com/users/JasonTM17/packages/container/package/nexora-event-ingestion) | 18080 | `/healthz` |
+
+After the first successful publish, pull the immutable tag that corresponds to
+the source you intend to inspect. `latest` is a convenience tag for the newest
+`main` build, not a release selector.
+
+```powershell
+docker pull ghcr.io/jasontm17/nexora-web:latest
+docker pull ghcr.io/jasontm17/nexora-platform-api:latest
+docker pull ghcr.io/jasontm17/nexora-event-ingestion:latest
+```
+
+If a package is private, authenticate with a GitHub token that has the package
+read permission before pulling; never place that token in a Dockerfile, image,
+or committed environment file. The publish workflow uses the ephemeral
+GitHub Actions token, produces SBOM/provenance attestations, and runs its
+image scan within CI.
+
+For a quick, loopback-only liveness check of the web image:
+
+```powershell
+docker run --rm -p 127.0.0.1:3000:3000 ghcr.io/jasontm17/nexora-web:latest
+# In another shell: Invoke-WebRequest http://127.0.0.1:3000/healthz
+```
+
+The platform API starts in its deterministic `local` profile by default. The
+event-ingestion image exposes only health and readiness until its explicit
+Spring-admission and NATS URLs are configured; do not treat a healthy process
+as proof of event delivery.
+
 ### Web evidence capture
 
 The README media in `assets/readme/` is produced by
@@ -227,8 +270,9 @@ CI workflows (`.github/workflows/`):
 - `validate.yml`: foundation, Go ingestion (vet + test + coverage), platform-api
   (Maven unit suite + JaCoCo coverage)
 - `security-scan.yml`: CodeQL SAST (Java/Go/TS), Gitleaks secret scan, Trivy FS
-- `docker-publish.yml`: build + push 3 images to Docker Hub (`nguyenson1710/`),
-  Trivy image scan, SBOM + provenance
+- `docker-publish.yml`: build + push the web, platform API and event-ingestion
+  images to GHCR (`ghcr.io/jasontm17/`), with Trivy image scan, SBOM and
+  provenance
 - `dependabot.yml`: automated updates for npm, Go, GitHub Actions, Docker
 
 The broader local evidence set includes the Java Testcontainers suite
