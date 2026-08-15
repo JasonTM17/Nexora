@@ -51,7 +51,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}
+          images: ghcr.io/jasontm17/${{ matrix.image_name }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
