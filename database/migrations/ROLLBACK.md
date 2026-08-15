@@ -109,3 +109,23 @@ For a shared database, use a new reviewed forward migration only after the
 required dependency and rollback assessment. Preserve the outbox receipt and
 terminal-state contract during any expand/contract sequence. Hosted Supabase
 rollback, provider configuration, and deployment remain outside M3-DB01.
+
+## M4-DB01 knowledge, chat and retrieval-run notes
+
+`V022` and `V023` are append-only once applied. Do not disable forced RLS on
+the knowledge/chat tables, relax the knowledge.read/knowledge.manage split, drop
+the documents dedup key, weaken the chat subject+tenant policies, or grant Data
+API roles as an ad-hoc rollback. A DELETED document or chat session becomes
+retrieval-ineligible through its state and policy; physical object/chunk/vector
+cleanup runs as a later owned job per the lifecycle contract and must never
+resurrect a marked row. Any corrective change is a new reviewed forward
+migration after dependency and backup/restore assessment; hosted rollback,
+provider configuration and deployment remain outside M4-DB01.
+
+\V024\ adds invoker-owned terminal-transition triggers. A DELETED knowledge
+base, document, chat session or chat message can never be flipped back to an
+eligible state, a FAILED document may only re-queue, and a document job cannot
+mutate a DELETED parent. The \ag.chunk_vectors\ table is application-owned
+with forced RLS; the \ector\ extension itself is operator-provisioned before
+V024 applies and is never pinned by SQL. Any corrective change is a new
+reviewed forward migration after dependency and backup/restore assessment.
