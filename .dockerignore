@@ -3,8 +3,11 @@
 .github
 .worktrees
 node_modules
+**/node_modules
 .env
 .env.*
+**/.env
+**/.env.*
 !.env.example
 .gitignore
 .gitattributes
@@ -21,9 +24,15 @@ test-fixtures
 .vscode
 .idea
 *.log
+**/*.pem
+**/*.key
+**/*.crt
+**/*credentials*
+**/*secret*
 coverage
 *.out
 target
 .next
+**/.next
 !.next/standalone
 !.next/static
