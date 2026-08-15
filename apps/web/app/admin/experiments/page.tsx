@@ -5,7 +5,7 @@ import type { AccessContextResponse } from "../../../../../packages/contracts/sr
 import { AppShell, PageGrid } from "../../../../../packages/ui-core/src/app-shell";
 import { ActionButton } from "../../../../../packages/ui-core/src/action-button";
 import { StatusLabel } from "../../../../../packages/ui-core/src/status-label";
-import { useI18n } from "../../lib/i18n";
+import { useI18n } from "../../../lib/i18n";
 
 type Problem = { code: string; message: string; traceId?: string | null };
 type State = "loading" | "ready" | "empty" | "denied" | "error";
