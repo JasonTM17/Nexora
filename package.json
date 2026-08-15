@@ -44,7 +44,7 @@
         "pnpm": "11.0.9"
       },
       "artifactDigests": {
-        "pnpmLockSha256": "c05c533516944bfabc9ee49913692965e945b9140fdd40e7e946b06c05712437"
+        "pnpmLockSha256": "71cc267a2a091e8dc14c1f3febbdffbdc01bb335b4fa1b1be6a5fb457e259ab7"
       },
       "checks": [
         {
