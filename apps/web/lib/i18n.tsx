@@ -73,10 +73,18 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   return <I18nContext.Provider value={{ locale, setLocale, t }}>{children}</I18nContext.Provider>;
 }
 
+const defaultI18nValue: I18nContextValue = {
+  locale: "en",
+  setLocale: () => {},
+  t: (key: string, params?: Record<string, string | number>) => {
+    const fallback = resolve(messages.en as unknown as Record<string, unknown>, key);
+    return fallback ? interpolate(fallback, params) : key;
+  },
+};
+
 export function useI18n(): I18nContextValue {
   const ctx = useContext(I18nContext);
-  if (!ctx) throw new Error("useI18n must be used within I18nProvider");
-  return ctx;
+  return ctx ?? defaultI18nValue;
 }
 
 export const SUPPORTED_LOCALES: Locale[] = ["en", "vi"];

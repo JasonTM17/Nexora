@@ -1,3 +1,4 @@
+// Grounded knowledge chat fixture surface
 import { KnowledgeChat } from "./knowledge-chat";
 
 export const dynamic = "force-dynamic";
@@ -5,3 +6,4 @@ export const dynamic = "force-dynamic";
 export default function AiPage() {
   return <KnowledgeChat />;
 }
+

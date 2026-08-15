@@ -44,11 +44,11 @@ export function TraceCard({ trace }: { readonly trace: RagTraceItem }) {
         </div>
         <div className="nx-trace-stat">
           <span className="nx-trace-stat-label">Candidates</span>
-          <span className="nx-trace-stat-val">{trace.candidateIds.length} chunks</span>
+          <span className="nx-trace-stat-val">{trace.candidateIds?.length ?? trace.candidateCount ?? 0} chunks</span>
         </div>
         <div className="nx-trace-stat">
           <span className="nx-trace-stat-label">Selected</span>
-          <span className="nx-trace-stat-val">{trace.selectedChunkIds.length} citations</span>
+          <span className="nx-trace-stat-val">{trace.selectedChunkIds?.length ?? trace.selectedCitationCount ?? 0} citations</span>
         </div>
       </div>
 
