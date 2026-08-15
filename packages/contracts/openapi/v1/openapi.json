@@ -1800,6 +1800,12 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           }
         }
       },
@@ -1850,6 +1856,12 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           }
         }
       }
@@ -1897,6 +1909,12 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           }
         }
       }
@@ -1955,6 +1973,12 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           }
         }
       },
@@ -2014,6 +2038,12 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           }
         }
       }
@@ -2065,6 +2095,12 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           }
         }
       }
@@ -2126,6 +2162,12 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           }
         }
       },
@@ -2176,6 +2218,12 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           }
         }
       }
@@ -2215,6 +2263,12 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           }
         }
       }
@@ -2268,6 +2322,12 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           }
         }
       }
@@ -2310,6 +2370,12 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           }
         }
       },
@@ -2360,6 +2426,12 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           }
         }
       }
@@ -2407,6 +2479,12 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           }
         }
       }
@@ -2478,6 +2556,12 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
           }
         }
       }
