@@ -11,9 +11,9 @@ export type Permission =
   | "organization.manage"
   | "members.read"
   | "members.manage"
-  | "pages.read"
-  | "pages.create"
-  | "pages.publish"
+  | "page.read"
+  | "page.create"
+  | "page.publish"
   | "knowledge.read"
   | "knowledge.manage"
   | "rag.query"
@@ -53,7 +53,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   EDITOR: [
     "organization.read",
     "members.read",
-    "pages.read", "pages.create",
+    "page.read", "page.create",
     "knowledge.read", "knowledge.manage",
     "rag.query",
     "notifications.read",
@@ -61,7 +61,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   REVIEWER: [
     "organization.read",
     "members.read",
-    "pages.read",
+    "page.read",
     "knowledge.read",
     "rag.query",
     "notifications.read",
@@ -69,7 +69,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   USER: [
     "organization.read",
     "members.read",
-    "pages.read",
+    "page.read",
     "knowledge.read",
     "rag.query",
     "notifications.read",
