@@ -5,6 +5,7 @@ import type { AccessContextResponse } from "../../../../../packages/contracts/sr
 import { AppShell, PageGrid } from "../../../../../packages/ui-core/src/app-shell";
 import { ActionButton } from "../../../../../packages/ui-core/src/action-button";
 import { StatusLabel } from "../../../../../packages/ui-core/src/status-label";
+import { useI18n } from "../../lib/i18n";
 
 type Problem = { code: string; message: string; traceId?: string | null };
 type State = "loading" | "ready" | "empty" | "denied" | "error";
@@ -32,6 +33,7 @@ function asProblem(error: unknown): Problem {
 }
 
 export default function NotificationsPage() {
+  const { t } = useI18n();
   const [organizationId, setOrganizationId] = useState("");
   const [notifications, setNotifications] = useState<ReadonlyArray<NotificationView>>([]);
   const [state, setState] = useState<State>("loading");
@@ -73,27 +75,27 @@ export default function NotificationsPage() {
   const unreadCount = notifications.filter((n) => !n.readAt).length;
 
   return <AppShell><PageGrid><main className="nx-admin-page">
-    <p className="nx-eyebrow">Notifications</p>
-    <h1 ref={heading} tabIndex={-1}>Your notifications</h1>
-    <p className="nx-lede">{unreadCount} unread · tenant-scoped delivery</p>
+    <p className="nx-eyebrow">{t("notifications.eyebrow")}</p>
+    <h1 ref={heading} tabIndex={-1}>{t("notifications.title")}</h1>
+    <p className="nx-lede">{t("notifications.unread", { count: unreadCount })}</p>
 
-    {state === "loading" && <section className="nx-access-card" role="status"><StatusLabel kind="loading" /> Loading notifications…</section>}
-    {state === "empty" && <section className="nx-access-card"><StatusLabel kind="planned" /><h2>Choose an organization</h2><p>Select an organization in your account to view notifications.</p></section>}
-    {(state === "denied" || state === "error") && <section className="nx-access-card nx-error-card" aria-live="assertive"><StatusLabel kind={state === "denied" ? "denied" : "error"} /><p>{problem?.message}</p><ActionButton tone="secondary" onClick={() => void load()}>Retry</ActionButton></section>}
+    {state === "loading" && <section className="nx-access-card" role="status"><StatusLabel kind="loading" /> {t("common.loading")}</section>}
+    {state === "empty" && <section className="nx-access-card"><StatusLabel kind="planned" /><h2>{t("account.selectOrganization")}</h2></section>}
+    {(state === "denied" || state === "error") && <section className="nx-access-card nx-error-card" aria-live="assertive"><StatusLabel kind={state === "denied" ? "denied" : "error"} /><p>{problem?.message}</p><ActionButton tone="secondary" onClick={() => void load()}>{t("common.retry")}</ActionButton></section>}
 
     {state === "ready" && <section className="nx-access-card">
-      <div className="nx-card-heading"><div><h2>Inbox</h2><p className="nx-field-help">{notifications.length} notification{notifications.length !== 1 ? "s" : ""}</p></div><StatusLabel kind="fixture" /></div>
-      {notifications.length === 0 ? <p className="nx-empty-copy">No notifications yet.</p> :
+      <div className="nx-card-heading"><div><h2>{t("notifications.inbox")}</h2><p className="nx-field-help">{notifications.length} {t("notifications.inbox").toLowerCase()}</p></div><StatusLabel kind="fixture" /></div>
+      {notifications.length === 0 ? <p className="nx-empty-copy">{t("notifications.noNotifications")}</p> :
         <ul className="nx-notification-list">{notifications.map((n) => <li key={n.id} className={n.readAt ? "nx-notification--read" : "nx-notification--unread"}>
           <div className="nx-notification-header">
-            <span className={`nx-badge nx-badge--${n.priority}`}>{n.priority}</span>
+            <span className={`nx-badge nx-badge--${n.priority}`}>{t(`notifications.priority.${n.priority}`)}</span>
             <strong>{n.title}</strong>
-            {!n.readAt && <span className="nx-unread-dot" aria-label="unread" />}
+            {!n.readAt && <span className="nx-unread-dot" aria-label={t("notifications.unreadDot")} />}
           </div>
           {n.body && <p className="nx-notification-body">{n.body}</p>}
           <div className="nx-notification-actions">
-            {n.actionUrl && <a className="nx-action-button nx-action-button--secondary" href={n.actionUrl}>Open</a>}
-            {!n.readAt && <ActionButton tone="secondary" onClick={() => void markRead(n.id)}>Mark read</ActionButton>}
+            {n.actionUrl && <a className="nx-action-button nx-action-button--secondary" href={n.actionUrl}>{t("notifications.open")}</a>}
+            {!n.readAt && <ActionButton tone="secondary" onClick={() => void markRead(n.id)}>{t("notifications.markRead")}</ActionButton>}
           </div>
         </li>)}</ul>}
     </section>}

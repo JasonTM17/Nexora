@@ -6,6 +6,7 @@ import type { AccessContextResponse } from "../../../../packages/contracts/src/g
 import { AppShell, PageGrid } from "../../../../packages/ui-core/src/app-shell";
 import { ActionButton } from "../../../../packages/ui-core/src/action-button";
 import { StatusLabel } from "../../../../packages/ui-core/src/status-label";
+import { useI18n } from "../../lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,7 @@ function asProblem(error: unknown): Problem {
 }
 
 function SearchInner() {
+  const { t } = useI18n();
   const searchParams = useSearchParams();
   const query = searchParams.get("q") || "";
   const [organizationId, setOrganizationId] = useState("");
@@ -70,20 +72,20 @@ function SearchInner() {
   useEffect(() => { heading.current?.focus(); }, [state]);
 
   return <AppShell><PageGrid><main className="nx-admin-page">
-    <p className="nx-eyebrow">Search</p>
-    <h1 ref={heading} tabIndex={-1}>Global search</h1>
-    <p className="nx-lede">Authorized hybrid search over pages and knowledge.</p>
+    <p className="nx-eyebrow">{t("search.eyebrow")}</p>
+    <h1 ref={heading} tabIndex={-1}>{t("search.title")}</h1>
+    <p className="nx-lede">{t("search.lede")}</p>
 
-    {state === "loading" && <section className="nx-access-card" role="status"><StatusLabel kind="loading" /> Searching…</section>}
-    {state === "empty" && <section className="nx-access-card"><StatusLabel kind="planned" /><h2>Enter a query</h2><p>Search across published pages and active knowledge.</p></section>}
-    {(state === "denied" || state === "error") && <section className="nx-access-card nx-error-card" aria-live="assertive"><StatusLabel kind={state === "denied" ? "denied" : "error"} /><p>{problem?.message}</p><ActionButton tone="secondary" onClick={() => void searchFn()}>Retry</ActionButton></section>}
+    {state === "loading" && <section className="nx-access-card" role="status"><StatusLabel kind="loading" /> {t("common.loading")}</section>}
+    {state === "empty" && <section className="nx-access-card"><StatusLabel kind="planned" /><h2>{t("search.placeholder")}</h2></section>}
+    {(state === "denied" || state === "error") && <section className="nx-access-card nx-error-card" aria-live="assertive"><StatusLabel kind={state === "denied" ? "denied" : "error"} /><p>{problem?.message}</p><ActionButton tone="secondary" onClick={() => void searchFn()}>{t("common.retry")}</ActionButton></section>}
 
     {state === "ready" && results && <section className="nx-access-card">
-      <div className="nx-card-heading"><div><h2>Results</h2><p className="nx-field-help">{results.totalCount} matches</p></div><StatusLabel kind="fixture" /></div>
+      <div className="nx-card-heading"><div><h2>{t("search.results", { count: results.totalCount })}</h2></div><StatusLabel kind="fixture" /></div>
       {results.items.length === 0 ? <p className="nx-empty-copy">No results for "{query}".</p> :
         <ul className="nx-search-results">{results.items.map((item) => <li key={item.id}>
           <div className="nx-search-result-header">
-            <span className="nx-badge">{item.sourceType}</span>
+            <span className="nx-badge">{t(`search.${item.sourceType}`)}</span>
             <strong>{item.title}</strong>
           </div>
           {item.snippet && <p className="nx-search-snippet">{item.snippet}</p>}

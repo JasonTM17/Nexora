@@ -5,6 +5,7 @@ import type { AccessContextResponse } from "../../../../../packages/contracts/sr
 import { AppShell, PageGrid } from "../../../../../packages/ui-core/src/app-shell";
 import { ActionButton } from "../../../../../packages/ui-core/src/action-button";
 import { StatusLabel } from "../../../../../packages/ui-core/src/status-label";
+import { useI18n } from "../../lib/i18n";
 
 type Problem = { code: string; message: string; traceId?: string | null };
 type State = "loading" | "ready" | "empty" | "denied" | "error";
@@ -30,6 +31,7 @@ function asProblem(error: unknown): Problem {
 }
 
 export default function FeatureFlagsPage() {
+  const { t } = useI18n();
   const [organizationId, setOrganizationId] = useState("");
   const [flags, setFlags] = useState<ReadonlyArray<FeatureFlagView>>([]);
   const [state, setState] = useState<State>("loading");
@@ -76,23 +78,23 @@ export default function FeatureFlagsPage() {
   }
 
   return <AppShell><PageGrid><main className="nx-admin-page">
-    <p className="nx-eyebrow">Feature flags</p>
-    <h1 ref={heading} tabIndex={-1}>Tenant feature flags</h1>
-    <p className="nx-lede">Server-derived, deterministic per-subject evaluation.</p>
+    <p className="nx-eyebrow">{t("flags.eyebrow")}</p>
+    <h1 ref={heading} tabIndex={-1}>{t("flags.title")}</h1>
+    <p className="nx-lede">{t("flags.lede")}</p>
 
-    {state === "loading" && <section className="nx-access-card" role="status"><StatusLabel kind="loading" /> Loading flags…</section>}
-    {state === "empty" && <section className="nx-access-card"><StatusLabel kind="planned" /><h2>Choose an organization</h2><p>Select an organization in your account to manage its flags.</p></section>}
-    {(state === "denied" || state === "error") && <section className="nx-access-card nx-error-card" aria-live="assertive"><StatusLabel kind={state === "denied" ? "denied" : "error"} /><p>{problem?.message}</p><ActionButton tone="secondary" onClick={() => void load()}>Retry</ActionButton></section>}
+    {state === "loading" && <section className="nx-access-card" role="status"><StatusLabel kind="loading" /> {t("common.loading")}</section>}
+    {state === "empty" && <section className="nx-access-card"><StatusLabel kind="planned" /><h2>{t("account.selectOrganization")}</h2></section>}
+    {(state === "denied" || state === "error") && <section className="nx-access-card nx-error-card" aria-live="assertive"><StatusLabel kind={state === "denied" ? "denied" : "error"} /><p>{problem?.message}</p><ActionButton tone="secondary" onClick={() => void load()}>{t("common.retry")}</ActionButton></section>}
 
     {state === "ready" && <section className="nx-access-card">
-      <div className="nx-card-heading"><div><h2>Flags</h2><p className="nx-field-help">{flags.length} flag{flags.length !== 1 ? "s" : ""}</p></div><StatusLabel kind="fixture" /></div>
-      {flags.length === 0 ? <p className="nx-empty-copy">No feature flags yet.</p> :
+      <div className="nx-card-heading"><div><h2>{t("flags.flags")}</h2><p className="nx-field-help">{flags.length} {t("flags.flags").toLowerCase()}</p></div><StatusLabel kind="fixture" /></div>
+      {flags.length === 0 ? <p className="nx-empty-copy">{t("flags.noFlags")}</p> :
         <ul className="nx-flag-list">{flags.map((flag) => <li key={flag.id}>
           <div><code>{flag.flagKey}</code>{flag.description && <small>{flag.description}</small>}</div>
           <div className="nx-flag-controls">
-            <span className={`nx-badge ${flag.enabled ? "nx-badge--on" : "nx-badge--off"}`}>{flag.enabled ? "On" : "Off"}</span>
-            {flag.enabled && <span className="nx-field-help">{flag.rolloutPercentage}% rollout</span>}
-            <ActionButton tone="secondary" onClick={() => void toggleFlag(flag)}>{flag.enabled ? "Disable" : "Enable"}</ActionButton>
+            <span className={`nx-badge ${flag.enabled ? "nx-badge--on" : "nx-badge--off"}`}>{flag.enabled ? t("flags.on") : t("flags.off")}</span>
+            {flag.enabled && <span className="nx-field-help">{t("flags.rollout", { percentage: flag.rolloutPercentage })}</span>}
+            <ActionButton tone="secondary" onClick={() => void toggleFlag(flag)}>{flag.enabled ? t("common.disable") : t("common.enable")}</ActionButton>
           </div>
         </li>)}</ul>}
     </section>}

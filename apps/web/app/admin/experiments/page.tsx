@@ -5,6 +5,7 @@ import type { AccessContextResponse } from "../../../../../packages/contracts/sr
 import { AppShell, PageGrid } from "../../../../../packages/ui-core/src/app-shell";
 import { ActionButton } from "../../../../../packages/ui-core/src/action-button";
 import { StatusLabel } from "../../../../../packages/ui-core/src/status-label";
+import { useI18n } from "../../lib/i18n";
 
 type Problem = { code: string; message: string; traceId?: string | null };
 type State = "loading" | "ready" | "empty" | "denied" | "error";
@@ -29,6 +30,7 @@ function asProblem(error: unknown): Problem {
 }
 
 export default function ExperimentsPage() {
+  const { t } = useI18n();
   const [organizationId, setOrganizationId] = useState("");
   const [experiments, setExperiments] = useState<ReadonlyArray<ExperimentView>>([]);
   const [state, setState] = useState<State>("loading");
@@ -68,23 +70,23 @@ export default function ExperimentsPage() {
   }
 
   return <AppShell><PageGrid><main className="nx-admin-page">
-    <p className="nx-eyebrow">Experiments</p>
-    <h1 ref={heading} tabIndex={-1}>A/B experiments</h1>
-    <p className="nx-lede">Deterministic per-subject variant assignment.</p>
+    <p className="nx-eyebrow">{t("experiments.eyebrow")}</p>
+    <h1 ref={heading} tabIndex={-1}>{t("experiments.title")}</h1>
+    <p className="nx-lede">{t("experiments.lede")}</p>
 
-    {state === "loading" && <section className="nx-access-card" role="status"><StatusLabel kind="loading" /> Loading experiments…</section>}
-    {state === "empty" && <section className="nx-access-card"><StatusLabel kind="planned" /><h2>Choose an organization</h2><p>Select an organization to manage its experiments.</p></section>}
-    {(state === "denied" || state === "error") && <section className="nx-access-card nx-error-card" aria-live="assertive"><StatusLabel kind={state === "denied" ? "denied" : "error"} /><p>{problem?.message}</p><ActionButton tone="secondary" onClick={() => void load()}>Retry</ActionButton></section>}
+    {state === "loading" && <section className="nx-access-card" role="status"><StatusLabel kind="loading" /> {t("common.loading")}</section>}
+    {state === "empty" && <section className="nx-access-card"><StatusLabel kind="planned" /><h2>{t("account.selectOrganization")}</h2></section>}
+    {(state === "denied" || state === "error") && <section className="nx-access-card nx-error-card" aria-live="assertive"><StatusLabel kind={state === "denied" ? "denied" : "error"} /><p>{problem?.message}</p><ActionButton tone="secondary" onClick={() => void load()}>{t("common.retry")}</ActionButton></section>}
 
     {state === "ready" && <section className="nx-access-card">
-      <div className="nx-card-heading"><div><h2>Experiments</h2><p className="nx-field-help">{experiments.length} experiment{experiments.length !== 1 ? "s" : ""}</p></div><StatusLabel kind="fixture" /></div>
-      {experiments.length === 0 ? <p className="nx-empty-copy">No experiments yet.</p> :
+      <div className="nx-card-heading"><div><h2>{t("experiments.experiments")}</h2><p className="nx-field-help">{experiments.length} {t("experiments.experiments").toLowerCase()}</p></div><StatusLabel kind="fixture" /></div>
+      {experiments.length === 0 ? <p className="nx-empty-copy">{t("experiments.noExperiments")}</p> :
         <ul className="nx-flag-list">{experiments.map((exp) => <li key={exp.id}>
           <div><code>{exp.experimentKey}</code>{exp.description && <small>{exp.description}</small>}</div>
           <div className="nx-flag-controls">
-            <span className={`nx-badge ${exp.active ? "nx-badge--on" : "nx-badge--off"}`}>{exp.active ? "Active" : "Off"}</span>
-            {exp.active && <span className="nx-field-help">{exp.treatmentPercentage}% treatment</span>}
-            <ActionButton tone="secondary" onClick={() => void toggleExperiment(exp)}>{exp.active ? "Pause" : "Activate"}</ActionButton>
+            <span className={`nx-badge ${exp.active ? "nx-badge--on" : "nx-badge--off"}`}>{exp.active ? t("experiments.active") : t("experiments.off")}</span>
+            {exp.active && <span className="nx-field-help">{t("experiments.treatment", { percentage: exp.treatmentPercentage })}</span>}
+            <ActionButton tone="secondary" onClick={() => void toggleExperiment(exp)}>{exp.active ? t("experiments.pause") : t("experiments.activate")}</ActionButton>
           </div>
         </li>)}</ul>}
     </section>}
