@@ -24,4 +24,10 @@ describe("home workspace overview", () => {
     expect(css).toContain(".nx-nav { flex-wrap: nowrap;");
     expect(css).toContain("min-height: 44px");
   });
+
+  it("keeps the container liveness contract deterministic", () => {
+    const health = app("app/healthz/route.ts");
+    expect(health).toContain('status: "ok"');
+    expect(health).toContain('"Cache-Control": "no-store"');
+  });
 });
