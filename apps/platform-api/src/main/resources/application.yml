@@ -37,6 +37,9 @@ nexora:
       issuer: ${NEXORA_REALTIME_DESCRIPTOR_ISSUER:nexora-platform-realtime}
       jwt-secret: ${NEXORA_REALTIME_JWT_SECRET}
       ttl-seconds: ${NEXORA_REALTIME_DESCRIPTOR_TTL_SECONDS:120}
+  security:
+    max-failed-logins: ${NEXORA_MAX_FAILED_LOGINS:5}
+    lockout-minutes: ${NEXORA_LOCKOUT_MINUTES:15}
 
 management:
   endpoints:
