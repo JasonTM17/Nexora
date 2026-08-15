@@ -1,0 +1,61 @@
+{
+  "manifestVersion": "1.0.0",
+  "seedSchemaVersion": "nexora-seed-v1",
+  "task": "M4-S01",
+  "status": "fixture-only",
+  "tenant": "Nexora University",
+  "organizationId": "10000000-0000-4000-8000-000000000001",
+  "knowledgeBase": {
+    "id": "11000000-0000-4000-8000-000000000001",
+    "name": "Nexora University Knowledge"
+  },
+  "documents": [
+    {
+      "id": "30000000-0000-4000-8000-000000000001",
+      "originalName": "student-handbook-2026.txt",
+      "contentType": "text/plain",
+      "byteSize": 1024,
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expectedChunks": 3
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000002",
+      "originalName": "academic-regulations.md",
+      "contentType": "text/markdown",
+      "byteSize": 2048,
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "expectedChunks": 5
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000003",
+      "originalName": "ai-lab-guide.pdf",
+      "contentType": "application/pdf",
+      "byteSize": 4096,
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "expectedChunks": 4
+    }
+  ],
+  "retrievalExpectations": [
+    {
+      "query": "immutable publishing version",
+      "expectedChunkSource": "academic-regulations",
+      "crossTenantDenied": true
+    },
+    {
+      "query": "quantum llama scheduling",
+      "expectedOutcome": "NO_MATCH"
+    }
+  ],
+  "chatFixtures": [
+    {
+      "sessionTitle": "Publishing help",
+      "expectedMessages": 2,
+      "expectedRevisionLineage": true
+    }
+  ],
+  "credentialSafety": {
+    "noCommittedSecrets": true,
+    "productionResetBlocked": true,
+    "resetAllowlistedTenantIds": ["10000000-0000-4000-8000-000000000001"]
+  }
+}
