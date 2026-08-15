@@ -26,7 +26,7 @@ sequenceDiagram
   participant S as Private Storage
   B->>W: Same-origin domain request
   W->>A: Validated bearer identity + trace context
-  A->>I: Validate issuer/audience/expiry; load fresh membership
+  A->>I: Validate issuer, audience and expiry, then load fresh membership
   I-->>A: Server-derived actor and tenant scope
   A->>P: Transaction-local context + tenant predicate
   P-->>A: Only policy-permitted records
