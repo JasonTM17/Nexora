@@ -20,9 +20,11 @@ RUN pnpm --filter @nexora/web build
 FROM node:24.12-alpine AS runtime
 WORKDIR /app
 
-# Copy built application (standalone output) BEFORE switching user
+# Next's standalone output preserves the monorepo app path (`apps/web`).
+# Copy the whole traced tree, then run from the directory containing server.js.
 COPY --from=build /src/apps/web/.next/standalone ./
-COPY --from=build /src/apps/web/.next/static ./.next/static
+COPY --from=build /src/apps/web/.next/static ./apps/web/.next/static
+WORKDIR /app/apps/web
 
 # Non-root user (create after copying)
 RUN addgroup -S nexora && adduser -S nexora -G nexora \
