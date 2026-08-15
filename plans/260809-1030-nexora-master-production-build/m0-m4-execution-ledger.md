@@ -2,13 +2,13 @@
 
 ## Status
 
-- Planning state: `DISPATCHED — M4 IN PROGRESS`.
+- Planning state: `DISPATCHED — M4 ACCEPTED ON MAIN`.
 - Goal scope: v0.1 M0-M4 / Prompt Phases 0-21.
-- M0-M3 are `ACCEPTED` on `main` (M3 accepted SHA: `365783b`; CI sync SHA:
-  `1685860` pending push from `integration/v0.1-m3`).
-- M4-C01 (Knowledge/RAG contracts) is `IN_PROGRESS` on
-  `feature/knowledge-rag-contracts` worktree `m4-c01-contracts`.
-- M4-DB01 through M4-I01 are `PENDING` their dependency chain on M4-C01.
+- M0-M4 are `ACCEPTED` on `main` (M3 accepted SHA: `365783b`; M4 accepted
+  merge SHA: `111b0ba187a5fe23bae8ff6eb71cd19adc446161`; M4 acceptance
+  receipt SHA: `7cc9ac7`).
+- Remaining v0.1 work is the release-evidence wave (R00A/R00B/R00C/R00I/R01)
+  and any M5-M8 future-Goal work.
 - Every task below becomes runnable only after its dependency, decision, branch, worktree, ownership and acceptance packet is materialized against a real Git SHA.
 - A table row is not proof that an agent, branch, worktree, test or capability exists.
 
