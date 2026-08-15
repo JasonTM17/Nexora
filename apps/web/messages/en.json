@@ -165,6 +165,16 @@
     "denied": "Denied",
     "noPermissions": "No permissions assigned."
   },
+  "admin": {
+    "pages": "Page management",
+    "pages.title": "Site pages",
+    "pages.lede": "Create, edit, and publish pages for your site.",
+    "pages.list": "Pages",
+    "pages.count": "pages",
+    "pages.empty": "No pages yet. Create your first page to build your site.",
+    "pages.create": "Create page",
+    "pages.edit": "Edit page"
+  },
   "account": {
     "title": "Account",
     "eyebrow": "Account",

@@ -165,6 +165,16 @@
     "denied": "Bị từ chối",
     "noPermissions": "Không có quyền nào được gán."
   },
+  "admin": {
+    "pages": "Quản lý trang",
+    "pages.title": "Trang web",
+    "pages.lede": "Tạo, chỉnh sửa và xuất bản trang cho trang web của bạn.",
+    "pages.list": "Trang",
+    "pages.count": "trang",
+    "pages.empty": "Chưa có trang nào. Tạo trang đầu tiên để xây dựng trang web.",
+    "pages.create": "Tạo trang",
+    "pages.edit": "Chỉnh sửa trang"
+  },
   "account": {
     "title": "Tài khoản",
     "eyebrow": "Tài khoản",
