@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { NexoraApiError, PlatformApiClient } from "../../../../../packages/contracts/src/generated/platform-api";
 import { SessionUnavailableError, serverSession } from "../../lib/supabase-session";
-import { enforcePermission } from "./_permissions";
+import { getRoleForOrganization, hasPermission } from "./_permissions";
 
 const SAFE_MESSAGES: Readonly<Record<string, string>> = {
   AUTHENTICATION_REQUIRED: "Your session has expired. Sign in again to continue.",
@@ -79,8 +79,25 @@ export function requireSameOrigin(request: NextRequest) {
 /**
  * Enforce a permission for the current request.
  * Returns null if allowed, or a Response if denied.
+ * Fetches the role from access-context for the given organization.
  */
-export function requirePermission(request: NextRequest, permission: string) {
-  const result = enforcePermission(request, permission);
-  return result.response ?? null;
+export async function requirePermission(
+  request: NextRequest,
+  permission: string,
+  organizationId: string,
+): Promise<Response | null> {
+  const role = await getRoleForOrganization(request, organizationId);
+  if (!role) {
+    return NextResponse.json(
+      { code: "UNAUTHORIZED", message: "Authentication required.", traceId: null },
+      { status: 401, headers: { "Cache-Control": "private, no-store" } },
+    );
+  }
+  if (!hasPermission(role, permission)) {
+    return NextResponse.json(
+      { code: "PERMISSION_DENIED", message: `Requires permission: ${permission}`, traceId: null },
+      { status: 403, headers: { "Cache-Control": "private, no-store" } },
+    );
+  }
+  return null;
 }

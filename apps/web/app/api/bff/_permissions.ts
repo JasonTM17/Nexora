@@ -1,13 +1,13 @@
 import { NextRequest } from "next/server";
 
 /**
- * M6-R02: BFF permission enforcement middleware.
- * Checks if the current user has the required permission for the route.
+ * M6-R02: BFF permission enforcement.
+ * Role-permission matrix for the 5 Nexora roles.
  */
 
-type Role = "OWNER" | "ADMIN" | "EDITOR" | "REVIEWER" | "USER";
+export type Role = "OWNER" | "ADMIN" | "EDITOR" | "REVIEWER" | "USER";
 
-const ROLE_PERMISSIONS: Record<Role, string[]> = {
+export const ROLE_PERMISSIONS: Record<Role, string[]> = {
   OWNER: ["organization.read", "organization.manage", "members.read", "members.manage", "pages.read", "pages.create", "pages.publish", "knowledge.read", "knowledge.manage", "rag.query", "analytics.read", "flags.read", "flags.manage", "experiments.read", "experiments.manage", "notifications.read"],
   ADMIN: ["organization.read", "organization.manage", "members.read", "members.manage", "pages.read", "pages.create", "pages.publish", "knowledge.read", "knowledge.manage", "rag.query", "analytics.read", "flags.read", "flags.manage", "experiments.read", "experiments.manage", "notifications.read"],
   EDITOR: ["organization.read", "members.read", "pages.read", "pages.create", "knowledge.read", "knowledge.manage", "rag.query", "notifications.read"],
@@ -20,53 +20,26 @@ export function hasPermission(role: string, permission: string): boolean {
 }
 
 /**
- * Extract role from request headers/cookies.
- * In production, this comes from the validated JWT claims.
+ * Get role for an organization by calling the access-context.
+ * Returns null if no membership found.
  */
-export function getRoleFromRequest(request: NextRequest): string | null {
-  // Role is set by the auth middleware via x-nexora-role header
-  return request.headers.get("x-nexora-role");
-}
-
-/**
- * Enforce a permission. Returns null if allowed, or a Response if denied.
- */
-export function enforcePermission(
+export async function getRoleForOrganization(
   request: NextRequest,
-  permission: string,
-): { allowed: boolean; role: string | null; response?: Response } {
-  const role = getRoleFromRequest(request);
-  if (!role) {
-    return {
-      allowed: false,
-      role: null,
-      response: Response.json(
-        { code: "UNAUTHORIZED", message: "Authentication required.", traceId: null },
-        { status: 401 },
-      ),
+  organizationId: string,
+): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `${request.nextUrl.origin}/api/bff/access-context?organizationId=${encodeURIComponent(organizationId)}`,
+      { headers: { cookie: request.headers.get("cookie") ?? "" } },
+    );
+    if (!res.ok) return null;
+    const data = await res.json() as {
+      memberships?: Array<{ organizationId: string; role: string }>;
     };
+    const membership = data.memberships?.find((m) => m.organizationId === organizationId)
+      ?? data.memberships?.[0];
+    return membership?.role ?? null;
+  } catch {
+    return null;
   }
-  if (!hasPermission(role, permission)) {
-    return {
-      allowed: false,
-      role,
-      response: Response.json(
-        { code: "PERMISSION_DENIED", message: `Requires permission: ${permission}`, traceId: null },
-        { status: 403 },
-      ),
-    };
-  }
-  return { allowed: true, role };
 }
-
-/** Route → required permission mapping */
-export const ROUTE_PERMISSIONS: Record<string, string> = {
-  "/api/bff/knowledge": "knowledge.read",
-  "/api/bff/rag": "rag.query",
-  "/api/bff/feature-flags": "flags.read",
-  "/api/bff/analytics": "analytics.read",
-  "/api/bff/notifications": "notifications.read",
-  "/api/bff/experiments": "experiments.read",
-  "/api/bff/memberships": "members.read",
-  "/api/bff/profile": "organization.read",
-};

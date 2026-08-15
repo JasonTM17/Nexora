@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticatedClient, problemResponse, requireSameOrigin } from "../_shared";
+import { authenticatedClient, problemResponse, requirePermission, requireSameOrigin } from "../_shared";
 
 /** Evaluate a feature flag for the authenticated subject. */
 export async function GET(request: NextRequest) {
@@ -14,6 +14,9 @@ export async function GET(request: NextRequest) {
       { status: 400 },
     );
   }
+
+  const permCheck = await requirePermission(request, "flags.read", organizationId);
+  if (permCheck) return permCheck;
 
   try {
     const session = await authenticatedClient();
@@ -36,6 +39,9 @@ export async function LIST(request: NextRequest) {
       { status: 400 },
     );
   }
+
+  const permCheck = await requirePermission(request, "flags.read", organizationId);
+  if (permCheck) return permCheck;
 
   try {
     const session = await authenticatedClient();

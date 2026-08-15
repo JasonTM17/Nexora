@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticatedClient, problemResponse, requireSameOrigin } from "../_shared";
+import { authenticatedClient, problemResponse, requirePermission, requireSameOrigin } from "../_shared";
 
 /** Record an analytics event. */
 export async function POST(request: NextRequest) {
@@ -21,6 +21,8 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+    const permCheck = await requirePermission(request, "analytics.read", body.organizationId);
+    if (permCheck) return permCheck;
     const session = await authenticatedClient();
     await session.client.recordAnalyticsEvent(
       {
@@ -51,6 +53,8 @@ export async function GET(request: NextRequest) {
       { status: 400 },
     );
   }
+  const permCheck = await requirePermission(request, "analytics.read", organizationId);
+  if (permCheck) return permCheck;
   try {
     const session = await authenticatedClient();
     const result = await session.client.aggregateAnalytics(

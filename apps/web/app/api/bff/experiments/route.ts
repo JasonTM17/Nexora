@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticatedClient, problemResponse, requireSameOrigin } from "../_shared";
+import { authenticatedClient, problemResponse, requirePermission, requireSameOrigin } from "../_shared";
 
 /** List experiments for the tenant. */
 export async function GET(request: NextRequest) {
@@ -9,6 +9,8 @@ export async function GET(request: NextRequest) {
   if (!organizationId) {
     return NextResponse.json({ code: "VALIDATION_FAILED", message: "organizationId is required.", traceId: null }, { status: 400 });
   }
+  const permCheck = await requirePermission(request, "experiments.read", organizationId);
+  if (permCheck) return permCheck;
   try {
     const session = await authenticatedClient();
     const result = await session.client.listExperiments({ organizationId });
@@ -33,6 +35,8 @@ export async function POST(request: NextRequest) {
     if (!body.organizationId || !body.experimentKey) {
       return NextResponse.json({ code: "VALIDATION_FAILED", message: "organizationId and experimentKey are required.", traceId: null }, { status: 400 });
     }
+    const permCheck = await requirePermission(request, "experiments.manage", body.organizationId);
+    if (permCheck) return permCheck;
     const session = await authenticatedClient();
     const result = await session.client.upsertExperiment(
       { experimentKey: body.experimentKey, active: body.active ?? false, treatmentPercentage: body.treatmentPercentage ?? 50, description: body.description },
