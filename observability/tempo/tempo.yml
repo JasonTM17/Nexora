@@ -1,0 +1,40 @@
+# M6-R01 Tempo configuration. Receives traces via OTLP.
+server:
+  http_listen_port: 3400
+  grpc_listen_port: 4300
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 168h  # 7 days
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /tmp/tempo/blocks
+
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+      cluster: nexora-local
+  storage:
+    path: /tmp/tempo/generator/wal
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_exemplars: true
+
+usage_report:
+  reporting_enabled: false

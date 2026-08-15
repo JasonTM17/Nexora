@@ -1,0 +1,14 @@
+# M6-R01 Grafana dashboard provisioning. Loads dashboards from /var/lib/grafana/dashboards.
+apiVersion: 1
+
+providers:
+  - name: nexora-dashboards
+    orgId: 1
+    folder: Nexora
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards

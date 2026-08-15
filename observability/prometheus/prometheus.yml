@@ -1,0 +1,35 @@
+# M6-R01 Prometheus configuration. Scrapes metrics from all Nexora services.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: nexora-local
+
+scrape_configs:
+  - job_name: platform-api
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+        labels:
+          service: platform-api
+          tier: backend
+
+  - job_name: event-ingestion
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:18080"]
+        labels:
+          service: event-ingestion
+          tier: edge
+
+  - job_name: web
+    metrics_path: /api/metrics
+    static_configs:
+      - targets: ["host.docker.internal:3000"]
+        labels:
+          service: web
+          tier: frontend
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
