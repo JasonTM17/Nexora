@@ -1,0 +1,77 @@
+---
+title: "C0 Forward Rebaseline Protocol"
+description: "Forward-only replacement for the structurally inapplicable C0-08 re-pin begin gate; design/replay first, ledger mutation only after a second approval."
+status: in-progress
+priority: P1
+effort: "bounded control recovery"
+tags: ["nexora", "control-ledger", "c0", "rebaseline", "security"]
+created: 2026-08-13
+---
+
+# C0 Forward Rebaseline Protocol
+
+## Overview
+
+The legacy `goal-repin-begin` command requires the canonical root checkout to
+remain clean at the old binding SHA. The legitimate source history has advanced
+from `0373ecfe2fc11ae6c7799131073036aa586c4d66` to
+`0c326c9b05f08c020995f10d59f087030349ba03`, so the command is structurally
+inapplicable. Resetting or bypassing the gate would discard source history or
+weaken the control plane.
+
+This plan defines a new, forward-only C0 rebaseline protocol. It is limited to
+reconstructing an auditable control baseline for the already-existing Git
+history. It does **not** accept every source change as product-complete, erase
+the prior binding, authorize R3 actions, push, provision a provider, release,
+or deploy.
+
+The protocol distinguishes the genesis-only `file_list_digest` artifact from
+the active seq-60 final-binding file-list identity. Direct replay proves that
+the active final binding and both clean checkouts use the same semantic
+file-list digest. The successor therefore rebases the observed Git main SHA,
+not a changed semantic plan identity.
+
+User approval was recorded in this task conversation on 2026-08-13 for the
+design packet, disposable replay, and dual exact-head review. A separate,
+explicit approval remains required immediately before any live SQLite control
+ledger mutation.
+
+## Goals
+
+| # | Goal | Priority |
+|---|------|----------|
+| 1 | Preserve the old C0 lineage while binding an independently captured, descendant source target as unaccepted provenance only. | P1 |
+| 2 | Make every live transition replayable, fail closed, and independently reviewable. | P1 |
+| 3 | Reconcile source-range acceptance separately from control rebaseline; retain all R3 STOP conditions. | P1 |
+
+## Phases
+
+| # | Phase | Status |
+|---|-------|--------|
+| 1 | [Authority and protocol specification](./phase-01-start.md) | In progress |
+| 2 | [Protocol implementation and immutable capture](./phase-02-protocol-implementation-and-immutable-capture.md) | Pending |
+| 3 | [Disposable clone replay](./phase-03-disposable-clone-replay.md) | Pending |
+| 4 | [Dual review and gated live transition](./phase-04-dual-review-and-gated-live-transition.md) | Pending |
+| 5 | [Historical source-range reconciliation](./phase-05-historical-source-range-reconciliation.md) | Pending |
+
+## Success Criteria
+
+- [ ] The new target is a captured descendant of the old baseline and has a
+      reproducible commit/path/manifest inventory.
+- [ ] The protocol preserves immutable predecessor events, requires the one
+      active C0-08 lease and fresh C0-05/hardening evidence, and cannot create
+      a parallel active C0 lease.
+- [ ] Completion is `CONTROL_LINEAGE_ONLY`: it cannot change final binding,
+      final manifest, Goal, execution baseline or allowances, and cannot
+      accept a task, milestone or the historical source range.
+- [ ] Positive and adversarial clone replays pass before a live transition is
+      considered.
+- [ ] Advisor FIT and Kongming PASS name the same protocol bytes, packet and
+      replay receipt.
+- [ ] A second user confirmation precedes any live ledger write; first push,
+      paid provision, credentialed provider call, release and deploy remain
+      forbidden.
+- [ ] Any later acceptance of the 127-commit range has its own exact packet,
+      requirement evidence and dual review; it is never a rebaseline effect.
+
+<!-- slug: c0-forward-rebaseline-protocol -->
