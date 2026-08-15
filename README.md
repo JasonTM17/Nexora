@@ -1,5 +1,10 @@
 # Nexora
 
+[![Docker Hub](https://img.shields.io/docker/v/nguyenson1710/nexora-web?label=web&logo=docker)](https://hub.docker.com/r/nguyenson1710/nexora-web)
+[![Docker Hub](https://img.shields.io/docker/v/nguyenson1710/nexora-platform-api?label=api&logo=docker)](https://hub.docker.com/r/nguyenson1710/nexora-platform-api)
+[![Docker Hub](https://img.shields.io/docker/v/nguyenson1710/nexora-event-ingestion?label=ingestion&logo=docker)](https://hub.docker.com/r/nguyenson1710/nexora-event-ingestion)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
 Nexora is a tenant-aware CMS and knowledge workspace delivered as a polyglot
 monorepo: a Next.js web surface with a same-origin BFF, a Spring Boot modular
 monolith platform API, a narrowly-scoped Go event-ingestion edge, PostgreSQL
@@ -8,8 +13,9 @@ backbone. The active line integrates milestones M0–M5 (repository foundation, 
 API, web foundation, tenant CMS core, durable event outbox, bounded Go
 ingress, private Realtime descriptors, knowledge management and secure RAG,
 adaptive intelligence: feature flags, analytics, notifications, experiments,
-global search). Milestone M6 (observability + security hardening) is in progress.
-M7–M8 (deployment, polish) are planned.
+global search, observability stack, and security hardening). Bilingual (VI/EN)
+interface with comprehensive RBAC (16 permissions, 5 roles). Docker images
+published to `nguyenson1710/nexora-*`.
 
 Every claim in this repository is bounded by evidence: local builds, tests and
 deterministic fixtures. Nothing here claims a deployed environment, a live

@@ -1,39 +1,33 @@
 # syntax=docker/dockerfile:1.7
 # Multi-stage build for Nexora web (Next.js 16 / React 19).
-# Runtime: non-root, distroless-compatible, HEALTHCHECK, OCI labels.
+# Runtime: non-root, standalone output, HEALTHCHECK, OCI labels.
 
 # ---- Build stage ----
 FROM node:24.12-alpine AS build
 WORKDIR /src
 
+# Copy ALL source first (workspace packages need their source for build)
+COPY . .
+
 # Install dependencies (frozen lockfile)
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-COPY apps/web/package.json ./apps/web/
-COPY packages/contracts/package.json ./packages/contracts/
-COPY packages/design-tokens/package.json ./packages/design-tokens/
-COPY packages/ui-core/package.json ./packages/ui-core/
-COPY packages/ui-studio/package.json ./packages/ui-studio/
-COPY packages/ui-ai/package.json ./packages/ui-ai/
-COPY packages/ui-builder/package.json ./packages/ui-builder/
 RUN corepack enable && corepack prepare pnpm@11.0.9 --activate \
     && pnpm install --frozen-lockfile
 
-# Build the application
-COPY . .
-RUN cd apps/web && pnpm exec next build
+# Build the web app
+RUN pnpm --filter @nexora/web build
 
 # ---- Runtime stage ----
 FROM node:24.12-alpine AS runtime
 WORKDIR /app
 
-# Non-root user
-RUN addgroup -S nexora && adduser -S nexora -G nexora
-USER nexora:nexora
+# Copy built application (standalone output) BEFORE switching user
+COPY --from=build /src/apps/web/.next/standalone ./
+COPY --from=build /src/apps/web/.next/static ./.next/static
 
-# Copy built application
-COPY --from=build --chown=nexora:nexora /src/apps/web/.next/standalone ./
-COPY --from=build --chown=nexora:nexora /src/apps/web/.next/static ./.next/static
-COPY --from=build --chown=nexora:nexora /src/apps/web/public ./public
+# Non-root user (create after copying)
+RUN addgroup -S nexora && adduser -S nexora -G nexora \
+    && chown -R nexora:nexora /app
+USER nexora:nexora
 
 ENV NODE_ENV=production
 ENV PORT=3000
