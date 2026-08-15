@@ -127,6 +127,36 @@ export type PageList = { readonly "items"?: ReadonlyArray<PageSummary>; readonly
 
 export type ArchiveResult = { readonly "pageId"?: string; readonly "state"?: string; readonly "archivedAt"?: string; };
 
+export type FeatureFlagView = { readonly "id": UUID; readonly "flagKey": string; readonly "enabled": boolean; readonly "rolloutPercentage": number; readonly "rules"?: {  }; readonly "description"?: string; };
+
+export type FlagEvaluation = { readonly "flagKey": string; readonly "enabled": boolean; readonly "variant": "control" | "treatment"; };
+
+export type UpsertFlagRequest = { readonly "flagKey": string; readonly "enabled": boolean; readonly "rolloutPercentage": number; readonly "rules"?: {  }; readonly "description"?: string; };
+
+export type UUID = string;
+
+export type RecordEventRequest = { readonly "eventType": string; readonly "resourceType"?: string; readonly "resourceId"?: UUID; readonly "properties"?: {  }; readonly "clientContext"?: {  }; readonly "idempotencyKey"?: string; };
+
+export type AnalyticsEvent = { readonly "id": UUID; readonly "eventType": string; readonly "resourceType"?: string; readonly "resourceId"?: UUID; readonly "properties"?: {  }; readonly "recordedAt": string; };
+
+export type EventCount = { readonly "eventType": string; readonly "count": number; };
+
+export type NotificationView = { readonly "id": UUID; readonly "notificationType": string; readonly "priority": "low" | "normal" | "high" | "urgent"; readonly "title": string; readonly "body"?: string; readonly "actionUrl"?: string; readonly "readAt"?: string; readonly "createdAt": string; };
+
+export type CreateNotificationRequest = { readonly "userId": UUID; readonly "notificationType": string; readonly "priority"?: "low" | "normal" | "high" | "urgent"; readonly "title": string; readonly "body"?: string; readonly "actionUrl"?: string; readonly "metadata"?: {  }; readonly "ttl"?: string; };
+
+export type UnreadCount = { readonly "count": number; };
+
+export type ExperimentView = { readonly "id": UUID; readonly "experimentKey": string; readonly "active": boolean; readonly "treatmentPercentage": number; readonly "description"?: string; };
+
+export type UpsertExperimentRequest = { readonly "experimentKey": string; readonly "active": boolean; readonly "treatmentPercentage": number; readonly "description"?: string; };
+
+export type VariantAssignment = { readonly "experimentKey": string; readonly "variant": "control" | "treatment"; readonly "inExperiment": boolean; };
+
+export type SearchResults = { readonly "items": ReadonlyArray<SearchResult>; readonly "nextCursor"?: string; readonly "totalCount": number; };
+
+export type SearchResult = { readonly "id": UUID; readonly "sourceType": "page" | "knowledge"; readonly "title": string; readonly "snippet"?: string; readonly "score": number; };
+
 export interface GetTenantContextHeaders {
   readonly "organizationId"?: OrganizationId;
 }
@@ -228,6 +258,62 @@ export interface DeleteDocumentHeaders {
   readonly "X-Nexora-Organization-Id": string;
 }
 
+export interface ListFlagsHeaders {
+  readonly "organizationId": OrganizationId;
+}
+
+export interface UpsertFlagHeaders {
+  readonly "organizationId": OrganizationId;
+}
+
+export interface EvaluateFlagHeaders {
+  readonly "organizationId": OrganizationId;
+}
+
+export interface RecordAnalyticsEventHeaders {
+  readonly "organizationId": OrganizationId;
+}
+
+export interface RecentAnalyticsEventsHeaders {
+  readonly "organizationId": OrganizationId;
+}
+
+export interface AggregateAnalyticsHeaders {
+  readonly "organizationId": OrganizationId;
+}
+
+export interface ListNotificationsHeaders {
+  readonly "organizationId": OrganizationId;
+}
+
+export interface CreateNotificationHeaders {
+  readonly "organizationId": OrganizationId;
+}
+
+export interface UnreadNotificationCountHeaders {
+  readonly "organizationId": OrganizationId;
+}
+
+export interface MarkNotificationReadHeaders {
+  readonly "organizationId": OrganizationId;
+}
+
+export interface ListExperimentsHeaders {
+  readonly "organizationId": OrganizationId;
+}
+
+export interface UpsertExperimentHeaders {
+  readonly "organizationId": OrganizationId;
+}
+
+export interface AssignExperimentHeaders {
+  readonly "organizationId": OrganizationId;
+}
+
+export interface SearchHeaders {
+  readonly "organizationId": OrganizationId;
+}
+
 export interface UpdateMembershipPath {
   readonly "membershipId": MembershipId;
 }
@@ -288,6 +374,18 @@ export interface DeleteDocumentPath {
   readonly "documentId": string;
 }
 
+export interface EvaluateFlagPath {
+  readonly "flagKey": string;
+}
+
+export interface MarkNotificationReadPath {
+  readonly "notificationId": UUID;
+}
+
+export interface AssignExperimentPath {
+  readonly "experimentKey": string;
+}
+
 export interface ListCmsPagesQuery {
   readonly "cursor"?: string;
   readonly "limit"?: number;
@@ -310,6 +408,26 @@ export interface ListKnowledgeBasesQuery {
 export interface ListDocumentsQuery {
   readonly "cursor"?: string;
   readonly "limit"?: number;
+}
+
+export interface RecentAnalyticsEventsQuery {
+  readonly "limit"?: number;
+  readonly "cursor"?: UUID;
+}
+
+export interface AggregateAnalyticsQuery {
+  readonly "since": string;
+}
+
+export interface ListNotificationsQuery {
+  readonly "limit"?: number;
+  readonly "cursor"?: UUID;
+}
+
+export interface SearchQuery {
+  readonly "query": string;
+  readonly "limit"?: number;
+  readonly "cursor"?: string;
 }
 
 export interface ApiResponse<T> {
@@ -540,6 +658,82 @@ export class PlatformApiClient {
 
   async deleteDocument(path: DeleteDocumentPath, headers: DeleteDocumentHeaders, options: RequestOptions = {}): Promise<ApiResponse<DocumentView>> {
     return this.request<DocumentView>(`/api/v1/knowledge/documents/${encodeURIComponent(String(path["documentId"]))}`, { method: "DELETE", headers: { "X-Nexora-Organization-Id": headers["X-Nexora-Organization-Id"] } }, options, true);
+  }
+
+  async listFlags(headers: ListFlagsHeaders, options: RequestOptions = {}): Promise<ApiResponse<ReadonlyArray<FeatureFlagView>>> {
+    return this.request<ReadonlyArray<FeatureFlagView>>(`/api/v1/feature-flags`, { method: "GET", headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
+  }
+
+  async upsertFlag(body: UpsertFlagRequest, headers: UpsertFlagHeaders, options: RequestOptions = {}): Promise<ApiResponse<FeatureFlagView>> {
+    return this.request<FeatureFlagView>(`/api/v1/feature-flags`, { method: "POST", body, headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
+  }
+
+  async evaluateFlag(path: EvaluateFlagPath, headers: EvaluateFlagHeaders, options: RequestOptions = {}): Promise<ApiResponse<FlagEvaluation>> {
+    return this.request<FlagEvaluation>(`/api/v1/feature-flags/${encodeURIComponent(String(path["flagKey"]))}/evaluate`, { method: "GET", headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
+  }
+
+  async recordAnalyticsEvent(body: RecordEventRequest, headers: RecordAnalyticsEventHeaders, options: RequestOptions = {}): Promise<ApiResponse<{ readonly "accepted"?: boolean; }>> {
+    return this.request<{ readonly "accepted"?: boolean; }>(`/api/v1/analytics/events`, { method: "POST", body, headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
+  }
+
+  async recentAnalyticsEvents(headers: RecentAnalyticsEventsHeaders, query: RecentAnalyticsEventsQuery = {}, options: RequestOptions = {}): Promise<ApiResponse<ReadonlyArray<AnalyticsEvent>>> {
+    const queryParameters = new URLSearchParams();
+    if (query["limit"] !== undefined) queryParameters.set("limit", String(query["limit"]));
+    if (query["cursor"] !== undefined) queryParameters.set("cursor", String(query["cursor"]));
+    const queryString = queryParameters.toString();
+    const requestPath = `/api/v1/analytics/events${queryString ? `?${queryString}` : ""}`;
+    return this.request<ReadonlyArray<AnalyticsEvent>>(requestPath, { method: "GET", headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
+  }
+
+  async aggregateAnalytics(headers: AggregateAnalyticsHeaders, query: AggregateAnalyticsQuery, options: RequestOptions = {}): Promise<ApiResponse<ReadonlyArray<EventCount>>> {
+    const queryParameters = new URLSearchParams();
+    if (query["since"] !== undefined) queryParameters.set("since", String(query["since"]));
+    const queryString = queryParameters.toString();
+    const requestPath = `/api/v1/analytics/aggregate${queryString ? `?${queryString}` : ""}`;
+    return this.request<ReadonlyArray<EventCount>>(requestPath, { method: "GET", headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
+  }
+
+  async listNotifications(headers: ListNotificationsHeaders, query: ListNotificationsQuery = {}, options: RequestOptions = {}): Promise<ApiResponse<ReadonlyArray<NotificationView>>> {
+    const queryParameters = new URLSearchParams();
+    if (query["limit"] !== undefined) queryParameters.set("limit", String(query["limit"]));
+    if (query["cursor"] !== undefined) queryParameters.set("cursor", String(query["cursor"]));
+    const queryString = queryParameters.toString();
+    const requestPath = `/api/v1/notifications${queryString ? `?${queryString}` : ""}`;
+    return this.request<ReadonlyArray<NotificationView>>(requestPath, { method: "GET", headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
+  }
+
+  async createNotification(body: CreateNotificationRequest, headers: CreateNotificationHeaders, options: RequestOptions = {}): Promise<ApiResponse<NotificationView>> {
+    return this.request<NotificationView>(`/api/v1/notifications`, { method: "POST", body, headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
+  }
+
+  async unreadNotificationCount(headers: UnreadNotificationCountHeaders, options: RequestOptions = {}): Promise<ApiResponse<UnreadCount>> {
+    return this.request<UnreadCount>(`/api/v1/notifications/unread-count`, { method: "GET", headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
+  }
+
+  async markNotificationRead(path: MarkNotificationReadPath, headers: MarkNotificationReadHeaders, options: RequestOptions = {}): Promise<ApiResponse<{ readonly "updated"?: boolean; }>> {
+    return this.request<{ readonly "updated"?: boolean; }>(`/api/v1/notifications/${encodeURIComponent(String(path["notificationId"]))}/read`, { method: "PATCH", headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
+  }
+
+  async listExperiments(headers: ListExperimentsHeaders, options: RequestOptions = {}): Promise<ApiResponse<ReadonlyArray<ExperimentView>>> {
+    return this.request<ReadonlyArray<ExperimentView>>(`/api/v1/experiments`, { method: "GET", headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
+  }
+
+  async upsertExperiment(body: UpsertExperimentRequest, headers: UpsertExperimentHeaders, options: RequestOptions = {}): Promise<ApiResponse<ExperimentView>> {
+    return this.request<ExperimentView>(`/api/v1/experiments`, { method: "POST", body, headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
+  }
+
+  async assignExperiment(path: AssignExperimentPath, headers: AssignExperimentHeaders, options: RequestOptions = {}): Promise<ApiResponse<VariantAssignment>> {
+    return this.request<VariantAssignment>(`/api/v1/experiments/${encodeURIComponent(String(path["experimentKey"]))}/assign`, { method: "GET", headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
+  }
+
+  async search(headers: SearchHeaders, query: SearchQuery, options: RequestOptions = {}): Promise<ApiResponse<SearchResults>> {
+    const queryParameters = new URLSearchParams();
+    if (query["query"] !== undefined) queryParameters.set("query", String(query["query"]));
+    if (query["limit"] !== undefined) queryParameters.set("limit", String(query["limit"]));
+    if (query["cursor"] !== undefined) queryParameters.set("cursor", String(query["cursor"]));
+    const queryString = queryParameters.toString();
+    const requestPath = `/api/v1/search${queryString ? `?${queryString}` : ""}`;
+    return this.request<SearchResults>(requestPath, { method: "GET", headers: { "X-Nexora-Organization-Id": headers["organizationId"] } }, options, true);
   }
 
   private async request<T>(
