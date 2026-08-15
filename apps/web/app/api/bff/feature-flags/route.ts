@@ -17,10 +17,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const session = await authenticatedClient();
-    const result = await session.client.evaluateFlag(
-      { flagKey },
-      { "X-Nexora-Organization-Id": organizationId },
-    );
+    const result = await session.client.evaluateFlag({ flagKey }, { organizationId });
     return session.applyCookies(NextResponse.json(result.data, { headers: { "Cache-Control": "private, no-store" } }));
   } catch (error) {
     return problemResponse(error);
@@ -42,10 +39,7 @@ export async function LIST(request: NextRequest) {
 
   try {
     const session = await authenticatedClient();
-    const result = await session.client.listFlags(
-      {},
-      { "X-Nexora-Organization-Id": organizationId },
-    );
+    const result = await session.client.listFlags({ organizationId });
     return session.applyCookies(NextResponse.json(result.data));
   } catch (error) {
     return problemResponse(error);

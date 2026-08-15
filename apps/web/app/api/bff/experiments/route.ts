@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   }
   try {
     const session = await authenticatedClient();
-    const result = await session.client.listExperiments({}, { "X-Nexora-Organization-Id": organizationId });
+    const result = await session.client.listExperiments({ organizationId });
     return session.applyCookies(NextResponse.json(result.data));
   } catch (error) {
     return problemResponse(error);
@@ -34,11 +34,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ code: "VALIDATION_FAILED", message: "organizationId and experimentKey are required.", traceId: null }, { status: 400 });
     }
     const session = await authenticatedClient();
-    await session.client.upsertExperiment(
+    const result = await session.client.upsertExperiment(
       { experimentKey: body.experimentKey, active: body.active ?? false, treatmentPercentage: body.treatmentPercentage ?? 50, description: body.description },
-      { "X-Nexora-Organization-Id": body.organizationId },
+      { organizationId: body.organizationId },
     );
-    return session.applyCookies(NextResponse.json(null, { status: 200 }));
+    return session.applyCookies(NextResponse.json(result.data));
   } catch (error) {
     return problemResponse(error);
   }

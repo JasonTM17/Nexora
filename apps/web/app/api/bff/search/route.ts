@@ -15,8 +15,8 @@ export async function GET(request: NextRequest) {
   try {
     const session = await authenticatedClient();
     const result = await session.client.search(
+      { organizationId },
       { query, limit: limit ? parseInt(limit, 10) : undefined, cursor },
-      { "X-Nexora-Organization-Id": organizationId },
     );
     return session.applyCookies(NextResponse.json(result.data));
   } catch (error) {

@@ -31,9 +31,9 @@ export async function POST(request: NextRequest) {
         clientContext: body.clientContext,
         idempotencyKey: body.idempotencyKey,
       },
-      { "X-Nexora-Organization-Id": body.organizationId },
+      { organizationId: body.organizationId },
     );
-    return session.applyCookies(NextResponse.json(null, { status: 202 }));
+    return session.applyCookies(NextResponse.json({ accepted: true }, { status: 202 }));
   } catch (error) {
     return problemResponse(error);
   }
@@ -54,8 +54,8 @@ export async function GET(request: NextRequest) {
   try {
     const session = await authenticatedClient();
     const result = await session.client.aggregateAnalytics(
+      { organizationId },
       { since: since ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() },
-      { "X-Nexora-Organization-Id": organizationId },
     );
     return session.applyCookies(NextResponse.json(result.data));
   } catch (error) {

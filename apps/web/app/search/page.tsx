@@ -1,14 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { AccessContextResponse } from "../../../../packages/contracts/src/generated/platform-api";
 import { AppShell, PageGrid } from "../../../../packages/ui-core/src/app-shell";
 import { ActionButton } from "../../../../packages/ui-core/src/action-button";
 import { StatusLabel } from "../../../../packages/ui-core/src/status-label";
 
-type Problem = { code: string; message: string; traceId?: string | null };
-type State = "loading" | "ready" | "empty" | "denied" | "error";
+export const dynamic = "force-dynamic";
 
 interface SearchResult {
   id: string;
@@ -24,6 +23,9 @@ interface SearchResults {
   totalCount: number;
 }
 
+type Problem = { code: string; message: string; traceId?: string | null };
+type State = "loading" | "ready" | "empty" | "denied" | "error";
+
 async function readJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { ...init, credentials: "same-origin", headers: { Accept: "application/json", ...(init?.headers ?? {}) } });
   const payload = await response.json() as T | Problem;
@@ -35,7 +37,7 @@ function asProblem(error: unknown): Problem {
   return error && typeof error === "object" ? error as Problem : { code: "REQUEST_FAILED", message: "Search failed." };
 }
 
-export default function SearchPage() {
+function SearchInner() {
   const searchParams = useSearchParams();
   const query = searchParams.get("q") || "";
   const [organizationId, setOrganizationId] = useState("");
@@ -50,7 +52,7 @@ export default function SearchPage() {
     setState(next.code === "PERMISSION_DENIED" || next.code === "MEMBERSHIP_REQUIRED" ? "denied" : "error");
   }, []);
 
-  const search = useCallback(async () => {
+  const searchFn = useCallback(async () => {
     if (!query.trim()) { setResults(null); setState("empty"); return; }
     setState("loading"); setProblem(null);
     try {
@@ -64,7 +66,7 @@ export default function SearchPage() {
     } catch (error) { setFailure(error); }
   }, [organizationId, query, setFailure]);
 
-  useEffect(() => { void search(); }, [search]);
+  useEffect(() => { void searchFn(); }, [searchFn]);
   useEffect(() => { heading.current?.focus(); }, [state]);
 
   return <AppShell><PageGrid><main className="nx-admin-page">
@@ -74,7 +76,7 @@ export default function SearchPage() {
 
     {state === "loading" && <section className="nx-access-card" role="status"><StatusLabel kind="loading" /> Searching…</section>}
     {state === "empty" && <section className="nx-access-card"><StatusLabel kind="planned" /><h2>Enter a query</h2><p>Search across published pages and active knowledge.</p></section>}
-    {(state === "denied" || state === "error") && <section className="nx-access-card nx-error-card" aria-live="assertive"><StatusLabel kind={state === "denied" ? "denied" : "error"} /><p>{problem?.message}</p><ActionButton tone="secondary" onClick={() => void search()}>Retry</ActionButton></section>}
+    {(state === "denied" || state === "error") && <section className="nx-access-card nx-error-card" aria-live="assertive"><StatusLabel kind={state === "denied" ? "denied" : "error"} /><p>{problem?.message}</p><ActionButton tone="secondary" onClick={() => void searchFn()}>Retry</ActionButton></section>}
 
     {state === "ready" && results && <section className="nx-access-card">
       <div className="nx-card-heading"><div><h2>Results</h2><p className="nx-field-help">{results.totalCount} matches</p></div><StatusLabel kind="fixture" /></div>
@@ -88,4 +90,8 @@ export default function SearchPage() {
         </li>)}</ul>}
     </section>}
   </main></PageGrid></AppShell>;
+}
+
+export default function SearchPage() {
+  return <Suspense fallback={<div>Loading…</div>}><SearchInner /></Suspense>;
 }
