@@ -33,6 +33,10 @@ USER nexora:nexora
 
 ENV NODE_ENV=production
 ENV PORT=3000
+# Next uses HOSTNAME when binding its standalone server. Keep the process
+# reachable on the container loopback for the image healthcheck and on the
+# published interface when Compose maps port 3000.
+ENV HOSTNAME=0.0.0.0
 EXPOSE 3000
 
 # HEALTHCHECK
