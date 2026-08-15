@@ -1,0 +1,131 @@
+# M7-R01 Production-shaped local stack.
+# Includes all services + observability + Redis + NATS clustering.
+# For actual cloud deployment, replace host.docker.internal with real hosts
+# and apply infrastructure/kubernetes/*.yaml manifests.
+#
+# Usage: docker compose -f compose.production.yml --profile full up -d
+
+name: nexora-production
+
+services:
+  postgres:
+    image: postgres:17.5-alpine
+    environment:
+      POSTGRES_DB: nexora
+      POSTGRES_USER: nexora
+      POSTGRES_HOST_AUTH_METHOD: trust
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexora -d nexora"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - nexora-postgres-data:/var/lib/postgresql/data
+
+  nats:
+    image: nats:2.11.0-alpine
+    command: ["--jetstream", "--store_dir", "/data", "--http_port", "8222"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8222/healthz >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    ports:
+      - "127.0.0.1:4222:4222"
+      - "127.0.0.1:8222:8222"
+    volumes:
+      - nexora-nats-data:/data
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - nexora-redis-data:/data
+
+  platform-api:
+    build:
+      context: apps/platform-api
+      dockerfile: Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: database
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/nexora
+      NEXORA_AUTH_JWKS_URI: http://platform-api:8080/.well-known/jwks.json
+      NEXORA_REDIS_ADDR: redis:6379
+      NEXORA_NATS_URL: nats://nats:4222
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/actuator/health/liveness"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 6
+
+  event-ingestion:
+    build:
+      context: services/event-ingestion
+      dockerfile: Dockerfile
+    environment:
+      NEXORA_EVENT_INGESTION_ADDR: 0.0.0.0:18080
+      NEXORA_EVENT_INGESTION_BODY_LIMIT_BYTES: 65536
+      NEXORA_EVENT_INGESTION_MAX_CONCURRENCY: 128
+      NEXORA_EVENT_INGESTION_RATE_LIMIT_PER_MINUTE: 60
+      NEXORA_EVENT_INGESTION_RATE_LIMIT_KEYS: 10000
+      NEXORA_ADMISSION_URL: http://platform-api:8080/api/v1/events/admit
+      NEXORA_NATS_URL: nats://nats:4222
+      NEXORA_REDIS_ADDR: redis:6379
+    ports:
+      - "127.0.0.1:18080:18080"
+    depends_on:
+      platform-api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/event-ingestion", "--healthcheck"]
+      interval: 5s
+      timeout: 2s
+      start_period: 2s
+      retries: 6
+
+  web:
+    build:
+      context: apps/web
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      NEXORA_PLATFORM_API_URL: http://platform-api:8080
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      platform-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 6
+
+volumes:
+  nexora-postgres-data:
+  nexora-nats-data:
+  nexora-redis-data:
