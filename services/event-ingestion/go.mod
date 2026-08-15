@@ -3,7 +3,7 @@ module github.com/jasontm17/nexora/services/event-ingestion
 go 1.26.5
 
 require (
-	github.com/nats-io/nats.go v1.52.0
+	github.com/nats-io/nats.go v1.53.1
 	github.com/redis/go-redis/v9 v9.7.0
 )
 
