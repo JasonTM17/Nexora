@@ -26,6 +26,8 @@ nexora:
     issuer: ${NEXORA_AUTH_ISSUER:http://127.0.0.1:9099/auth/v1}
     audience: ${NEXORA_AUTH_AUDIENCE:authenticated}
     jwk-set-uri: ${NEXORA_AUTH_JWKS_URI:http://127.0.0.1:9099/auth/v1/.well-known/jwks.json}
+    legacy-secret: ${NEXORA_AUTH_LEGACY_SECRET:}
+    legacy-hs256-fallback: ${NEXORA_LEGACY_HS256_FALLBACK:false}
   platform:
     api-version: v1
     migration-contract:

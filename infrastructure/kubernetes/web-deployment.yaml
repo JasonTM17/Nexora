@@ -1,0 +1,68 @@
+# M7-T01 Kubernetes deployment template for Nexora Web.
+# Apply after: cloud provider decision, container registry push, ingress config.
+# Replace placeholders: {{NAMESPACE}}, {{IMAGE}}, {{REPLICAS}}, {{HOST}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexora-web
+  namespace: {{NAMESPACE}}
+  labels:
+    app: nexora-web
+    tier: frontend
+spec:
+  replicas: {{REPLICAS}}
+  selector:
+    matchLabels:
+      app: nexora-web
+  template:
+    metadata:
+      labels:
+        app: nexora-web
+        tier: frontend
+    spec:
+      containers:
+        - name: web
+          image: {{IMAGE}}
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: NEXORA_PLATFORM_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: nexora-config
+                  key: platformApiUrl
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /api/bff/access-context
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexora-web
+  namespace: {{NAMESPACE}}
+spec:
+  selector:
+    app: nexora-web
+  ports:
+    - port: 80
+      targetPort: 3000
+  type: ClusterIP
