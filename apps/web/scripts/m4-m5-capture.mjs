@@ -6,7 +6,7 @@
 
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node/url";
+import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
