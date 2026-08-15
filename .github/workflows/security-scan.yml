@@ -1,0 +1,84 @@
+name: Security scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly Monday 6am UTC
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  codeql:
+    name: CodeQL SAST
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        language: [java, go, javascript]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea3d27597364c9af683 # v4.2.2
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@28deaeda66b76a059156332f82b27532e0e3c11e # v3.28.10
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Build (Java)
+        if: matrix.language == 'java'
+        run: cd apps/platform-api && ./mvnw -q compile -DskipTests
+
+      - name: Build (Go)
+        if: matrix.language == 'go'
+        run: cd services/event-ingestion && go build ./...
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@28deaeda66b76a059156332f82b27532e0e3c11e # v3.28.10
+        with:
+          category: '/language:${{ matrix.language }}'
+
+  gitleaks:
+    name: Secret scan (Gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea3d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@f7b686fd5edb98a7c5ac41a24b1cc91886a8f9d6 # v2.3.7
+        with:
+          config-path: .gitleaks.toml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  trivy-fs:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea3d27597364c9af683 # v4.2.2
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@dc50788a7a6bdc8e88b6f8d6e8f6e8f6e8f6e8f6 # 0.30.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: 1
+          skip-dirs: node_modules,.worktrees
+
+      - name: Upload Trivy FS results
+        uses: github/codeql-action/upload-sarif@28deaeda66b76a059156332f82b27532e0e3c11e # v3.28.10
+        if: always()
+        with:
+          sarif_file: trivy-fs-results.sarif

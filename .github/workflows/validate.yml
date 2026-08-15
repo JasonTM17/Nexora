@@ -38,7 +38,12 @@ jobs:
       - name: Vet Go event-ingestion service
         run: go vet ./...
       - name: Test Go event-ingestion service
-        run: go test ./...
+        run: go test -cover -coverprofile=coverage.out ./...
+      - name: Upload Go coverage
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f69819ecde39500697a03a13 # v4.6.0
+        with:
+          name: go-coverage
+          path: services/event-ingestion/coverage.out
 
   platform-api:
     runs-on: ubuntu-24.04
@@ -57,3 +62,6 @@ jobs:
           cache: maven
       - name: Compile and run unit tests
         run: sh mvnw -q test -Dtest='JwtValidationTests,EventContractV1_1Test,OutboxPublisherSchedulerTest,OutboxPublisherTest,EventAdmissionServiceTest,EventConsumerWiringTest'
+      - name: Generate coverage report (JaCoCo)
+        run: sh mvnw -q jacoco:report
+        continue-on-error: true

@@ -1,0 +1,65 @@
+# M6-R01 Dependabot configuration for automated dependency updates.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - javascript
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+
+  - package-ecosystem: gomod
+    directory: /services/event-ingestion
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - go
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - ci
+    commit-message:
+      prefix: "ci(deps)"
+      include: scope
+
+  - package-ecosystem: docker
+    directory: /apps/web
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - docker
+
+  - package-ecosystem: docker
+    directory: /apps/platform-api
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - docker
+
+  - package-ecosystem: docker
+    directory: /services/event-ingestion
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - docker

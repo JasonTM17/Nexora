@@ -1,0 +1,29 @@
+# M6-R01 Gitleaks secret detection configuration.
+title = "Nexora Gitleaks config"
+
+[allowlist]
+description = "Known safe patterns"
+regexes = [
+  # Placeholder values in .env.example
+  'NEXORA_[A-Z_]+=',
+  # Test fixtures
+  'test-[a-f0-9]{32}',
+]
+
+[[rules]]
+id = "jwt-secret"
+description = "JWT Secret"
+regex = '''(?i)(?:jwt|secret|token|key)[\s]*[:=]["']?([a-zA-Z0-9_\-\.]{32,})["'?]'''
+tags = ["key", "jwt"]
+
+[[rules]]
+id = "database-url"
+description = "Database connection string with credentials"
+regex = '''(postgres|mysql|mongodb):\/\/[a-zA-Z0-9_]+:[^@\s]+@'''
+tags = ["database", "credentials"]
+
+[[rules]]
+id = "api-key-generic"
+description = "Generic API key"
+regex = '''(?i)(?:api[_-]?key|apikey)[\s]*[:=]["']?([a-zA-Z0-9_\-\.]{24,})["'?]'''
+tags = ["key", "api"]
