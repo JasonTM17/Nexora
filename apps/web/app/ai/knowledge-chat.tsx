@@ -7,6 +7,7 @@ import { AppShell, PageGrid } from "../../../../packages/ui-core/src/app-shell";
 import { ActionButton } from "../../../../packages/ui-core/src/action-button";
 import { StatusLabel } from "../../../../packages/ui-core/src/status-label";
 import { Citation, type CitationState } from "../../../../packages/ui-ai/src/citation";
+import { useI18n } from "../../lib/i18n";
 
 type Problem = { code: string; message: string; traceId?: string | null };
 type State = "idle" | "loading" | "answered" | "no-answer" | "denied" | "error";
@@ -23,6 +24,7 @@ function asProblem(error: unknown): Problem {
 }
 
 export function KnowledgeChat() {
+  const { t } = useI18n();
   const [organizationId, setOrganizationId] = useState("");
   const [query, setQuery] = useState("");
   const [answer, setAnswer] = useState<RagAnswer | null>(null);
@@ -65,14 +67,14 @@ export function KnowledgeChat() {
   const citationState: CitationState = answer && answer.citations && answer.citations.length > 0 ? "available" : answer ? "denied" : "no-evidence";
 
   return <AppShell><PageGrid><header className="nx-site-header"><Link className="nx-wordmark" href="/">Nexora</Link><nav className="nx-nav" aria-label="Knowledge assistant"><Link href="/knowledge">Knowledge</Link><Link aria-current="page" href="/ai">AI</Link><Link href="/account">Account</Link></nav></header><main id="main-content" className="nx-admin-page">
-    <p className="nx-eyebrow">Knowledge assistant</p><h1 ref={heading} tabIndex={-1}>{state === "denied" ? "Access denied" : "Ask your knowledge base"}</h1><p className="nx-lede" aria-live="polite">{state === "denied" ? "You do not have current permission to query knowledge in this organization." : "Answers cite only authorized sources; unresolved queries return an honest no-answer."}</p>
-    <form className="nx-kb-form" onSubmit={ask} aria-label="Ask the knowledge assistant">
-      <label className="nx-admin-organization" htmlFor="rag-query">Question<textarea id="rag-query" value={query} maxLength={2000} required rows={3} disabled={state === "loading" || !organizationId} onChange={(event) => setQuery(event.target.value)} placeholder="e.g. How does immutable publishing work?" /></label>
-      <ActionButton disabled={state === "loading" || !query.trim() || !organizationId}>{state === "loading" ? "Retrieving…" : "Ask"}</ActionButton>
+    <p className="nx-eyebrow">{t("ai.eyebrow")}</p><h1 ref={heading} tabIndex={-1}>{state === "denied" ? t("status.denied") : t("ai.title")}</h1><p className="nx-lede" aria-live="polite">{state === "denied" ? t("ai.accessDenied") : t("ai.lede")}</p>
+    <form className="nx-kb-form" onSubmit={ask} aria-label={t("ai.title")}>
+      <label className="nx-admin-organization" htmlFor="rag-query">{t("ai.askPlaceholder")}<textarea id="rag-query" value={query} maxLength={2000} required rows={3} disabled={state === "loading" || !organizationId} onChange={(event) => setQuery(event.target.value)} placeholder={t("ai.askPlaceholder")} /></label>
+      <ActionButton disabled={state === "loading" || !query.trim() || !organizationId}>{state === "loading" ? t("common.loading") : t("ai.ask")}</ActionButton>
     </form>
     {state === "answered" && answer && <article className="nx-ai-response" aria-live="polite"><p>{answer.content}</p><Citation state={citationState} title={answer.citations?.[0] ?? "Authorized source"} /><p className="nx-field-help">Model {answer.modelId} · {answer.tokenCount} tokens</p></article>}
-    {state === "no-answer" && <article className="nx-ai-response" aria-live="polite"><StatusLabel kind="empty" /><p>No authorized source answers that question. Try rephrasing it against the knowledge in this organization.</p></article>}
-    {(state === "denied" || state === "error") && <section className="nx-access-card nx-error-card" aria-live="assertive"><StatusLabel kind={state === "denied" ? "denied" : "error"} /><p>{problem?.message}</p>{problem?.traceId && <p className="nx-field-help">Reference: {problem.traceId}</p>}<ActionButton tone="secondary" onClick={() => void loadContext()}>Retry</ActionButton></section>}
-    {state === "idle" && !organizationId && <section className="nx-access-card"><StatusLabel kind="planned" /><h2>Choose an organization</h2><p>Choose an active organization in your account before asking the knowledge assistant.</p><Link className="nx-action-button nx-action-button--secondary" href="/account">Go to account</Link></section>}
+    {state === "no-answer" && <article className="nx-ai-response" aria-live="polite"><StatusLabel kind="empty" /><p>{t("ai.noAnswer")}</p></article>}
+    {(state === "denied" || state === "error") && <section className="nx-access-card nx-error-card" aria-live="assertive"><StatusLabel kind={state === "denied" ? "denied" : "error"} /><p>{problem?.message}</p>{problem?.traceId && <p className="nx-field-help">Reference: {problem.traceId}</p>}<ActionButton tone="secondary" onClick={() => void loadContext()}>{t("common.retry")}</ActionButton></section>}
+    {state === "idle" && !organizationId && <section className="nx-access-card"><StatusLabel kind="planned" /><h2>{t("account.selectOrganization")}</h2><p>{t("ai.lede")}</p><Link className="nx-action-button nx-action-button--secondary" href="/account">{t("account.title")}</Link></section>}
   </main></PageGrid></AppShell>;
 }
