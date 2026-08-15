@@ -108,8 +108,9 @@ services:
 
   web:
     build:
-      context: apps/web
-      dockerfile: Dockerfile
+      # The Next standalone build needs the monorepo lockfile and workspace packages.
+      context: .
+      dockerfile: apps/web/Dockerfile
     environment:
       NODE_ENV: production
       NEXORA_PLATFORM_API_URL: http://platform-api:8080
