@@ -1,0 +1,85 @@
+{
+  "schemaVersion": "1.0.0",
+  "description": "Nexora media manifest — maps documentation media to exact release SHA",
+  "captures": [
+    {
+      "path": "assets/readme/home.png",
+      "surfaces": ["public-home"],
+      "viewport": { "width": 1440, "height": 900 },
+      "description": "Public home surface with hero and foundation status badges"
+    },
+    {
+      "path": "assets/readme/studio.png",
+      "surfaces": ["studio"],
+      "viewport": { "width": 1440, "height": 900 },
+      "description": "Studio surface with Ant Design wrapper states"
+    },
+    {
+      "path": "assets/readme/ai.png",
+      "surfaces": ["ai"],
+      "viewport": { "width": 1440, "height": 900 },
+      "description": "AI surface with evidence-before-assertion contract"
+    },
+    {
+      "path": "assets/readme/builder.png",
+      "surfaces": ["builder"],
+      "viewport": { "width": 1440, "height": 900 },
+      "description": "Builder surface with navigator, canvas, inspector"
+    },
+    {
+      "path": "assets/readme/builder-mobile.png",
+      "surfaces": ["builder"],
+      "viewport": { "width": 390, "height": 844 },
+      "description": "Builder at 390px mobile frame"
+    },
+    {
+      "path": "assets/readme/nexora-tour.gif",
+      "surfaces": ["home", "studio", "ai", "builder"],
+      "viewport": { "width": 1280, "height": 800 },
+      "description": "Scripted navigation tour GIF"
+    },
+    {
+      "path": "assets/readme/knowledge.png",
+      "surfaces": ["knowledge"],
+      "viewport": { "width": 1440, "height": 900 },
+      "description": "Knowledge workspace with tenant-scoped bases"
+    },
+    {
+      "path": "assets/readme/ai-chat.png",
+      "surfaces": ["ai"],
+      "viewport": { "width": 1440, "height": 900 },
+      "description": "AI chat with citations and no-answer state"
+    },
+    {
+      "path": "assets/readme/search.png",
+      "surfaces": ["search"],
+      "viewport": { "width": 1440, "height": 900 },
+      "description": "Global search with results and source badges"
+    },
+    {
+      "path": "assets/readme/feature-flags.png",
+      "surfaces": ["admin"],
+      "viewport": { "width": 1440, "height": 900 },
+      "description": "Feature flags admin with rollout percentages"
+    },
+    {
+      "path": "assets/readme/analytics.png",
+      "surfaces": ["admin"],
+      "viewport": { "width": 1440, "height": 900 },
+      "description": "Analytics dashboard with event breakdown"
+    },
+    {
+      "path": "assets/readme/notifications.png",
+      "surfaces": ["admin"],
+      "viewport": { "width": 1440, "height": 900 },
+      "description": "Notifications inbox with read/unread state"
+    },
+    {
+      "path": "assets/readme/experiments.png",
+      "surfaces": ["admin"],
+      "viewport": { "width": 1440, "height": 900 },
+      "description": "Experiments management with variant assignment"
+    }
+  ],
+  "honesty": "All captures show deterministic fixture data. No live provider, tenant, or metric is connected."
+}
