@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { NexoraApiError, PlatformApiClient } from "../../../../../packages/contracts/src/generated/platform-api";
 import { SessionUnavailableError, serverSession } from "../../lib/supabase-session";
+import { enforcePermission } from "./_permissions";
 
 const SAFE_MESSAGES: Readonly<Record<string, string>> = {
   AUTHENTICATION_REQUIRED: "Your session has expired. Sign in again to continue.",
@@ -73,4 +74,13 @@ export function requireSameOrigin(request: NextRequest) {
     );
   }
   return null;
+}
+
+/**
+ * Enforce a permission for the current request.
+ * Returns null if allowed, or a Response if denied.
+ */
+export function requirePermission(request: NextRequest, permission: string) {
+  const result = enforcePermission(request, permission);
+  return result.response ?? null;
 }
