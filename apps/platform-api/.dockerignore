@@ -1,0 +1,11 @@
+# Keep local configuration and credentials outside the Docker build context.
+.git
+target
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*credentials*
+*secret*
+*.log
