@@ -1,0 +1,67 @@
+{
+  "task": "R00A",
+  "productSha": "fde842a0c6a6f6d1d5d9267e7d7f0839848c363f",
+  "renderer": {
+    "tool": "@mermaid-js/mermaid-cli",
+    "version": "11.16.0"
+  },
+  "generatedAt": "2026-08-15T02:35:38.549Z",
+  "diagrams": [
+    {
+      "source": "data-and-trust.md#block-1",
+      "block": 1,
+      "digest": "9c526f0e51385858d01aaafdbc0d5152c66857f6bb5f926ec7b5413f03c7aff4",
+      "output": "renders/data-and-trust-01.svg",
+      "outputDigest": "9ec01b53d7e75dc52fbf4eac6063fa2f1e6f9cf6f9387ae66af5eb0d2b8629a2"
+    },
+    {
+      "source": "data-and-trust.md#block-2",
+      "block": 2,
+      "digest": "2f51687ee211e271081d0f67977231455cf5e3bce62e445eee36eb18ef973d87",
+      "output": "renders/data-and-trust-02.svg",
+      "outputDigest": "c364a697eb1cd65b1e900fa044ef5afe1b820ca43fc9814f5f67bc96ce44c53e"
+    },
+    {
+      "source": "data-and-trust.md#block-3",
+      "block": 3,
+      "digest": "ad9bc763a92965de2942075c17bb61e85c5efdc5bb575d9da6be4b892dd5ac20",
+      "output": "renders/data-and-trust-03.svg",
+      "outputDigest": "7b900b8f5eb8e4caa2d7331c96d81badea3fcf9b7917b1a12032c982ee3d1207"
+    },
+    {
+      "source": "failure-semantics.md#block-1",
+      "block": 1,
+      "digest": "23f5610f0a0ce9012f804d5e670f729f743832813a3155a86b02923db841d668",
+      "output": "renders/failure-semantics-01.svg",
+      "outputDigest": "6004ab5b93caab649d48050c3ed5acd5b000ce606e486d1ddc9a94a760306bbe"
+    },
+    {
+      "source": "system-and-modules.md#block-1",
+      "block": 1,
+      "digest": "7fced18bb94ffef4179e9f260ca23db1c12a291fe1a4611a548777e221e80558",
+      "output": "renders/system-and-modules-01.svg",
+      "outputDigest": "2df54451af2f31734936664bd43cd0af01abab6f43d564651750651ca52ea5da"
+    },
+    {
+      "source": "system-and-modules.md#block-2",
+      "block": 2,
+      "digest": "6940d85cb36904adad7f3ccbaf9ed44335350111bc18a012f1dcd9b933c23ffe",
+      "output": "renders/system-and-modules-02.svg",
+      "outputDigest": "85360c797931e1a2fb58a75557c0fc7e6750be8a1733ed5b5aabd8189c83ae80"
+    },
+    {
+      "source": "system-overview.md#block-1",
+      "block": 1,
+      "digest": "6b983203bc3abe6344f9ae57c1dce61ef7374447ed5fe60b42c6757e051cd9bd",
+      "output": "renders/system-overview-01.svg",
+      "outputDigest": "a11fb7393d9db777529ffdfa61342cecc697dee837dcb4d35294550caefa78a0"
+    },
+    {
+      "source": "system-overview.md#block-2",
+      "block": 2,
+      "digest": "7f457859b15516818562d07066f9cb34af41346bf1e5101f5efce4a5186911ec",
+      "output": "renders/system-overview-02.svg",
+      "outputDigest": "071464897e9227d3bec4d24bbbc5bcdc119c42f44e51ab271a3249b1648f7a9d"
+    }
+  ]
+}
