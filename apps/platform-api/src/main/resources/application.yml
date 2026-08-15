@@ -9,6 +9,14 @@ spring:
   lifecycle:
     timeout-per-shutdown-phase: 20s
 
+logging:
+  structured:
+    format:
+      console: json
+  level:
+    root: INFO
+    com.nexora.platform: DEBUG
+
 server:
   address: ${NEXORA_BIND_ADDRESS:127.0.0.1}
   shutdown: graceful
