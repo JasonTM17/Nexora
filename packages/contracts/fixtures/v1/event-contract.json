@@ -311,7 +311,7 @@
       },
       {
         "name": "nonSha256DigestRejected",
-        "idempotencyKeyDigest": "sk_live_abcdefghijklmnop",
+        "idempotencyKeyDigest": "md5:d41d8cd98f00b204e9800998ecf8427e",
         "result": "PII_REJECTED"
       },
       {

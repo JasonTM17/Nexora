@@ -1,0 +1,10 @@
+# Trivy suppressions for the repository filesystem scan (.github/workflows/security-scan.yml).
+# Every entry must carry a justification and be revisited when the underlying advisory changes.
+#
+# GO-2026-5932 (golang.org/x/crypto/openpgp): the advisory marks the whole openpgp
+# package as unmaintained with no fixed version, so any x/crypto version matches.
+# event-ingestion never imports an openpgp package (verified with
+# `go list -deps ./...` in services/event-ingestion); x/crypto is an indirect
+# dependency only. Suppression is module-level false-positive handling, not a
+# waived vulnerability.
+GO-2026-5932
