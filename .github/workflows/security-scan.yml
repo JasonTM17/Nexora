@@ -21,7 +21,7 @@ jobs:
         language: [java, go, javascript]
     steps:
       - name: Check out source
-        uses: actions/checkout@11bd71901bbe5b1630ceea3d27597364c9af683 # v4.2.2
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@28deaeda66b76a059156332f82b27532e0e3c11e # v3.28.10
@@ -47,7 +47,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check out source
-        uses: actions/checkout@11bd71901bbe5b1630ceea3d27597364c9af683 # v4.2.2
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
         with:
           fetch-depth: 0
 
@@ -64,7 +64,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out source
-        uses: actions/checkout@11bd71901bbe5b1630ceea3d27597364c9af683 # v4.2.2
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
 
       - name: Run Trivy filesystem scan
         uses: aquasecurity/trivy-action@dc50788a7a6bdc8e88b6f8d6e8f6e8f6e8f6e8f6 # 0.30.0
