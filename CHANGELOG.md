@@ -50,6 +50,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Re-pinned CI actions to Node 24 runtimes (checkout v7.0.1, setup-buildx v4.2.0, build-push v7.3.0, CodeQL v4.37.7, gitleaks v3.0.0) ahead of the September 2026 Node 20 runner removal
 - Fixed the CodeQL implicit-cast-in-compound-assignment finding in `DeterministicEmbeddingProvider`; dismissed the two `spring-disabled-csrf-protection` findings as not applicable (stateless JWT bearer API, no cookie-based authentication)
 
+## [v0.1.0] — 2026-08-15
+
+### Added
+- Control documentation: forward rebaseline protocol (lifecycle commands, replay evidence
+  hardening, range inventory canonicalization, lineage separation) across 9 docs commits
+- Production-shaped preview release packaging M0–M6 with bilingual UI and RBAC
+
+### Notes
+- Release notes originally pointed at a Docker Hub namespace that was never published;
+  corrected 2026-08-22 to the GitHub Container Registry images that the pipeline actually produces
+
 ## [v0.1.0-alpha.1] — 2026-08-15
 
 ### Added

@@ -60,8 +60,8 @@ jobs:
           distribution: temurin
           java-version-file: .java-version
           cache: maven
-      - name: Compile and run unit tests
-        run: sh mvnw -q test -Dtest='JwtValidationTests,EventContractV1_1Test,OutboxPublisherSchedulerTest,OutboxPublisherTest,EventAdmissionServiceTest,EventConsumerWiringTest'
+      - name: Compile and run the full test suite
+        run: sh mvnw -q test
       - name: Generate coverage report (JaCoCo)
         run: sh mvnw -q jacoco:report
         continue-on-error: true
