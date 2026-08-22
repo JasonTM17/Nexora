@@ -34,7 +34,7 @@ public class DeterministicEmbeddingProvider implements EmbeddingProvider {
         for (int i = 0; i < DIMENSIONS; i++) {
             int byteValue = seed[i % seed.length] & 0xFF;
             float value = (byteValue / 127.5f) - 1.0f;
-            value += Math.sin(i * 12.9898 + byteValue * 78.233) * 0.1f;
+            value = (float) (value + Math.sin(i * 12.9898 + byteValue * 78.233) * 0.1f);
             vector[i] = value;
         }
         return normalize(vector);
