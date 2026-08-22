@@ -196,8 +196,9 @@ docker compose up --build --wait -d     # service-only loopback proof
 
 The repository is configured to publish three OCI images to GitHub Container
 Registry (GHCR). A successful `main` workflow run produces `latest`, `main`,
-and an immutable source tag (`sha-<commit>`); a successful GitHub Release run
-additionally produces the configured semantic-version tags. The images are
+and an immutable source tag (the short commit SHA, e.g. `ee6eaff`); a
+successful GitHub Release run additionally produces the configured
+semantic-version tags. The images are
 build artifacts for local evaluation and integration. They are not deployment
 or production-readiness evidence.
 
