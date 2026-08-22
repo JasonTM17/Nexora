@@ -15,6 +15,12 @@ const publicCsp = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Turbopack's standalone tracing copies @swc/helpers partially (cjs only) from
+  // the pnpm store while the Next server resolves its `esm` subpaths at boot,
+  // crashing the container. Force-include the whole package in the trace.
+  outputFileTracingIncludes: {
+    "/**": ["../../node_modules/.pnpm/@swc+helpers@*/node_modules/@swc/helpers/**"],
+  },
   async headers() {
     return [
       {
