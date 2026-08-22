@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.0.1</version>
+        <version>4.0.4</version>
         <relativePath/>
     </parent>
 
@@ -79,6 +79,8 @@
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
+            <!-- Pinned ahead of the Boot 4.0.4 BOM: 42.7.12 is the fix floor for CVE-2026-42198/CVE-2026-54291. -->
+            <version>42.7.12</version>
             <scope>runtime</scope>
         </dependency>
         <dependency>

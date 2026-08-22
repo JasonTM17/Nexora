@@ -9,7 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
-    "@hookform/resolvers": "5.7.1",
+    "@hookform/resolvers": "5.8.0",
     "@nexora/contracts": "workspace:*",
     "@nexora/design-tokens": "workspace:*",
     "@nexora/ui-ai": "workspace:*",
@@ -17,16 +17,16 @@
     "@nexora/ui-core": "workspace:*",
     "@nexora/ui-studio": "workspace:*",
     "@supabase/ssr": "0.12.4",
-    "@supabase/supabase-js": "2.112.2",
+    "@supabase/supabase-js": "2.112.3",
     "@tanstack/react-query": "5.101.4",
-    "next": "16.3.0",
+    "next": "16.3.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-hook-form": "7.85.0",
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@axe-core/playwright": "4.12.1",
+    "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.62.1",
     "@tailwindcss/postcss": "4.3.3",
     "@testing-library/dom": "10.4.1",

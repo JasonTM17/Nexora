@@ -76,7 +76,7 @@ export function KnowledgeWorkspace() {
     {state === "ready" && <section className="nx-access-card" aria-labelledby="kb-title"><div className="nx-card-heading"><div><h2 id="kb-title">{t("knowledge.title")}</h2><p className="nx-field-help">Server-derived organization context · knowledge.read</p></div><StatusLabel kind="fixture" /></div>{items.length === 0 ? <p className="nx-empty-copy">{t("knowledge.noBases")}</p> : <ul className="nx-kb-list">{items.map((item) => <li key={item.id}><code>{item.name}</code><small>{item.state} · {t("knowledge.version")} {item.version}</small></li>)}</ul>}
       <form className="nx-kb-form" onSubmit={create} aria-label={t("knowledge.create")}>
         <label className="nx-admin-organization" htmlFor="kb-name">{t("knowledge.create")}<input id="kb-name" value={name} maxLength={200} required disabled={saving} onChange={(event) => setName(event.target.value)} placeholder={t("knowledge.namePlaceholder")} /></label>
-        <ActionButton disabled={saving || !name.trim()}>{saving ? t("common.loading") : t("knowledge.create")}</ActionButton>
+        <ActionButton type="submit" disabled={saving || !name.trim()}>{saving ? t("common.loading") : t("knowledge.create")}</ActionButton>
       </form></section>}
   </main></PageGrid></AppShell>;
 }
