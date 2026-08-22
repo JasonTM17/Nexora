@@ -23,3 +23,19 @@ product SHA `fde842a`; it is not hosted-provider or production evidence.
 The recording loops back to Home. Screenshots for each surface exist at 1440px
 desktop and 375px mobile viewports with 2x device scale; per-file SHA-256
 digests and the runtime tuple are recorded in `docs/media-manifest.json`.
+
+## Captures
+
+Per-surface desktop and mobile captures, plus the scripted tour — all from the
+same fixture build as the transcript above.
+
+| Surface | Desktop | Mobile |
+|---|---|---|
+| Home | ![Home desktop capture](media/home-desktop.png) | ![Home mobile capture](media/home-mobile.png) |
+| Studio | ![Studio desktop capture](media/studio-desktop.png) | ![Studio mobile capture](media/studio-mobile.png) |
+| AI | ![AI desktop capture](media/ai-desktop.png) | ![AI mobile capture](media/ai-mobile.png) |
+| Knowledge | ![Knowledge desktop capture](media/knowledge-desktop.png) | ![Knowledge mobile capture](media/knowledge-mobile.png) |
+| Builder | ![Builder desktop capture](media/builder-desktop.png) | ![Builder mobile capture](media/builder-mobile.png) |
+
+Scripted tour (same fixture build):
+![Nexora tour across home, Studio, AI and Builder](media/nexora-tour.gif)

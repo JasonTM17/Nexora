@@ -72,3 +72,21 @@ The Mermaid diagrams here are diagram-as-code planning artifacts. A later
 release-documentation owner must render, checksum and retain them with the
 specific reviewed architecture head. A rendered diagram alone does not prove a
 running build, health, SLO, backup, rollback or restore capability.
+
+## Rendered diagram views
+
+The Mermaid sources in the view documents are exported to standalone SVG
+(`renders/render-architecture.mjs`) so the diagrams can be read outside a
+Mermaid renderer. They carry the same evidence boundary as their sources:
+baseline planning views, not deployment evidence.
+
+| Render | Source view |
+|---|---|
+| [system-overview-01](renders/system-overview-01.svg) | `system-overview.md` — target topology |
+| [system-overview-02](renders/system-overview-02.svg) | `system-overview.md` — alternate view |
+| [system-and-modules-01](renders/system-and-modules-01.svg) | `system-and-modules.md` — module map |
+| [system-and-modules-02](renders/system-and-modules-02.svg) | `system-and-modules.md` — alternate view |
+| [data-and-trust-01](renders/data-and-trust-01.svg) | `data-and-trust.md` — data and trust plane |
+| [data-and-trust-02](renders/data-and-trust-02.svg) | `data-and-trust.md` — alternate view |
+| [data-and-trust-03](renders/data-and-trust-03.svg) | `data-and-trust.md` — alternate view |
+| [failure-semantics-01](renders/failure-semantics-01.svg) | `failure-semantics.md` — failure semantics |
