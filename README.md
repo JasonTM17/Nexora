@@ -41,20 +41,10 @@ tenant, repository, provider or live metric is connected.
 | Builder (desktop) | ![Builder surface: navigator, canvas with selected hero section and inspector panel on fixture data](assets/readme/builder.png) | Clear ownership and selection geometry: navigator, canvas and inspector with keyboard toggle semantics. |
 | Builder (390px) | ![Builder surface at 390 pixels wide: navigator, canvas and inspector presented sequentially in a compact mobile frame](assets/readme/builder-mobile.png) | Compact mobile frame presenting navigator, canvas and inspector sequentially; it does not claim full desktop-canvas editing on a phone. |
 
-### Admin and knowledge surfaces (M5)
-
-The same evidence rule applies: deterministic fixtures, no live tenant or
-metric.
-
-| Surface | Preview |
-|---|---|
-| Knowledge workspace | ![Knowledge workspace with document list and reader pane on fixture data](assets/readme/knowledge.png) |
-| AI chat with sources | ![Knowledge chat frame with deterministic no-answer contract and source placeholders](assets/readme/ai-chat.png) |
-| Global search | ![Global search results over authorized pages and knowledge fixtures](assets/readme/search.png) |
-| Feature flags admin | ![Feature flags admin with per-flag rollout percentages on fixture data](assets/readme/feature-flags.png) |
-| Analytics | ![Analytics dashboard with event breakdown charts on fixture data](assets/readme/analytics.png) |
-| Notifications | ![Notifications inbox with read and unread states on fixture data](assets/readme/notifications.png) |
-| Experiments | ![Experiments management with variant assignment on fixture data](assets/readme/experiments.png) |
+Admin and knowledge surfaces (M5) are not pictured: the captures taken at
+commit 295fd2d recorded expired-session error screens rather than working
+surfaces, and were removed. They must be re-captured against a valid fixture
+session before any image of them is published here.
 
 The capture workflow is documented under
 [Local development → Web evidence capture](#web-evidence-capture).

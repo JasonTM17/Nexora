@@ -5,7 +5,8 @@
     "readmeSurfaces": "assets/readme surface screenshots and the tour GIF were captured at commit 295fd2d (docs(media): capture M4-M5 surface screenshots for documentation)",
     "readmeTourGif": "assets/readme/nexora-tour.gif was authored at commit d9b8904 (docs(readme): rewrite README with captured foundation evidence)",
     "productWalkthrough": "docs/product/media captures back the docs/product/walkthrough.md transcript recorded at product SHA fde842a",
-    "frames": "assets/readme/frames/*.png and assets/readme/gif-check.png are build intermediates of the tour GIF, not documentation surfaces"
+    "frames": "assets/readme/frames/*.png and assets/readme/gif-check.png are build intermediates of the tour GIF, not documentation surfaces",
+    "removedErrorCaptures": "Captures removed from the repository because their content showed error states instead of working surfaces: the seven M5 admin/knowledge README captures (expired-session screens) plus knowledge-vi.png (a byte-identical copy) and the walkthrough knowledge-desktop/knowledge-mobile (404 pages) and ai-desktop (load-failure page). Do not re-add images of these surfaces without re-capturing against a valid fixture session."
   },
   "captures": [
     {
@@ -51,62 +52,6 @@
       "description": "Scripted navigation tour GIF"
     },
     {
-      "path": "assets/readme/knowledge.png",
-      "sha256": "9f8b1ae5acc9a7b2f632183c47aea0db153db0d06f94dd8b09eb939b00a8a2f9",
-      "surfaces": ["knowledge"],
-      "viewport": { "width": 1440, "height": 900 },
-      "description": "Knowledge workspace with tenant-scoped bases"
-    },
-    {
-      "path": "assets/readme/knowledge-vi.png",
-      "sha256": "9f8b1ae5acc9a7b2f632183c47aea0db153db0d06f94dd8b09eb939b00a8a2f9",
-      "surfaces": ["knowledge"],
-      "viewport": { "width": 1440, "height": 900 },
-      "description": "Byte-identical copy of knowledge.png; a distinct Vietnamese-language capture is pending and must not be claimed until it exists"
-    },
-    {
-      "path": "assets/readme/ai-chat.png",
-      "sha256": "7cecbac729fd6d65b4b515213f3204c557b712e10ccdb89ea6b42516205cce29",
-      "surfaces": ["ai"],
-      "viewport": { "width": 1440, "height": 900 },
-      "description": "AI chat with citations and no-answer state"
-    },
-    {
-      "path": "assets/readme/search.png",
-      "sha256": "7a00bf94a7d7c73c49e51fec4ec99c9c07ae71fd3230e0f349b69aab558b034f",
-      "surfaces": ["search"],
-      "viewport": { "width": 1440, "height": 900 },
-      "description": "Global search with results and source badges"
-    },
-    {
-      "path": "assets/readme/feature-flags.png",
-      "sha256": "95b0cd2b922d61ca745d3a12af64371faff4874024b80235f4b205c44ed3134f",
-      "surfaces": ["admin"],
-      "viewport": { "width": 1440, "height": 900 },
-      "description": "Feature flags admin with rollout percentages"
-    },
-    {
-      "path": "assets/readme/analytics.png",
-      "sha256": "9ba66e4d0e48026ea2a9cb8992861f674dc1e5d1dca066981612da3f4b2059e9",
-      "surfaces": ["admin"],
-      "viewport": { "width": 1440, "height": 900 },
-      "description": "Analytics dashboard with event breakdown"
-    },
-    {
-      "path": "assets/readme/notifications.png",
-      "sha256": "5da6312bf6e7dd18896bb03f38ef02a81c71b5d7f122723dc270807effeabdbd",
-      "surfaces": ["admin"],
-      "viewport": { "width": 1440, "height": 900 },
-      "description": "Notifications inbox with read/unread state"
-    },
-    {
-      "path": "assets/readme/experiments.png",
-      "sha256": "b6f367ef1b0dc9f96f0df8e82db51151c0583fbcf6285e4391c1ba47b16fc0d5",
-      "surfaces": ["admin"],
-      "viewport": { "width": 1440, "height": 900 },
-      "description": "Experiments management with variant assignment"
-    },
-    {
       "path": "docs/product/media/home-desktop.png",
       "sha256": "b52742786c78623f767dde6dd4505563c05cfd563c8f0f1466dabba3a1c84f6d",
       "surfaces": ["public-home"],
@@ -131,28 +76,10 @@
       "description": "Walkthrough studio capture, mobile"
     },
     {
-      "path": "docs/product/media/ai-desktop.png",
-      "sha256": "7e0388782149c7dfb4f0983dead235c1c3ec39a38b14a60d6bcc6bce260f7830",
-      "surfaces": ["ai"],
-      "description": "Walkthrough AI capture, desktop"
-    },
-    {
       "path": "docs/product/media/ai-mobile.png",
       "sha256": "cafdc4a971476873f138e91f67d5989814515dfbd793c23380037a4d08d41a39",
       "surfaces": ["ai"],
       "description": "Walkthrough AI capture, mobile"
-    },
-    {
-      "path": "docs/product/media/knowledge-desktop.png",
-      "sha256": "6679f9170c7fb4268a5f2feaaee5338fa5b65df2c7411ed32588c7aaa3626f4f",
-      "surfaces": ["knowledge"],
-      "description": "Walkthrough knowledge capture, desktop"
-    },
-    {
-      "path": "docs/product/media/knowledge-mobile.png",
-      "sha256": "392a72365dd96b250e5d4674ec8078bfc19d011378aaf62705fe895affd43b5d",
-      "surfaces": ["knowledge"],
-      "description": "Walkthrough knowledge capture, mobile"
     },
     {
       "path": "docs/product/media/builder-desktop.png",
